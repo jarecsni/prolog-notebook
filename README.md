@@ -140,4 +140,4 @@ MIT
 
 [kernel]: https://github.com/hhu-stups/prolog-jupyter-kernel
 [wasm]: https://github.com/SWI-Prolog/swipl-wasm
-[ptv]: https://github.com/jarecsni/prolog-trace-viz
+[ptv]: https://github.com/textologylabs/prolog-trace-viz
