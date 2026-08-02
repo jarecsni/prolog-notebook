@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.1] — 2026-08-02
+
+No functional change. Published from CI via npm trusted publishing (OIDC) to
+verify the release pipeline end to end — v0.1.0 was published by hand to claim
+the name.
+
+### Changed
+
+- Release workflow authenticates over OIDC instead of an `NPM_TOKEN`. npm
+  deprecates 2FA-bypass granular tokens for direct publishing around January
+  2027 and points at trusted publishing instead; it also removes the 90-day
+  token expiry from the loop.
+- The example page now says so when it has not started, instead of leaving the
+  buttons silently inert (browsers block ES modules over `file://`).
+
 ## [0.1.0] — 2026-08-02
 
 First release. The execution core works; the file-backed renderer does not exist yet.
