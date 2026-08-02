@@ -6,18 +6,27 @@ on:
       - 'v*.*.*'
 
 # A pushed semver tag (`v0.1.0`) triggers test + npm publish + GitHub Release.
-# No interactive `npm login` anywhere: authentication is an Automation token.
 #
-# Required secret: NPM_TOKEN — an "Automation" token from
-# https://www.npmjs.com/settings/<your-user>/tokens. Add via:
-#   gh secret set NPM_TOKEN -R jarecsni/prolog-notebook
-# GITHUB_TOKEN is provided automatically for the release step.
+# Authentication is npm trusted publishing (OIDC) — no NPM_TOKEN, nothing to
+# store, expire or rotate. npm deprecates 2FA-bypass granular tokens for direct
+# publishing around January 2027, and this is the path they point at instead:
+# https://docs.npmjs.com/trusted-publishers
 #
-# The same prepublishOnly hook gates here as it does locally, so a failing
-# test can never reach npm.
+# One-time setup on npmjs.com, after the package exists:
+#   package page -> Settings -> Trusted Publisher -> GitHub Actions
+#   repository: jarecsni/prolog-notebook   workflow: release.yml
+#
+# Requires `id-token: write` on the job and npm >= 11.5.1, which is newer than
+# the npm bundled with Node 20 — hence the explicit npm upgrade step. Do NOT set
+# NODE_AUTH_TOKEN: an empty string still counts as a value and npm will try to
+# use it instead of falling back to OIDC.
+#
+# The same prepublishOnly hook gates here as it does locally, so a failing test
+# can never reach npm.
 
 permissions:
   contents: write # gh release create
+  id-token: write # OIDC token for trusted publishing
 
 jobs:
   release:
@@ -31,6 +40,9 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Use an npm that speaks OIDC
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -50,8 +62,6 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Extract release notes from CHANGELOG
         run: |
