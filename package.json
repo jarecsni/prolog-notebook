@@ -10,17 +10,44 @@
     "./engine": "./src/engine.js",
     "./notebook.css": "./src/notebook.css"
   },
-  "files": ["src", "README.md", "LICENSE"],
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "example": "python3 -m http.server 8777"
+    "example": "python3 -m http.server 8777",
+    "prepublishOnly": "npm test"
   },
-  "keywords": ["prolog", "notebook", "jupyter", "swi-prolog", "wasm", "webassembly", "logic-programming", "literate-programming"],
+  "keywords": [
+    "prolog",
+    "notebook",
+    "jupyter",
+    "swi-prolog",
+    "wasm",
+    "webassembly",
+    "logic-programming",
+    "literate-programming"
+  ],
   "author": "Johnny Jarecsni",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/jarecsni/prolog-notebook.git" },
-  "bugs": { "url": "https://github.com/jarecsni/prolog-notebook/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jarecsni/prolog-notebook.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jarecsni/prolog-notebook/issues"
+  },
   "homepage": "https://github.com/jarecsni/prolog-notebook#readme",
-  "engines": { "node": ">=18" },
-  "dependencies": { "swipl-wasm": "^8.0.4" }
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "swipl-wasm": "^8.0.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
