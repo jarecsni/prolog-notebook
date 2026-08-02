@@ -6,10 +6,28 @@
 import { createSession, formatSolution } from './browser.js';
 
 let serial = 0;
+let booted = false;
 
 export function mount(root = document) {
+  // A page can carry a #boot-warning element saying "this notebook is not running".
+  // It is removed only once mount() has actually run, so any failure that prevents
+  // this module from loading — opening the page over file://, a bad path, a syntax
+  // error — leaves the warning on screen instead of silently inert buttons.
+  document.getElementById('boot-warning')?.remove();
+
   root.querySelectorAll('.cell.program').forEach(mountProgram);
   root.querySelectorAll('.cell.query').forEach(mountQuery);
+}
+
+/** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
+async function boot(status) {
+  if (!booted && status) {
+    status.textContent = 'starting SWI-Prolog (5.9 MB, first time only)…';
+    status.className = 'status busy';
+  }
+  const session = await createSession();
+  booted = true;
+  return session;
 }
 
 function mountProgram(cell) {
@@ -21,12 +39,21 @@ function mountProgram(cell) {
   autosize(source);
 
   button.addEventListener('click', async () => {
-    status.textContent = 'loading Prolog…';
-    status.className = 'status busy';
-    const session = await createSession();
-    const r = session.consult(source.value, name);
-    status.textContent = r.ok ? 'consulted' : r.error;
-    status.className = `status ${r.ok ? 'ok' : 'err'}`;
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Working…';
+    try {
+      const session = await boot(status);
+      const r = session.consult(source.value, name);
+      status.textContent = r.ok ? '✓ consulted' : r.error;
+      status.className = `status ${r.ok ? 'ok' : 'err'}`;
+    } catch (e) {
+      status.textContent = e.message;
+      status.className = 'status err';
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
   });
 }
 
@@ -74,12 +101,21 @@ function mountQuery(cell) {
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
     if (!goal) return;
-    const session = await createSession();
     write(`?- ${goal}.`, 'echo');
-    query = session.query(goal);
-    nextBtn.disabled = false;
-    allBtn.disabled = false;
-    step();
+    runBtn.disabled = true;
+    try {
+      if (!booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
+      const session = await boot();
+      query = session.query(goal);
+      nextBtn.disabled = false;
+      allBtn.disabled = false;
+      step();
+    } catch (e) {
+      write(e.message, 'err');
+      finish();
+    } finally {
+      runBtn.disabled = false;
+    }
   });
 
   nextBtn.addEventListener('click', step);

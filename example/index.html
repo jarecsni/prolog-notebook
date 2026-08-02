@@ -9,6 +9,16 @@
 <body>
 <main>
 
+<div id="boot-warning">
+  <strong>This notebook is not running.</strong>
+  The page loaded but its JavaScript did not. The usual cause is opening
+  <code>index.html</code> straight from disk — browsers block ES modules over
+  <code>file://</code>. Serve it over HTTP instead:
+  <pre>npm install
+npm run example        # then open http://localhost:8777/example/</pre>
+  This message disappears by itself once the notebook is live.
+</div>
+
 <div class="kicker">Chapter 4 · Cut and control</div>
 <h1>Where does the fence go?</h1>
 <p><em>You have a rule that answers correctly and says everything twice. The obvious fix

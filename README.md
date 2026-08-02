@@ -50,6 +50,10 @@ npm run example        # then open http://localhost:8777/example/
 The example is a real worked section — the `once/1` placement puzzle — not a widget demo.
 Predict what each version returns before you press Run.
 
+It has to be **served over HTTP**. Opening `example/index.html` straight from disk leaves the
+buttons inert, because browsers block ES modules over `file://` — the page detects this and
+says so rather than failing silently.
+
 ## Use it
 
 Headless, in Node — this is how you test that every example in a document still works:
