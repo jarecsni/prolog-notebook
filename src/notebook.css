@@ -100,6 +100,9 @@ button.primary:hover { background: #98380f; }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--err); }
 .status.busy { color: #8a8371; }
+/* Loaded, but SWI said something the reader needs to see — most often that this
+   cell has redefined a predicate another cell owns. */
+.status.warn { color: #a8730f; white-space: pre-line; line-height: 1.4; }
 
 .out {
   font: 13.5px/1.7 ui-monospace, Menlo, monospace;

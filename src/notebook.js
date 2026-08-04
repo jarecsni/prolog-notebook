@@ -45,8 +45,11 @@ function mountProgram(cell) {
     try {
       const session = await boot(status);
       const r = session.consult(source.value, name);
-      status.textContent = r.ok ? '✓ consulted' : r.error;
-      status.className = `status ${r.ok ? 'ok' : 'err'}`;
+      // A warning here usually means this cell has just destroyed another
+      // cell's clauses, which the reader has no other way of finding out.
+      const warning = r.messages && r.messages.find((m) => m.kind === 'warning');
+      status.textContent = r.ok ? warning ? warning.text : '✓ consulted' : r.error;
+      status.className = `status ${r.ok ? (warning ? 'warn' : 'ok') : 'err'}`;
     } catch (e) {
       status.textContent = e.message;
       status.className = 'status err';
@@ -84,7 +87,8 @@ function mountQuery(cell) {
   const step = () => {
     if (!query) return;
     const r = query.next();
-    if (r.solution) write(`${++count}.  ${formatSolution(r.solution)}`, 'sol');
+    // r.text is rendered by SWI itself, so operators and quoting are right.
+    if (r.solution) write(`${++count}.  ${r.text ?? formatSolution(r.solution)}`, 'sol');
     if (r.error) {
       write(r.error, 'err');
       finish();
