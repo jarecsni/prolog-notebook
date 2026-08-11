@@ -81,16 +81,55 @@ through the injectable filesystem, never Node's `fs` — see [platform-seams.md]
 
 ## 4. Kicker, and where chapter numbers live
 
-`kicker` currently sits in a notebook's front matter and reads `Chapter 4 · Cut and control`.
-Under a binder that is wrong: the chapter number is the binder's opinion.
+A chapter has **two names**, and the existing example page shows both:
 
-- The spine's `kicker` is the **book-level default** — the running head, effectively.
-- A notebook's own `kicker` is an **override**, used when the notebook is built alone.
-- When a notebook is built as part of a book, the spine wins, and the build may compose a
-  kicker from the entry's position (`Chapter 4 · <spine kicker>`).
+```
+CHAPTER 4 · CUT AND CONTROL     ← the kicker: the formal name, what a TOC lists
+Where does the fence go?        ← the H1: the editorial name, what the page is called
+```
 
-A notebook must never hard-code its own number. Reordering the spine renumbers the book; it
-does not touch a single notebook file.
+The formal name is already in the spine — it is the entry's link text. So:
+
+> **The kicker of a bound notebook is the spine's label for that entry.**
+
+One string, used for the kicker, the table of contents and the navigation, so the three
+cannot drift apart. The notebook keeps its `# H1` and is not touched.
+
+### Numbering
+
+Derived from the spine's own structure, which is ordinary markdown and reads correctly on
+GitHub either way:
+
+```markdown
+Anything up here is preface, and links in it are **not** entries.
+
+- [About this binder](preface.prolog.md)     → "About this binder"      (no number)
+
+## Chapters
+- [Tutorial introduction](ch01.prolog.md)    → "Chapter 1 · Tutorial introduction"
+- [Cut and control](ch04-cut.prolog.md)      → "Chapter 4 · Cut and control"
+
+## Appendices
+- [Operator table](appx-ops.prolog.md)       → "Appendix A · Operator table"
+```
+
+- Entries under a heading whose text begins **Chapter** or **Chapters** are numbered `1..n`.
+- Entries under **Appendix** or **Appendices** are lettered `A..Z`.
+- Entries under any other heading, or under none, are unnumbered — their label is the link
+  text alone.
+- A spine with no headings at all numbers every entry as a chapter. The common case needs no
+  ceremony.
+
+`numbering: none` in the spine's front matter disables all of it. The link text is then the
+whole label, and an author who wants "Chapter 4" types it.
+
+### Standalone
+
+Built alone, a notebook uses its own front-matter `kicker` and shows **no number**. That key
+is the notebook's opinion about itself, which is legitimate; a position is not. `--check`
+warns — does not fail — when it looks like a chapter number has been written into one.
+
+Reordering the spine renumbers the book and touches no notebook file. That is the whole point.
 
 ## 5. Cross-notebook references
 

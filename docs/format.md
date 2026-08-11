@@ -51,7 +51,7 @@ extension.
 ```markdown
 ---
 format: prolog-notebook/1
-kicker: Chapter 4 · Cut and control
+kicker: Cut and control
 rerun: manual
 ---
 ```
@@ -59,10 +59,26 @@ rerun: manual
 | key      | meaning                                                              |
 | -------- | -------------------------------------------------------------------- |
 | `format` | required. `prolog-notebook/1`. A newer major is refused, not guessed. |
-| `kicker` | the `.kicker` line above the title. No markdown spelling exists for it. |
+| `kicker` | the `.kicker` line above the title, used when this notebook is built **alone**. No markdown spelling exists for it. |
 | `rerun`  | notebook-wide default for query cells, `manual` (default) or `auto`.  |
 
 Unknown keys are preserved verbatim and ignored.
+
+**A notebook never states its own position.** No chapter number, no book, no ordering —
+`kicker: Chapter 4 · Cut and control` was the original spelling here and it is wrong: which
+chapter this is is the *binder's* opinion, not the notebook's, and the same notebook may sit
+at a different position in another book. See [binding.md](binding.md).
+
+So the kicker has two sources, and the file changes between them not at all:
+
+- **Built alone** — this key, if present, and never a number.
+- **Built as part of a book** — the spine's label for this entry, composed from the entry's
+  section and position (`Chapter 4 · Cut and control`) and injected at render time. The same
+  string is what the table of contents and the navigation show, so they cannot drift apart.
+
+`--check` warns when a notebook's own `kicker` looks like it contains a chapter number. It is
+a warning, not an error: a notebook that will only ever be read alone is entitled to say
+whatever it likes above its title.
 
 **There is no `title` key.** The title is the first `# H1` in the body — one source of truth,
 and it means the GitHub view has a real heading rather than a heading hidden in metadata.
@@ -371,7 +387,7 @@ programmatically produces exactly the bytes documented above ([869ectt20]).
 ````markdown
 ---
 format: prolog-notebook/1
-kicker: Chapter 4 · Cut and control
+kicker: Cut and control
 ---
 
 # Where does the fence go?
