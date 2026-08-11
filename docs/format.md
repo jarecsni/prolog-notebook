@@ -72,9 +72,10 @@ at a different position in another book. See [binding.md](binding.md).
 So the kicker has two sources, and the file changes between them not at all:
 
 - **Built alone** — this key, if present, and never a number.
-- **Built as part of a book** — the spine's label for this entry, composed from the entry's
-  section and position (`Chapter 4 · Cut and control`) and injected at render time. The same
-  string is what the table of contents and the navigation show, so they cannot drift apart.
+- **Built as part of a book** — nothing in this file changes. The binder emits a *cover
+  section* before the chapter, carrying the label it derived from the entry's position
+  (`Chapter 4 · Cut and control`); the HTML emitter renders that cover as the `.kicker` line
+  above the title, and a print emitter renders it as a page. See [binding.md §4](binding.md).
 
 `--check` warns when a notebook's own `kicker` looks like it contains a chapter number. It is
 a warning, not an error: a notebook that will only ever be read alone is entitled to say

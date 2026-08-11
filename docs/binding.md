@@ -39,9 +39,9 @@ The alternative — a book that owns its chapters as sub-documents — fails on 
    `.pl` file with real `.plt` tests, cited by each notebook that needs them
    ([format §4](format.md)). This is the case `src=` was reserved for; the binder makes it
    a requirement rather than a nicety.
-5. **Generated matter is build output.** TOC, index and cross-reference appendices are
-   emitted by `build` and are never files an author edits. If it can be derived, it is not
-   source.
+5. **Generated matter is build output.** Title pages, contents, chapter covers and the
+   predicate cross-reference are emitted by `build` and are never files an author edits
+   (§4). If it can be derived, it is not source.
 
 ## 3. The spine file
 
@@ -52,6 +52,7 @@ with no build step, and it needs no parser we do not already have.
 ---
 format: prolog-notebook-book/1
 kicker: Programming in Prolog · a study binder
+matter: title, toc, covers, xref
 ---
 
 # Working through Clocksin & Mellish
@@ -75,25 +76,66 @@ Notebooks written while reading C&M. Each one runs in the browser.
   `key: value`, no YAML dependency. `format: prolog-notebook-book/1` is required and is what
   identifies the file; the name `book.md` is convention only.
 - **There is no `title` key.** The first `# H1` is the title, as in a notebook.
+- `matter` lists the generated sections this binder wants, in the order they are produced
+  (§4). Omit it for the default `title, toc, covers, xref`; `matter: none` for a bare
+  binder that is only its chapters.
 
 Entries may be a URL rather than a relative path, once notebooks are hosted. Resolution goes
 through the injectable filesystem, never Node's `fs` — see [platform-seams.md](platform-seams.md).
 
-## 4. Kicker, and where chapter numbers live
+## 4. What the binder emits — a sequence of sections
 
-A chapter has **two names**, and the existing example page shows both:
+**The binder does not reach into a chapter. It emits its own pages around it.**
+
+`build book.md` produces an ordered list of **sections**, each of exactly one kind:
+
+- **referenced** — a notebook, rendered exactly as it renders standalone
+- **generated** — a page the binder derives: title, contents, a chapter cover, back matter
 
 ```
-CHAPTER 4 · CUT AND CONTROL     ← the kicker: the formal name, what a TOC lists
-Where does the fence go?        ← the H1: the editorial name, what the page is called
+book.md                              build output
+──────────────                       ──────────────────────────────────
+matter: title, toc, covers, xref     1   title page          generated
+# Working through C&M                2   contents            generated
+preface prose…                       3   preface             prose from the spine
+                                     4   Chapter 1 cover     generated
+## Chapters                          5   ch01-tutorial       rendered as-is
+- [Tutorial intro](ch01-tutorial…)   6   Chapter 2 cover     generated
+- [Cut and control](ch04-cut…)       7   ch04-cut            rendered as-is
+## Appendices                        8   Appendix A cover    generated
+- [Operator table](appx-ops…)        9   appx-ops            rendered as-is
+                                     10  predicate xref      generated
 ```
 
-The formal name is already in the spine — it is the entry's link text. So:
+Look at section 6: `ch04-cut.prolog.md` is **Chapter 2 of this binder**. Numbering is
+position in the binder and nothing else — which is what makes arbitrary reordering possible,
+and why a file cannot carry a number even when the book it was written alongside gave it one.
 
-> **The kicker of a bound notebook is the spine's label for that entry.**
+### `matter` — the generated sections
 
-One string, used for the kicker, the table of contents and the navigation, so the three
-cannot drift apart. The notebook keeps its `# H1` and is not touched.
+| name | what it is |
+| ---- | ---------- |
+| `title` | title page: the spine's `# H1`, its `kicker`, and its preface prose |
+| `toc` | contents, from the entry labels (§5) |
+| `covers` | a cover page before **every** entry |
+| `xref` | predicate cross-reference: every predicate defined in the binder, the chapter that defines it, and the chapters that call it |
+| `none` | nothing generated — the binder is exactly its chapters, in order |
+
+Covers are **implicit**. Writing one spine line per cover would be the pile-of-files problem
+in a new place, and a binder with thirty chapters would be sixty entries of which half say
+nothing. A cover may be *overridden* by an authored file when a chapter earns an epigraph or
+a "before you start" — but it is never something you have to write.
+
+`xref` rather than a conventional term index, deliberately. A term index needs author-marked
+terms: real work, and a book's worth of it. A predicate cross-reference is derivable with no
+author effort at all, because the build is already parsing the Prolog — and for a Prolog book
+it is the more useful back matter anyway.
+
+**Generated sections are never files.** They are not in the source tree, not committed, and
+not checked by `--check`. They are a pure function of the spine and the chapters, recomputed
+on every build, exactly like a TOC in any other static site generator.
+
+## 5. Labels, numbering, and how the kicker gets there
 
 ### Numbering
 
@@ -123,15 +165,42 @@ Anything up here is preface, and links in it are **not** entries.
 `numbering: none` in the spine's front matter disables all of it. The link text is then the
 whole label, and an author who wants "Chapter 4" types it.
 
+The label produced here is used in exactly three places — the entry's cover page, the
+contents, and the navigation — so those three cannot drift apart.
+
+### The kicker is how a cover renders on the web
+
+A chapter has **two names**, and the existing example page shows both:
+
+```
+CHAPTER 4 · CUT AND CONTROL     ← the label: the formal name, what a TOC lists
+Where does the fence go?        ← the H1: the editorial name, what the page is called
+```
+
+In print, `covers` is a real page and the label sits on it. On the web a cover page of its
+own would be a click in the way, so **the HTML emitter merges the cover into the head of the
+chapter page** — and that slot is precisely the `.kicker` line the stylesheet already has.
+
+Same model, two emitters:
+
+| emitter | a cover section becomes |
+| ------- | ----------------------- |
+| HTML | the `.kicker` line above the chapter's `# H1`, plus any authored cover content |
+| PDF / EPUB | a page of its own, as in a printed book |
+
+So the kicker is a *rendering of a generated section*, not a property of the notebook and not
+a value injected into it. The notebook's own model is untouched either way.
+
 ### Standalone
 
-Built alone, a notebook uses its own front-matter `kicker` and shows **no number**. That key
-is the notebook's opinion about itself, which is legitimate; a position is not. `--check`
-warns — does not fail — when it looks like a chapter number has been written into one.
+Built alone, a notebook has no binder, therefore no cover, therefore no label. It uses its
+own front-matter `kicker` and shows **no number**. That key is the notebook's opinion about
+itself, which is legitimate; a position is not. `--check` warns — does not fail — when it
+looks like a chapter number has been written into one.
 
 Reordering the spine renumbers the book and touches no notebook file. That is the whole point.
 
-## 5. Cross-notebook references
+## 6. Cross-notebook references
 
 Reserved now, unimplemented, so the grammar is settled once — the same treatment `src=` got.
 
@@ -149,7 +218,7 @@ ch04-cut#q-is-son
 - This is what a cross-reference appendix is built from, and it is the reason to reserve it
   before anyone writes a chapter that wants one.
 
-## 6. Editions
+## 7. Editions
 
 A book is where entitlement lives, because a book is where *ordering and completeness* live,
 and those are what a reader buys.
@@ -163,7 +232,7 @@ flag.** A `.prolog.md` is static text served to the reader; a gate inside it wou
 theatre, and it would break the property that the file reads on GitHub. Gating happens at
 build and serve time, never in the source. See [platform-seams.md](platform-seams.md).
 
-## 7. What this is not
+## 8. What this is not
 
 - **Not a monorepo convention.** A book does not require its notebooks to be in one
   directory, one repo, or one owner's hands.
