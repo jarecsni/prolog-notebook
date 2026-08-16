@@ -62,36 +62,59 @@ Headless, in Node — this is how you test that every example in a document stil
 import { createSession, formatSolution } from 'prolog-notebook';
 
 const session = await createSession();
-session.consult(`
+await session.consult(`
   male(edward).  male(alfred).
   father(albert, edward).  mother(victoria, edward).
   parent(X, Y) :- father(X, Y) ; mother(X, Y).
   is_son(X) :- male(X), parent(_, X).
-`);
+`, 'cell-family');
 
 // Step solutions one at a time, as at the prompt
 const q = session.query('is_son(X)');
 let r;
-while (!(r = q.next()).done) console.log(formatSolution(r.solution));
+while (!(r = await q.next()).done) console.log(r.text);
 
 // …or drain it
-const { solutions } = session.query('is_son(X)').all();
+const { solutions } = await session.query('is_son(X)').all();
 ```
 
-In a browser, load the WASM bundle with a `<script>` tag, then import from
-`prolog-notebook/browser`. See [`example/index.html`](example/index.html) for the cell
-markup and [`src/notebook.js`](src/notebook.js) for the wiring.
+**Every call is awaited**, because in the browser the engine runs in a Web Worker. A Prolog
+query is synchronous WASM, so a goal that never terminates blocks whatever thread it is on —
+and non-termination is *chapter material* in a Prolog book. Running the engine somewhere that
+can be terminated is what turns `loop :- loop.` from a dead tab into a Stop button.
+
+In a browser, import from `prolog-notebook/browser` and let it start the worker; the page does
+**not** need a `<script>` tag for the WASM bundle any more, because the worker loads it. See
+[`example/index.html`](example/index.html) for the cell markup and
+[`src/notebook.js`](src/notebook.js) for the wiring.
+
+```js
+import { createSession } from 'prolog-notebook/browser';
+const session = await createSession();       // boots the worker
+await session.abort();                       // stop a runaway goal; cells are re-consulted
+```
+
+Node runs the engine in-process and is deliberately **not** protected: a non-terminating goal
+will hang it. The CLI is not an interactive page, and pretending otherwise would hide the
+difference.
 
 ### API
 
 | | |
 |---|---|
-| `createSession(options?)` | boots SWI-Prolog; returns a `PrologSession` |
-| `session.consult(text, name?)` | loads a clause base into `user`; `{ok, error?}` |
-| `session.query(goal)` | opens a query; returns a `PrologQuery` |
-| `query.next()` | one solution: `{done, solution?, error?}` |
-| `query.all(limit?)` | drains it: `{solutions, error?, truncated}` |
-| `formatSolution(s)` | renders bindings the way a top level would |
+| `createSession(options?)` | boots SWI-Prolog; returns a session |
+| `await session.consult(text, name?)` | loads a clause base into `user`; `{ok, error?, messages}` |
+| `session.query(goal)` | opens a query; nothing runs until you pull a solution |
+| `await query.next()` | one solution: `{done, solution?, text?, error?}` |
+| `await query.all(limit?)` | drains it: `{solutions, error?, truncated}` |
+| `await session.abort()` | terminates a running goal and replays the consults |
+| `await session.restart()` | same, without anything needing to be running |
+| `formatSolution(s)` | renders bindings the way a top level would, with no engine |
+
+Abort is cheap because of a decision made elsewhere: one cell is one virtual file, so the
+clause store rebuilds from the cells in milliseconds. Terminating the worker also reclaims the
+whole WASM heap, so a runaway loop and a memory blow-up have the same cure. Assert/retract
+state does not survive it — see [`docs/format.md`](docs/format.md) §8.
 
 ## Two things that will bite you if you build this yourself
 

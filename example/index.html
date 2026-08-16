@@ -69,7 +69,8 @@ to walk through the rest — exactly as you would type a semicolon at the interp
   <div class="bar">query<span class="spacer"></span>
     <button class="primary" data-act="run">Run</button>
     <button data-act="next" disabled>; next</button>
-    <button data-act="all" disabled>all</button></div>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span><input value="is_son(X)" spellcheck="false"></div>
   <div class="out"></div>
 </div>
@@ -127,7 +128,8 @@ son_b(X) :- male(X), once(parent(_, X)).</textarea>
   <div class="bar">query<span class="spacer"></span>
     <button class="primary" data-act="run">Run</button>
     <button data-act="next" disabled>; next</button>
-    <button data-act="all" disabled>all</button></div>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span><input value="son_a(X)" spellcheck="false"></div>
   <div class="out"></div>
 </div>
@@ -136,7 +138,8 @@ son_b(X) :- male(X), once(parent(_, X)).</textarea>
   <div class="bar">query<span class="spacer"></span>
     <button class="primary" data-act="run">Run</button>
     <button data-act="next" disabled>; next</button>
-    <button data-act="all" disabled>all</button></div>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span><input value="son_b(X)" spellcheck="false"></div>
   <div class="out"></div>
 </div>
@@ -169,7 +172,8 @@ times.</p>
   <div class="bar">query<span class="spacer"></span>
     <button class="primary" data-act="run">Run</button>
     <button data-act="next" disabled>; next</button>
-    <button data-act="all" disabled>all</button></div>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span><input value="son_b(george)" spellcheck="false"></div>
   <div class="out"></div>
 </div>
@@ -191,7 +195,8 @@ times.</p>
 
 </main>
 
-<script src="../node_modules/swipl-wasm/dist/swipl/swipl-bundle.js"></script>
+<!-- The engine is loaded by the worker, not by this page: a query that never
+     terminates has to run somewhere we can terminate. See src/worker.js. -->
 <script type="module">
   import { mount } from "../src/notebook.js";
   mount();
