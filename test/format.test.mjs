@@ -5,7 +5,16 @@ import { parse, serialise, inputHash, hashFor, NotebookError } from '../src/form
 
 // A whole chapter, on disk, as an author would actually write one. Inline strings
 // prove the grammar; this proves the thing people will really hand us.
-const FIXTURE = new URL('./fixtures/ch04-cut.prolog.md', import.meta.url);
+//
+// It lives in notebooks/ rather than test/fixtures/ because it is a chapter, not a
+// fixture: it is meant to grow, and a reader is meant to read it. Nothing here
+// asserts a cell count for that reason — what is asserted is the property that must
+// survive every edit, which is the byte-exact round-trip.
+const NOTEBOOK = new URL('../notebooks/ch04-cut.prolog.md', import.meta.url);
+
+// The opposite kind of file, and the reason the two must not be one file: this one
+// is deliberately WRONG, so it can never be a chapter anyone reads.
+const STALE = new URL('./fixtures/stale-output.prolog.md', import.meta.url);
 
 // The worked example from docs/format.md §13, in canonical form. Everything the
 // format promises has to hold for this file.
@@ -117,26 +126,37 @@ test('parse -> serialise is byte-identical for a conforming file', () => {
 });
 
 test('a whole chapter file parses and round-trips byte for byte', () => {
-  const source = readFileSync(FIXTURE, 'utf8');
+  const source = readFileSync(NOTEBOOK, 'utf8');
   const notebook = parse(source);
 
-  assert.equal(notebook.cells.filter((c) => c.kind === 'program').length, 2);
-  assert.equal(notebook.cells.filter((c) => c.kind === 'query').length, 3);
-  assert.equal(notebook.cells.filter((c) => c.kind === 'container').length, 4);
+  for (const kind of ['markdown', 'program', 'query', 'container']) {
+    assert.ok(notebook.cells.some((c) => c.kind === kind), `chapter should have a ${kind} cell`);
+  }
   assert.equal(serialise(notebook), source);
 });
 
+test('a published chapter agrees with its own saved answers', () => {
+  // The chapter is what a run would have written, so its hash matches. Asserting
+  // this here is what stops an edit to the program above a query from landing with
+  // an answer that no longer follows from it.
+  const notebook = parse(readFileSync(NOTEBOOK, 'utf8'));
+  // `c.output !== null` would match a markdown cell, which has no output property
+  // at all — undefined is not null, and the test would silently pass on the wrong cell.
+  const query = notebook.cells.find((c) => c.kind === 'query' && c.output);
+  assert.equal(hashFor(notebook, query), query.output.inputHash);
+});
+
 test('a chapter can say its saved answers are stale before any engine exists', () => {
-  const notebook = parse(readFileSync(FIXTURE, 'utf8'));
+  const notebook = parse(readFileSync(STALE, 'utf8'));
   const query = notebook.cells.find((c) => c.id === 'q-is-son');
-  // The fixture carries a deliberately wrong hash. Detecting that on a cold page,
-  // with no WASM loaded, is the entire point of storing one.
+  // Detecting this on a cold page, with no WASM loaded, is the entire point of
+  // storing a hash rather than recomputing an answer.
   assert.equal(query.output.inputHash, '0000000000000000');
   assert.notEqual(hashFor(notebook, query), query.output.inputHash);
 });
 
 test('a query with no saved output is simply unanswered, not malformed', () => {
-  const notebook = parse(readFileSync(FIXTURE, 'utf8'));
+  const notebook = parse(readFileSync(NOTEBOOK, 'utf8'));
   assert.equal(notebook.cells.find((c) => c.id === 'q-son-a').output, null);
 });
 

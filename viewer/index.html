@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  The viewer: a shell that renders any notebook from notebooks/. It is not an
+  example of anything and there is only ever one of it, which is why it does not
+  live in example/ beside the hand-written spike page.
+
+  Scaffolding with a known end date: v0.3's `serve --watch` (869edp5c8) and
+  `build` generate this page, at which point it stops being a file in the repo.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Replaced from the notebook's own H1 once it loads (format §2). -->
+<title>A Prolog notebook</title>
+<link rel="stylesheet" href="../src/notebook.css">
+<!--
+  markdown-it is a bare specifier, which a browser cannot resolve on its own.
+  The map points at the ESM bundle npm already installed — no bundler, no build
+  step, which is the same promise the notebooks make.
+
+  It is a development convenience, not the shipping shape: `build` (v0.3)
+  prerenders a chapter to HTML, so the markdown library runs once at build time
+  and a reader downloads none of it.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "markdown-it": "../node_modules/markdown-it/dist/browser/markdown-it.esm.min.mjs"
+  }
+}
+</script>
+</head>
+<body>
+<main>
+
+<div id="boot-warning">
+  <strong>This notebook is not running.</strong>
+  The page loaded but its JavaScript did not. The usual cause is opening
+  <code>index.html</code> straight from disk — browsers block ES modules over
+  <code>file://</code>. Serve it over HTTP instead:
+  <pre>npm install
+npm run dev        # then open http://localhost:8777/viewer/</pre>
+  This message disappears by itself once the notebook is live.
+</div>
+
+</main>
+
+<script type="module">
+  import { load } from "../src/page.js";
+
+  // Any notebook, by URL: notebooks/ holds the chapters, and this page holds no
+  // opinion about which of them you are reading.
+  const src = new URLSearchParams(location.search).get("src")
+    ?? "../notebooks/ch04-cut.prolog.md";
+
+  load(src).catch((error) => {
+    // A chapter that fails to load must say so. Rendering nothing looks like a
+    // chapter with nothing in it, which is the more expensive kind of wrong.
+    const box = document.getElementById("boot-warning");
+    box.innerHTML = `<strong>This notebook did not load.</strong> `;
+    box.appendChild(document.createTextNode(error.message));
+  });
+</script>
+</body>
+</html>

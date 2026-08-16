@@ -44,15 +44,27 @@ So a query cell gives you the first solution, and then you step.
 git clone https://github.com/jarecsni/prolog-notebook
 cd prolog-notebook
 npm install
-npm run example        # then open http://localhost:8777/example/
+npm run dev            # serves the repo root on :8777
 ```
 
-The example is a real worked section — the `once/1` placement puzzle — not a widget demo.
-Predict what each version returns before you press Run.
+Then open **http://localhost:8777/viewer/**. That is a chapter — the `once/1` placement puzzle,
+a real worked section rather than a widget demo — rendered from
+[`notebooks/ch04-cut.prolog.md`](notebooks/ch04-cut.prolog.md). Predict what each version
+returns before you press Run.
 
-It has to be **served over HTTP**. Opening `example/index.html` straight from disk leaves the
-buttons inert, because browsers block ES modules over `file://` — the page detects this and
-says so rather than failing silently.
+Edit that file, reload, and the chapter changes: prose, Prolog, margin note and prediction box
+are all in it, and there is no HTML anywhere. Point the viewer at any other notebook with
+`?src=`.
+
+| | |
+|---|---|
+| `notebooks/` | chapters. The product. |
+| `viewer/` | one shell page that renders any of them. Replaced by `build` in v0.3. |
+| `example/` | the original hand-written spike, kept until the chapter above replaces it |
+
+It has to be **served over HTTP**. Opening the page straight from disk leaves the buttons
+inert, because browsers block ES modules over `file://` — the page detects this and says so
+rather than failing silently.
 
 ## Use it
 
@@ -85,7 +97,7 @@ can be terminated is what turns `loop :- loop.` from a dead tab into a Stop butt
 
 In a browser, import from `prolog-notebook/browser` and let it start the worker; the page does
 **not** need a `<script>` tag for the WASM bundle any more, because the worker loads it. See
-[`example/index.html`](example/index.html) for the cell markup and
+[`viewer/index.html`](viewer/index.html) for the whole of a host page, and
 [`src/notebook.js`](src/notebook.js) for the wiring.
 
 ```js
@@ -93,6 +105,17 @@ import { createSession } from 'prolog-notebook/browser';
 const session = await createSession();       // boots the worker
 await session.abort();                       // stop a runaway goal; cells are re-consulted
 ```
+
+To render a notebook file instead of marking up cells by hand — the whole page from one call:
+
+```js
+import { load } from 'prolog-notebook/page';
+await load('chapter-04-cut.prolog.md');      // parse, render into <main>, wire up the cells
+```
+
+`prolog-notebook/format` (parse, serialise, `inputHash`) and `prolog-notebook/render` (model to
+HTML strings) are exported separately, and neither touches the DOM — the same two modules back
+the browser, the CLI runner and a future VS Code serializer.
 
 Node runs the engine in-process and is deliberately **not** protected: a non-terminating goal
 will hang it. The CLI is not an interactive page, and pretending otherwise would hide the
@@ -133,15 +156,17 @@ lesson about backtracking quietly teaches the wrong thing.
 
 Working and tested:
 
-- execution core, environment-agnostic (`src/engine.js`), 8 passing tests
+- execution core, environment-agnostic (`src/engine.js`), run in a Web Worker in the browser
 - Node entry point, browser entry point
-- program cells and query cells with `Run` / `; next` / `all`
-- the worked example
+- **a chapter is a file** — parse, render and mount a `.prolog.md`, cells and all
+- program cells and query cells with `Run` / `; next` / `all` / `stop`
+- 85 passing tests
 
 Not built yet:
 
-- **a file-backed renderer** — reading `.ipynb` or markdown and *generating* the cells.
-  Today the example's cells are hand-written HTML. This is the next real piece of work.
+- **saved outputs on a cold page.** A published chapter should be readable, with its answers,
+  before the 5.9 MB engine arrives — and on a page where it never arrives. The format stores
+  the solution *sequence* for exactly this; nothing renders it yet.
 - custom elements (`<prolog-program>`, `<prolog-query>`) so notebooks drop into any static site
 - a VS Code notebook controller — VS Code supplies the UI, this supplies the kernel, still no Python
 - a CLI runner, to execute a document's cells in CI and fail the build when an example rots

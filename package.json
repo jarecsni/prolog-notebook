@@ -10,6 +10,8 @@
     "./engine": "./src/engine.js",
     "./format": "./src/format.js",
     "./notebook.css": "./src/notebook.css",
+    "./page": "./src/page.js",
+    "./render": "./src/render.js",
     "./session": "./src/session.js",
     "./worker": "./src/worker.js"
   },
@@ -21,7 +23,7 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "example": "python3 -m http.server 8777",
+    "dev": "python3 -m http.server 8777",
     "prepublishOnly": "npm test"
   },
   "keywords": [

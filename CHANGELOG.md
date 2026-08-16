@@ -19,6 +19,22 @@ the demonstration has to be survivable.
 
 ### Added
 
+- **A chapter is a file.** `prolog-notebook/page` fetches a `.prolog.md`, parses it, renders
+  the whole page and wires up the cells: `await load('chapter-04-cut.prolog.md')`. Program and
+  query cells are generated from the model rather than marked up by hand, which is what makes
+  writing a chapter *writing markdown*.
+- `prolog-notebook/render` — the cell model to HTML **strings**, DOM-free. The same emitter
+  serves the browser today, the static build in v0.3 and the VS Code renderer later; one
+  implementation, four consumers.
+- A generated program cell carries its notebook id as `data-cell`, and the consult is named by
+  it. SWI now says `Previously defined at /p-family.pl:20` — a warning that names a cell the
+  reader can find in the source, rather than `/cell-3.pl`.
+- **`notebooks/` holds chapters and `viewer/` holds the one page that renders them.** They had
+  both been living in `example/`, under a script (`npm run example`, now `npm run dev`) that
+  actually served the repo root. A chapter is not an example, there will be many of them, and
+  the first one had been doubling as a parser fixture *with a deliberately wrong `input-hash`* —
+  which a file anybody is meant to read must never carry. The wrong hash now lives in
+  `test/fixtures/stale-output.prolog.md`, where being wrong is the point.
 - **The engine runs in a Web Worker** in the browser, so a runaway goal costs a click on
   Stop rather than the tab. Verified by driving Chrome: with `loop` spinning, timers still
   fire, layout still runs, and the notebook is usable again afterwards.
