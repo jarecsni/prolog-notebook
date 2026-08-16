@@ -156,13 +156,57 @@ function splitReveal(body) {
 }
 
 /**
- * Render one cell, or return null for a kind this module does not own.
+ * A program cell: the Prolog, and a button that loads it.
  *
- * Program and query cells are 869ectrzz; keeping them out of here rather than
- * stubbing them means nothing silently renders as empty in the meantime.
+ * `data-cell` carries the notebook's own id through to the DOM, and it is not
+ * decoration either — src/notebook.js consults each cell into the virtual file
+ * named by it (format §8), so SWI's own messages say `/p-family.pl` rather than
+ * `/cell-3.pl`. A warning that a cell has destroyed another cell's clauses is
+ * only useful if it names a cell the reader can find.
+ *
+ * @param {{id: string, source: string}} cell
+ * @returns {string}
+ */
+export function renderProgram(cell) {
+  return `<div class="cell program" data-cell="${escapeHtml(cell.id)}">
+  <div class="bar">program<span class="spacer"></span><span class="status"></span>
+    <button class="primary">Consult</button></div>
+  <textarea spellcheck="false">${escapeHtml(cell.source)}</textarea>
+</div>`;
+}
+
+/**
+ * A query cell: the goal, and the buttons that step it.
+ *
+ * `; next` is not a convenience beside `all` — a Prolog query yields a stream of
+ * proofs, and watching them arrive one at a time is usually the lesson. Both
+ * survive into the generated markup for that reason.
+ *
+ * The `.out` div is deliberately empty even when the cell HAS a saved output in
+ * the file. Rendering those without an engine is [869ectt0y], and it needs the
+ * attribution rule (docs/modes.md §3) to say whose answers they are; an
+ * unlabelled replay would be the exact lie that rule exists to prevent.
+ *
+ * @param {{id: string, goal: string}} cell
+ * @returns {string}
+ */
+export function renderQuery(cell) {
+  return `<div class="cell query" data-cell="${escapeHtml(cell.id)}">
+  <div class="bar">query<span class="spacer"></span>
+    <button class="primary" data-act="run">Run</button>
+    <button data-act="next" disabled>; next</button>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
+  <div class="prompt"><span>?-</span><input value="${escapeHtml(cell.goal)}" spellcheck="false"></div>
+  <div class="out"></div>
+</div>`;
+}
+
+/**
+ * Render one cell.
  *
  * @param {object} cell
- * @returns {string|null}
+ * @returns {string}
  */
 export function renderCell(cell) {
   switch (cell.kind) {
@@ -170,13 +214,35 @@ export function renderCell(cell) {
       return renderProse(cell.source);
     case 'container':
       return renderContainer(cell);
+    case 'program':
+      return renderProgram(cell);
+    case 'query':
+      return renderQuery(cell);
     case 'unknown':
       // A cell kind from a later version. It renders as the ordinary code block
       // it looks like, so a v0.2 page degrades instead of dropping content.
       return renderProse(cell.source);
     default:
-      return null;
+      throw new Error(`no renderer for cell kind "${cell.kind}"`);
   }
+}
+
+/**
+ * A parsed notebook to the HTML that goes inside `<main>`.
+ *
+ * Throwing on an unrenderable cell rather than skipping it is the whole reason
+ * this loop exists as a function: a chapter that silently drops a cell reads as
+ * a complete chapter, and the missing step is the one the reader needed.
+ *
+ * @param {{frontMatter: Map<string, string>, cells: object[]}} notebook
+ * @returns {string}
+ */
+export function renderNotebook(notebook) {
+  const parts = [];
+  const kicker = renderKicker(notebook.frontMatter);
+  if (kicker) parts.push(kicker);
+  for (const cell of notebook.cells) parts.push(renderCell(cell));
+  return `${parts.join('\n\n')}\n`;
 }
 
 /**

@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from '../src/format.js';
-import { renderProse, renderContainer, renderCell, renderKicker } from '../src/render.js';
+import {
+  renderProse, renderContainer, renderCell, renderKicker,
+  renderProgram, renderQuery, renderNotebook,
+} from '../src/render.js';
 
 const FIXTURE = new URL('./fixtures/ch04-cut.prolog.md', import.meta.url);
 const notebook = parse(readFileSync(FIXTURE, 'utf8'));
@@ -90,13 +93,17 @@ test('bullets close a chapter with a heading and a list', () => {
   assert.match(html, /<li>Prolog enumerates <strong>proofs<\/strong>, not answers\.<\/li>/);
 });
 
-test('renderCell owns prose and containers, and nothing else', () => {
-  assert.equal(typeof renderCell(notebook.cells[0]), 'string');
-  assert.equal(typeof renderCell(container('aside')), 'string');
-  // Program and query cells belong to 869ectrzz. Returning null rather than an
-  // empty string means a missing renderer cannot look like an empty cell.
-  assert.equal(renderCell(notebook.cells.find((c) => c.kind === 'program')), null);
-  assert.equal(renderCell(notebook.cells.find((c) => c.kind === 'query')), null);
+test('renderCell covers every kind the parser can produce', () => {
+  for (const kind of ['markdown', 'container', 'program', 'query']) {
+    const cell = notebook.cells.find((c) => c.kind === kind);
+    assert.equal(typeof renderCell(cell), 'string', `${kind} should render`);
+  }
+});
+
+test('an unrenderable cell throws rather than rendering as nothing', () => {
+  // A chapter that silently drops a cell reads as a complete chapter, and the
+  // missing step is the one the reader needed.
+  assert.throws(() => renderCell({ kind: 'exercise' }), /no renderer for cell kind "exercise"/);
 });
 
 test('a future cell kind renders as the code block it looks like', () => {
@@ -110,10 +117,82 @@ test('the kicker comes from front matter, since markdown cannot spell it', () =>
   assert.equal(renderKicker(new Map()), '');
 });
 
-test('every prose and container cell in a real chapter renders', () => {
-  const rendered = notebook.cells
-    .filter((c) => c.kind === 'markdown' || c.kind === 'container')
-    .map(renderCell);
-  assert.equal(rendered.length, 8);
+test('every cell in a real chapter renders to something', () => {
+  const rendered = notebook.cells.map(renderCell);
+  assert.equal(rendered.length, 13);
   assert.equal(rendered.every((html) => typeof html === 'string' && html.length > 0), true);
+});
+
+// --- program and query cells -----------------------------------------------
+// The class vocabulary here is a deliverable, not decoration: notebook.css styles
+// exactly these names, so a generator that invented its own structure would leave
+// the page technically working and visually gone (869edyyvm).
+
+const program = notebook.cells.find((c) => c.kind === 'program');
+const query = notebook.cells.find((c) => c.kind === 'query');
+
+test('a program cell carries the classes the stylesheet targets', () => {
+  const html = renderProgram(program);
+  assert.match(html, /^<div class="cell program" data-cell="p-family">/);
+  assert.match(html, /<div class="bar">program<span class="spacer"><\/span><span class="status"><\/span>/);
+  assert.match(html, /<button class="primary">Consult<\/button>/);
+  assert.match(html, /<textarea spellcheck="false">male\(albert\)\./);
+});
+
+test("the cell's id reaches the DOM, because the consult is named by it", () => {
+  // One cell, one virtual file: this attribute is what makes SWI say
+  // "/p-family.pl" instead of "/cell-3.pl" when a cell destroys another's clauses.
+  assert.match(renderProgram(program), /data-cell="p-family"/);
+  assert.match(renderQuery(query), /data-cell="q-is-son"/);
+});
+
+test('the program source survives verbatim, angle brackets included', () => {
+  // `X < Y` is ordinary Prolog and ordinary HTML poison. Escaping is not optional
+  // here: a comparison operator would otherwise open a tag and eat the clause.
+  const html = renderProgram({ id: 'p-cmp', source: 'smaller(X, Y) :- X < Y, X > 0.\n% a & b' });
+  assert.match(html, /smaller\(X, Y\) :- X &lt; Y, X &gt; 0\.\n% a &amp; b/);
+  assert.equal(html.includes('X < Y'), false);
+});
+
+test('a query cell carries its goal and the four buttons', () => {
+  const html = renderQuery(query);
+  assert.match(html, /^<div class="cell query" data-cell="q-is-son">/);
+  assert.match(html, /<div class="prompt"><span>\?-<\/span><input value="is_son\(X\)" spellcheck="false">/);
+  // Stepping is the teaching device, so `; next` is not optional chrome.
+  const acts = [...html.matchAll(/data-act="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(acts, ['run', 'next', 'all', 'stop']);
+  assert.match(html, /<button data-act="next" disabled>/);
+});
+
+test('a goal containing a quote does not break out of the attribute', () => {
+  const html = renderQuery({ id: 'q-str', goal: 'X = "str", atom_string(A, X)' });
+  assert.match(html, /value="X = &quot;str&quot;, atom_string\(A, X\)"/);
+});
+
+test('a saved output is not rendered yet, and the output area stays empty', () => {
+  // 869ectt0y owns replaying saved solutions, and it needs the attribution rule
+  // (docs/modes.md §3) to say whose answers they are. An unlabelled replay would
+  // be exactly the lie that rule exists to prevent, so this renders nothing.
+  assert.notEqual(query.output, null, 'the fixture should carry a saved output');
+  assert.match(renderQuery(query), /<div class="out"><\/div>\n<\/div>$/);
+});
+
+// --- the whole notebook ----------------------------------------------------
+
+test('a notebook renders kicker first, then every cell in document order', () => {
+  const html = renderNotebook(notebook);
+  assert.match(html, /^<div class="kicker">Cut and control<\/div>/);
+  const order = ['<h1>', 'p-family', 'q-is-son', 'class="note"', 'class="aside"', 'p-fixes',
+    'class="predict"', 'q-son-a', 'q-son-b', 'class="bullets"'];
+  let at = 0;
+  for (const marker of order) {
+    const next = html.indexOf(marker, at);
+    assert.notEqual(next, -1, `${marker} should appear after the previous one`);
+    at = next;
+  }
+});
+
+test('a notebook with no kicker starts with its first cell', () => {
+  const plain = parse('# Title\n\ntext\n');
+  assert.match(renderNotebook(plain), /^<h1>Title<\/h1>/);
 });

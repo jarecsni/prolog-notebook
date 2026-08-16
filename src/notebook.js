@@ -38,7 +38,10 @@ function mountProgram(cell, options) {
   const source = cell.querySelector('textarea');
   const button = cell.querySelector('button');
   const status = cell.querySelector('.status');
-  const name = `cell-${serial++}`;
+  // One cell, one virtual file. A generated cell carries its notebook id, so SWI
+  // says "/p-family.pl" when this cell redefines another's clauses — a warning
+  // that names a cell the reader can actually find in the source.
+  const name = cell.dataset.cell || `cell-${serial++}`;
 
   autosize(source);
 

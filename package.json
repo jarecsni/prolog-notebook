@@ -10,6 +10,8 @@
     "./engine": "./src/engine.js",
     "./format": "./src/format.js",
     "./notebook.css": "./src/notebook.css",
+    "./page": "./src/page.js",
+    "./render": "./src/render.js",
     "./session": "./src/session.js",
     "./worker": "./src/worker.js"
   },
