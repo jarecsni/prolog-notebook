@@ -156,6 +156,12 @@ button.primary:hover { background: #98380f; }
 }
 .aside strong { display: block; margin-bottom: .3rem; }
 
+/* Generated containers wrap their prose in <p>, which the hand-written markup did
+   not. Without this the last paragraph adds a trailing 1rem inside every box. */
+.aside p:last-child,
+.predict > p:last-child,
+.bullets p:last-child { margin-bottom: 0; }
+
 .note {
   font-family: var(--hand);
   font-size: 1.12rem;
