@@ -8,6 +8,7 @@
     ".": "./src/node.js",
     "./browser": "./src/browser.js",
     "./engine": "./src/engine.js",
+    "./format": "./src/format.js",
     "./notebook.css": "./src/notebook.css"
   },
   "files": [
