@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.2.0] — 2026-08-16
+
+**Breaking: the session API is asynchronous.** `consult`, `next` and `all` now return
+promises, and in the browser the engine runs in a Web Worker.
+
+### Why
+
+A Prolog query is synchronous WASM, so a goal that never terminates blocks the thread it
+runs on. Measured, not assumed: `consult('loop :- loop.')` followed by `query('loop').next()`
+stopped Node's event loop dead — a timer scheduled for 3 seconds never fired. In a browser
+that is not a slow page, it is a dead one: no repaint, no button, no way back except closing
+the tab.
+
+That is unacceptable here specifically, because **non-termination is chapter material**. Left
+recursion and a generator with no base case are things a Prolog book has to demonstrate, and
+the demonstration has to be survivable.
+
+### Added
+
+- **The engine runs in a Web Worker** in the browser, so a runaway goal costs a click on
+  Stop rather than the tab. Verified by driving Chrome: with `loop` spinning, timers still
+  fire, layout still runs, and the notebook is usable again afterwards.
+- `session.abort()` and `session.restart()` — terminate the worker and replay the consults
+  into a new engine. Affordable only because one cell is one virtual file, so a chapter's
+  clause store rebuilds in milliseconds; terminating also reclaims the whole WASM heap, so a
+  memory blow-up and an infinite loop have the same cure.
+- A `stop` button in the query cell, and a `ConsultLog` holding one entry per cell — the
+  latest text, not a history — so a replay restores what the reader actually has.
+- `prolog-notebook/format` (0.1.3, listed here for completeness): the notebook parser,
+  canonical serialiser and `input-hash`.
+
+### Changed
+
+- `createSession()` returns a session whose methods are all async. Migration is mechanical:
+  `session.consult(…)` → `await session.consult(…)`, `q.next()` → `await q.next()`.
+- The browser page no longer loads the WASM bundle with a `<script>` tag; the worker loads
+  it. A page may pass `swiplUrl` if it lives somewhere unusual.
+- Node still runs the engine in-process and is **not** protected against a runaway goal. The
+  CLI is not an interactive page; the limitation is documented rather than implied.
+
+### Notes
+
+`assert`/`retract` state does not survive an abort, which is already the documented
+behaviour of "restart engine and run all" (`docs/format.md` §8) rather than a new surprise.
+
 ## [0.1.2] — 2026-08-04
 
 Two bugs, both of which made the library quietly say something untrue. Found by
