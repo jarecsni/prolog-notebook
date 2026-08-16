@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { parse, serialise, inputHash, hashFor, NotebookError } from '../src/format.js';
+
+// A whole chapter, on disk, as an author would actually write one. Inline strings
+// prove the grammar; this proves the thing people will really hand us.
+const FIXTURE = new URL('./fixtures/ch04-cut.prolog.md', import.meta.url);
 
 // The worked example from docs/format.md §13, in canonical form. Everything the
 // format promises has to hold for this file.
@@ -109,6 +114,30 @@ test('a container keeps its title and its body, including raw HTML', () => {
 
 test('parse -> serialise is byte-identical for a conforming file', () => {
   assert.equal(serialise(parse(CHAPTER)), CHAPTER);
+});
+
+test('a whole chapter file parses and round-trips byte for byte', () => {
+  const source = readFileSync(FIXTURE, 'utf8');
+  const notebook = parse(source);
+
+  assert.equal(notebook.cells.filter((c) => c.kind === 'program').length, 2);
+  assert.equal(notebook.cells.filter((c) => c.kind === 'query').length, 3);
+  assert.equal(notebook.cells.filter((c) => c.kind === 'container').length, 4);
+  assert.equal(serialise(notebook), source);
+});
+
+test('a chapter can say its saved answers are stale before any engine exists', () => {
+  const notebook = parse(readFileSync(FIXTURE, 'utf8'));
+  const query = notebook.cells.find((c) => c.id === 'q-is-son');
+  // The fixture carries a deliberately wrong hash. Detecting that on a cold page,
+  // with no WASM loaded, is the entire point of storing one.
+  assert.equal(query.output.inputHash, '0000000000000000');
+  assert.notEqual(hashFor(notebook, query), query.output.inputHash);
+});
+
+test('a query with no saved output is simply unanswered, not malformed', () => {
+  const notebook = parse(readFileSync(FIXTURE, 'utf8'));
+  assert.equal(notebook.cells.find((c) => c.id === 'q-son-a').output, null);
 });
 
 test('prose is passed through byte for byte, blank lines and all', () => {
