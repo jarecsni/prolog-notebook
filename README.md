@@ -44,19 +44,27 @@ So a query cell gives you the first solution, and then you step.
 git clone https://github.com/jarecsni/prolog-notebook
 cd prolog-notebook
 npm install
-npm run example        # then open http://localhost:8777/example/
+npm run dev            # serves the repo root on :8777
 ```
 
-The example is a real worked section — the `once/1` placement puzzle — not a widget demo.
-Predict what each version returns before you press Run.
+Then open **http://localhost:8777/viewer/**. That is a chapter — the `once/1` placement puzzle,
+a real worked section rather than a widget demo — rendered from
+[`notebooks/ch04-cut.prolog.md`](notebooks/ch04-cut.prolog.md). Predict what each version
+returns before you press Run.
 
-`http://localhost:8777/example/notebook.html` is the same kind of page built the way chapters
-are actually written: it fetches a `.prolog.md`, renders it, and wires up the cells. Point it
-at another one with `?src=`.
+Edit that file, reload, and the chapter changes: prose, Prolog, margin note and prediction box
+are all in it, and there is no HTML anywhere. Point the viewer at any other notebook with
+`?src=`.
 
-It has to be **served over HTTP**. Opening `example/index.html` straight from disk leaves the
-buttons inert, because browsers block ES modules over `file://` — the page detects this and
-says so rather than failing silently.
+| | |
+|---|---|
+| `notebooks/` | chapters. The product. |
+| `viewer/` | one shell page that renders any of them. Replaced by `build` in v0.3. |
+| `example/` | the original hand-written spike, kept until the chapter above replaces it |
+
+It has to be **served over HTTP**. Opening the page straight from disk leaves the buttons
+inert, because browsers block ES modules over `file://` — the page detects this and says so
+rather than failing silently.
 
 ## Use it
 
@@ -89,7 +97,7 @@ can be terminated is what turns `loop :- loop.` from a dead tab into a Stop butt
 
 In a browser, import from `prolog-notebook/browser` and let it start the worker; the page does
 **not** need a `<script>` tag for the WASM bundle any more, because the worker loads it. See
-[`example/index.html`](example/index.html) for the cell markup and
+[`viewer/index.html`](viewer/index.html) for the whole of a host page, and
 [`src/notebook.js`](src/notebook.js) for the wiring.
 
 ```js

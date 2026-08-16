@@ -7,8 +7,11 @@ import {
   renderProgram, renderQuery, renderNotebook,
 } from '../src/render.js';
 
-const FIXTURE = new URL('./fixtures/ch04-cut.prolog.md', import.meta.url);
-const notebook = parse(readFileSync(FIXTURE, 'utf8'));
+// The real chapter, not a fixture: if a chapter someone is meant to read stops
+// rendering, that is what the suite should say. Nothing below asserts a cell count,
+// so the chapter stays free to grow.
+const NOTEBOOK = new URL('../notebooks/ch04-cut.prolog.md', import.meta.url);
+const notebook = parse(readFileSync(NOTEBOOK, 'utf8'));
 const container = (variant) => notebook.cells.find((c) => c.variant === variant);
 
 test('prose renders as GitHub would render it', () => {
@@ -119,7 +122,7 @@ test('the kicker comes from front matter, since markdown cannot spell it', () =>
 
 test('every cell in a real chapter renders to something', () => {
   const rendered = notebook.cells.map(renderCell);
-  assert.equal(rendered.length, 13);
+  assert.equal(rendered.length, notebook.cells.length);
   assert.equal(rendered.every((html) => typeof html === 'string' && html.length > 0), true);
 });
 

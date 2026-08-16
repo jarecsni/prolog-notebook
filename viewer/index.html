@@ -1,4 +1,12 @@
 <!doctype html>
+<!--
+  The viewer: a shell that renders any notebook from notebooks/. It is not an
+  example of anything and there is only ever one of it, which is why it does not
+  live in example/ beside the hand-written spike page.
+
+  Scaffolding with a known end date: v0.3's `serve --watch` (869edp5c8) and
+  `build` generate this page, at which point it stops being a file in the repo.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -29,10 +37,10 @@
 <div id="boot-warning">
   <strong>This notebook is not running.</strong>
   The page loaded but its JavaScript did not. The usual cause is opening
-  <code>notebook.html</code> straight from disk — browsers block ES modules over
+  <code>index.html</code> straight from disk — browsers block ES modules over
   <code>file://</code>. Serve it over HTTP instead:
   <pre>npm install
-npm run example        # then open http://localhost:8777/example/notebook.html</pre>
+npm run dev        # then open http://localhost:8777/viewer/</pre>
   This message disappears by itself once the notebook is live.
 </div>
 
@@ -41,10 +49,10 @@ npm run example        # then open http://localhost:8777/example/notebook.html</
 <script type="module">
   import { load } from "../src/page.js";
 
-  // Any notebook, by URL. The default is the one notebook that exists; 869ectt17
-  // writes the once/1 chapter as a real file and this page points at that instead.
+  // Any notebook, by URL: notebooks/ holds the chapters, and this page holds no
+  // opinion about which of them you are reading.
   const src = new URLSearchParams(location.search).get("src")
-    ?? "../test/fixtures/ch04-cut.prolog.md";
+    ?? "../notebooks/ch04-cut.prolog.md";
 
   load(src).catch((error) => {
     // A chapter that fails to load must say so. Rendering nothing looks like a

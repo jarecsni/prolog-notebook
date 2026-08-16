@@ -45,7 +45,7 @@ the rest — exactly as you would type a semicolon at the interpreter's prompt.
 is_son(X)
 ```
 
-```text output for="q-is-son" input-hash="0000000000000000"
+```text output for="q-is-son" input-hash="2fea085fecd9b398"
 X = edward ;
 X = edward ;
 X = alfred ;
