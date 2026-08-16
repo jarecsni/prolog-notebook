@@ -347,6 +347,22 @@ clean.
 
 Unknown container kinds render as plain blockquotes and round-trip untouched.
 
+### Where our renderer diverges from GitHub
+
+The prose renderer is markdown-it: CommonMark, plus GFM tables, strikethrough and autolinks.
+Two GFM extensions it does not carry, both of which fail silently on our side while working on
+the repo page — so an author who uses one sees a chapter that renders two different ways:
+
+- `- [ ] task` — renders as the literal text `[ ] task`, not a checkbox.
+- `[^1]` — footnote references and definitions are left as literal text.
+
+One plugin each, and neither is needed by any chapter yet, so both are deferred to
+[869ejgybm]. Until it lands, do not use them.
+
+Raw HTML in prose is a different matter and is **not** a divergence to be fixed: it is escaped
+deliberately, so a notebook from a stranger cannot run script in the reader's page. Everything
+markdown can express still works; `<kbd>`, `<sup>` and sized `<img>` do not.
+
 ## 11. Canonical serialisation
 
 Stronger than round-trip. Round-trip says *do not corrupt what is there*; this says *agree on
@@ -442,3 +458,4 @@ false.
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
 [869edyyvm]: https://app.clickup.com/t/869edyyvm
 [869ectt20]: https://app.clickup.com/t/869ectt20
+[869ejgybm]: https://app.clickup.com/t/869ejgybm

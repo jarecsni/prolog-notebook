@@ -1,6 +1,7 @@
 # Read, Explore, Own — what a reader may change
 
-Status: **v0.1, agreed 2026-08-16.** Tickets [869ejgbxf], [869ejgbzw], [869ejgc1k].
+Status: **v0.2, amended 2026-08-16** with the output-attribution rule (§3) and what Run means
+in a browser (§5). Tickets [869ejgbxf], [869ejgbzw], [869ejgc1k], [869ectt5d], [869ejgyaa].
 
 A notebook is read in two very different situations. Someone working through a published
 chapter is a *reader*: their changes are experiments, and the chapter is not theirs. Someone
@@ -44,12 +45,33 @@ Three rules:
 
 1. **Never write to the served file.** Impossible on a static host and undesirable anyway. The
    canonical chapter stays canonical.
-2. **The author's answers and the reader's answers are never confused.** The page shows the
-   saved output until the reader runs; after that it shows theirs, labelled as theirs, with a
-   way back. Silently replacing the author's answers with the reader's — or the reverse —
-   makes the page lie about where a result came from.
+2. **The author's answers and the reader's answers are never confused.** See the rule below;
+   it is the one that does the work.
 3. **Reset is always available**, per cell and for the whole notebook. Dropping the scratchpad
    returns the published chapter exactly.
+
+### Every output is attributable
+
+Persisting the reader's *edits* without their *outputs* produces a page that lies. On the next
+load the cell would show their program above the author's answers, as though one had produced
+the other. So the scratchpad holds both or neither ([869ectt5d]).
+
+Which means every output on screen is in exactly one of three states, and the page always says
+which:
+
+| state | what it is | when it shows |
+| ----- | ---------- | ------------- |
+| **authored** | the saved output from the file, from a clean run at publish time | the default; what a cold page shows, engine or no engine |
+| **yours** | produced by this reader, from the program currently on screen | after they press Run — labelled, with a way back to authored |
+| **stale** | either kind, whose `input-hash` no longer matches the program above it | marked, never silently discarded and never silently trusted ([869eddzgq]) |
+
+**The invariant: an output is never shown without being attributable.** Everything else in
+Explore mode follows from it — why reset exists, why edits and outputs persist together, why
+scratchpad state is keyed by the published source it was made against (§6).
+
+The failure it prevents is specific. A reader who sees their own program above someone else's
+answers does not conclude that our tool is confused; they conclude something false about
+**Prolog**. That is the one failure this project may not have.
 
 ### Explore needs an exit, or it is a trap
 
@@ -93,6 +115,15 @@ than a keystroke. The tradeoff that produced out-of-order execution is not ours 
 
 The exception is a cell declaring `:- dynamic`, whose assert/retract state lives in no file.
 Detected statically; the UI offers *restart engine and run all* ([format §8](format.md)).
+
+**In the browser the same rule means Run brings its own context.** Pressing Run on a query
+consults every program cell above it first ([869ejgyaa]), so a reader who lands halfway down a
+chapter and runs one query gets the right answer without knowing which cells to press first.
+Affordable for the same reason the strict version is: 3.5 ms per consult, and consulting a
+program cell is side-effect-free. There is no dependency graph, because **Prolog has no
+load-time name binding** — `q(X) :- p(X)` merely mentions `p/1`, which is looked up when it is
+called, so consult order cannot affect correctness. Dependency information is only ever needed
+for the cosmetic question of which displayed outputs went stale.
 
 ## 6. When the chapter moves underneath a reader
 
@@ -138,3 +169,5 @@ and export plus the VS Code milestone covers it.
 [869edpd6b]: https://app.clickup.com/t/869edpd6b
 [869eddrfv]: https://app.clickup.com/t/869eddrfv
 [869ectt6g]: https://app.clickup.com/t/869ectt6g
+[869eddzgq]: https://app.clickup.com/t/869eddzgq
+[869ejgyaa]: https://app.clickup.com/t/869ejgyaa
