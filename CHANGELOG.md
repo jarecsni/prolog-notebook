@@ -23,6 +23,14 @@ the demonstration has to be survivable.
   the whole page and wires up the cells: `await load('chapter-04-cut.prolog.md')`. Program and
   query cells are generated from the model rather than marked up by hand, which is what makes
   writing a chapter *writing markdown*.
+- **The `once/1` chapter is now that file**, and the hand-written page it was ported from is
+  deleted. Same prose, same four queries, same answers — six duplicated sons, one from `son_a`,
+  three from `son_b`, `true` for the ground goal — driven from
+  [`notebooks/ch04-cut.prolog.md`](notebooks/ch04-cut.prolog.md) instead of 200 lines of HTML.
+  It carries its saved answers and their `input-hash`es, and a test asserts the chapter agrees
+  with them, so an edit to a program cell that invalidates an answer below it fails CI.
+  On the repo page it reads as a document: prose as prose, Prolog syntax-highlighted, and the
+  prediction still hidden behind a `<details>` you have to click.
 - **Run brings its own context.** Pressing Run on a query consults the program cells above it
   first, so a reader who lands halfway down a chapter gets an answer rather than
   `Unknown procedure`. Cells already loaded at their current text are skipped, so the second

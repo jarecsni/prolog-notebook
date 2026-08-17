@@ -136,14 +136,17 @@ test('a whole chapter file parses and round-trips byte for byte', () => {
 });
 
 test('a published chapter agrees with its own saved answers', () => {
-  // The chapter is what a run would have written, so its hash matches. Asserting
-  // this here is what stops an edit to the program above a query from landing with
-  // an answer that no longer follows from it.
+  // The chapter is what a run would have written, so every hash matches. This is
+  // what stops an edit to a program cell from landing with answers below it that
+  // no longer follow from it — the whole staleness mechanism, checked in CI.
   const notebook = parse(readFileSync(NOTEBOOK, 'utf8'));
   // `c.output !== null` would match a markdown cell, which has no output property
-  // at all — undefined is not null, and the test would silently pass on the wrong cell.
-  const query = notebook.cells.find((c) => c.kind === 'query' && c.output);
-  assert.equal(hashFor(notebook, query), query.output.inputHash);
+  // at all — undefined is not null, and the test would silently pass on nothing.
+  const answered = notebook.cells.filter((c) => c.kind === 'query' && c.output);
+  assert.ok(answered.length >= 4, 'the chapter should carry its answers');
+  for (const query of answered) {
+    assert.equal(hashFor(notebook, query), query.output.inputHash, `${query.id} is stale`);
+  }
 });
 
 test('a chapter can say its saved answers are stale before any engine exists', () => {
@@ -156,8 +159,10 @@ test('a chapter can say its saved answers are stale before any engine exists', (
 });
 
 test('a query with no saved output is simply unanswered, not malformed', () => {
-  const notebook = parse(readFileSync(NOTEBOOK, 'utf8'));
-  assert.equal(notebook.cells.find((c) => c.id === 'q-son-a').output, null);
+  // A hand-written chapter has none until it is run for the first time, so this is
+  // the normal state of a query cell rather than an error to report.
+  const notebook = parse('```prolog query id="q-1"\nis_son(X)\n```\n');
+  assert.equal(notebook.cells[0].output, null);
 });
 
 test('prose is passed through byte for byte, blank lines and all', () => {
