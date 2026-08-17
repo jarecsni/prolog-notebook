@@ -57,6 +57,21 @@ test('an unknown predicate reports an error rather than throwing', async () => {
   assert.match(r.error ?? '', /Unknown procedure/);
 });
 
+test('an error does not mention our own WASM plumbing', async () => {
+  // SWI raises this from the goal we wrapped for the WASM boundary, so it arrives
+  // as "wasm:wasm_call_string/3: Unknown procedure: …". The reader did not write
+  // that frame and cannot act on it.
+  const r = (await session.query('no_such_predicate(X)').all());
+  assert.equal(r.error, 'Unknown procedure: no_such_predicate/1');
+});
+
+test("but the frame that IS the reader's code survives", async () => {
+  // Only our own wrapper is dropped. "//2" names the division that failed, which
+  // is the whole value of the context.
+  const r = (await session.query('X is 1/0').all());
+  assert.match(r.error ?? '', /^\/\/2: Arithmetic/);
+});
+
 test('stepping yields one solution at a time', async () => {
   const q = (await session.query('son_b(X)'));
   assert.equal((await q.next()).solution.X, 'edward');

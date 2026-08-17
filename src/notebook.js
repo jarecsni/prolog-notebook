@@ -8,6 +8,7 @@
 // a goal that never terminates leaves the page usable. That is not a nicety: a
 // Prolog chapter has to be able to demonstrate non-termination.
 import { createSession, formatSolution } from './browser.js';
+import { definedPredicates, unknownProcedure } from './clauses.js';
 
 let serial = 0;
 let booted = false;
@@ -19,8 +20,22 @@ export function mount(root = document, options = {}) {
   // error — leaves the warning on screen instead of silently inert buttons.
   document.getElementById('boot-warning')?.remove();
 
-  root.querySelectorAll('.cell.program').forEach((cell) => mountProgram(cell, options));
-  root.querySelectorAll('.cell.query').forEach((cell) => mountQuery(cell, options));
+  // Document order matters, and it is the only thing that does. A query is run
+  // against the program cells ABOVE it, and a predicate it cannot find may be
+  // defined in one BELOW it — which is worth saying rather than leaving as
+  // "Unknown procedure".
+  const cells = [...root.querySelectorAll('.cell')];
+  const programs = [];
+  cells.forEach((cell, index) => {
+    if (cell.classList.contains('program')) programs.push({ index, ...mountProgram(cell, options) });
+  });
+  cells.forEach((cell, index) => {
+    if (!cell.classList.contains('query')) return;
+    mountQuery(cell, options, {
+      above: programs.filter((p) => p.index < index),
+      below: programs.filter((p) => p.index > index),
+    });
+  });
 }
 
 /** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
@@ -45,18 +60,22 @@ function mountProgram(cell, options) {
 
   autosize(source);
 
+  const consult = async (session) => {
+    const r = await session.consult(source.value, name);
+    // A warning here usually means this cell has just destroyed another
+    // cell's clauses, which the reader has no other way of finding out.
+    const warning = r.messages && r.messages.find((m) => m.kind === 'warning');
+    status.textContent = r.ok ? warning ? warning.text : '✓ consulted' : r.error;
+    status.className = `status ${r.ok ? (warning ? 'warn' : 'ok') : 'err'}`;
+    return r;
+  };
+
   button.addEventListener('click', async () => {
     const label = button.textContent;
     button.disabled = true;
     button.textContent = 'Working…';
     try {
-      const session = await boot(options, status);
-      const r = await session.consult(source.value, name);
-      // A warning here usually means this cell has just destroyed another
-      // cell's clauses, which the reader has no other way of finding out.
-      const warning = r.messages && r.messages.find((m) => m.kind === 'warning');
-      status.textContent = r.ok ? warning ? warning.text : '✓ consulted' : r.error;
-      status.className = `status ${r.ok ? (warning ? 'warn' : 'ok') : 'err'}`;
+      await consult(await boot(options, status));
     } catch (e) {
       status.textContent = e.message;
       status.className = 'status err';
@@ -65,9 +84,23 @@ function mountProgram(cell, options) {
       button.textContent = label;
     }
   });
+
+  return {
+    name,
+    /**
+     * Load this cell unless it is already loaded at exactly this text.
+     *
+     * Cheap enough to do on every Run: the second Run of a chapter consults
+     * nothing at all, and an edited cell invalidates itself and nothing else.
+     */
+    ensure: async (session) =>
+      (session.log.isCurrent(name, source.value) ? { ok: true } : consult(session)),
+    /** What this cell defines, used only to explain an error, never to run one. */
+    defines: () => definedPredicates(source.value),
+  };
 }
 
-function mountQuery(cell, options) {
+function mountQuery(cell, options, { above = [], below = [] } = {}) {
   const input = cell.querySelector('input');
   const runBtn = cell.querySelector('[data-act="run"]');
   const nextBtn = cell.querySelector('[data-act="next"]');
@@ -110,6 +143,37 @@ function mountQuery(cell, options) {
     if (stopBtn) stopBtn.disabled = !state;
   };
 
+  /**
+   * Load every program cell above this query, in document order.
+   *
+   * Consult order cannot affect correctness — Prolog has no load-time name
+   * binding, so `q(X) :- p(X)` merely mentions p/1 and the lookup happens when
+   * it is called. So there is no dependency graph to compute, and at ~3.5 ms a
+   * cell there is nothing to gain by computing one.
+   */
+  const loadPrograms = async (session) => {
+    for (const program of above) {
+      const r = await program.ensure(session);
+      // Running a query against a chapter that failed to load would answer a
+      // question the reader did not ask.
+      if (!r.ok) return { ok: false, name: program.name, error: r.error };
+    }
+    return { ok: true };
+  };
+
+  /**
+   * "Unknown procedure: son_a/1" is true and unhelpful when the cell defining
+   * son_a/1 is two inches further down the page.
+   */
+  const locate = (message) => {
+    const indicator = unknownProcedure(message);
+    if (!indicator) return null;
+    const cell = below.find((program) => program.defines().has(indicator));
+    return cell
+      ? `${indicator} is defined below this query, in cell ${cell.name}. Press Consult there, or move that cell above the query.`
+      : null;
+  };
+
   const step = async () => {
     if (!query || running) return false;
     setRunning(true);
@@ -119,6 +183,8 @@ function mountQuery(cell, options) {
       if (r.solution) write(`${++count}.  ${r.text ?? formatSolution(r.solution)}`, 'sol');
       if (r.error) {
         write(r.error, 'err');
+        const hint = locate(r.error);
+        if (hint) write(hint, 'done');
         finish();
         return false;
       }
@@ -148,6 +214,12 @@ function mountQuery(cell, options) {
     try {
       if (!booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
       session = await boot(options);
+      const loaded = await loadPrograms(session);
+      if (!loaded.ok) {
+        write(`cell ${loaded.name} did not load: ${loaded.error}`, 'err');
+        finish();
+        return;
+      }
       query = session.query(goal);
       setRunning(false);
       await step();

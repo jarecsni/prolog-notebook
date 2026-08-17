@@ -41,6 +41,17 @@ export class ConsultLog {
     this.entries.delete(name);
   }
 
+  /**
+   * Is this cell already loaded, at exactly this text?
+   *
+   * What makes "Run consults the cells above it" cheap enough to do on every
+   * click: the second Run of a chapter consults nothing, because nothing has
+   * changed. An edited cell answers false for itself and only for itself.
+   */
+  isCurrent(name, text) {
+    return this.entries.has(name) && this.entries.get(name) === text;
+  }
+
   clear() {
     this.entries.clear();
   }

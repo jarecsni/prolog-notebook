@@ -22,6 +22,22 @@ test('log order is insertion order, which is document order', () => {
   assert.deepEqual([...log].map((e) => e.name), ['c', 'a', 'b']);
 });
 
+test('the log knows whether a cell is already loaded at this exact text', () => {
+  // What makes "Run consults the cells above it" affordable on every click: the
+  // second Run of a chapter consults nothing, because nothing has changed.
+  const log = new ConsultLog();
+  log.record('p-1', 'a.');
+  assert.equal(log.isCurrent('p-1', 'a.'), true);
+  assert.equal(log.isCurrent('p-1', 'a. b.'), false, 'an edit invalidates the cell');
+  assert.equal(log.isCurrent('p-2', 'a.'), false, 'a cell never loaded is not current');
+});
+
+test('a cell that failed to consult is not current, so Run retries it', async () => {
+  const session = await createSession();
+  await session.consult('broken(', 'cell-bad');
+  assert.equal(session.log.isCurrent('cell-bad', 'broken('), false);
+});
+
 test('a deleted cell is forgotten, so its clauses do not come back on replay', () => {
   const log = new ConsultLog();
   log.record('p-1', 'a.');
