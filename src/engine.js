@@ -150,11 +150,11 @@ export class PrologQuery {
       r = this.handle.next();
     } catch (e) {
       this.exhausted = true;
-      return { done: true, error: e.message };
+      return { done: true, error: readableError(e.message) };
     }
     if (r.error) {
       this.exhausted = true;
-      return { done: true, error: r.message };
+      return { done: true, error: readableError(r.message) };
     }
 
     // The engine can deliver the final solution *together with* done:true — a
@@ -186,6 +186,22 @@ export class PrologQuery {
     }
     return { solutions, error, truncated: !this.exhausted };
   }
+}
+
+/**
+ * Drop the frame that is ours rather than the reader's.
+ *
+ * SWI prefixes an error with the goal it was raised from, which is usually worth
+ * keeping — `//2: Arithmetic: evaluation error` names the division. But every
+ * goal we run is wrapped for the WASM boundary, so an unknown predicate reads
+ * `wasm:wasm_call_string/3: Unknown procedure: is_son/1`. That prefix is our
+ * plumbing in the middle of a teaching page: the reader did not write it, cannot
+ * act on it, and it is the same words whatever they got wrong.
+ *
+ * Only that one frame is removed. Any other context is the reader's own code.
+ */
+export function readableError(message) {
+  return String(message ?? '').replace(/^wasm:wasm_call_string\/\d+:\s*/, '');
 }
 
 /** Strip the engine's bookkeeping keys from a solution. */

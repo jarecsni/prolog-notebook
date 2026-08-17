@@ -23,6 +23,19 @@ the demonstration has to be survivable.
   the whole page and wires up the cells: `await load('chapter-04-cut.prolog.md')`. Program and
   query cells are generated from the model rather than marked up by hand, which is what makes
   writing a chapter *writing markdown*.
+- **Run brings its own context.** Pressing Run on a query consults the program cells above it
+  first, so a reader who lands halfway down a chapter gets an answer rather than
+  `Unknown procedure`. Cells already loaded at their current text are skipped, so the second
+  Run of a chapter consults nothing and an edited cell invalidates only itself.
+  There is no dependency graph, and there is no need for one: **Prolog has no load-time name
+  binding** — `q(X) :- p(X)` merely mentions `p/1`, which is looked up when it is *called* — so
+  consult order cannot affect correctness, and at ~3.5 ms a cell there is nothing to gain by
+  computing one.
+- **An error a reader can act on.** `wasm:wasm_call_string/3: Unknown procedure: son_a/1` is
+  our own plumbing in the middle of a lesson; it now reads `Unknown procedure: son_a/1`, and
+  where the predicate is defined by a cell *below* the query, the notebook says so and names
+  it. Context frames belonging to the reader's own code are untouched — `//2: Arithmetic:
+  evaluation error` still names the division that failed.
 - `prolog-notebook/render` — the cell model to HTML **strings**, DOM-free. The same emitter
   serves the browser today, the static build in v0.3 and the VS Code renderer later; one
   implementation, four consumers.
