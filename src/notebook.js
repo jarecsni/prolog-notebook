@@ -19,6 +19,7 @@ import { createSession, formatSolution } from './browser.js';
 import { definedPredicates, unknownProcedure } from './clauses.js';
 
 let serial = 0;
+let panels = 0;
 let booted = false;
 
 /** Absolute, never relative: "3 minutes ago" is wrong the moment it is written. */
@@ -86,19 +87,26 @@ export function mount(root = document, options = {}) {
  * end of the chapter to see it will read every cell above as unexplained.
  *
  * But a chapter is for reading, and a full-width bar pinned across the foot of
- * every page is a tool insisting on itself. So it is tucked away as a small pill
- * carrying only the state at a glance — a dot and a count — and opens on hover,
- * on focus, or on a tap for anyone without a pointer. It opens itself briefly
- * when the engine's state actually changes, which is the moment its words are
- * worth reading, and tucks itself back when the reader is done with it.
+ * every page is a tool insisting on itself. So it is tucked away as a small
+ * lozenge carrying only the state at a glance — a dot and a word — and the rest
+ * slides out of it, leftward, ON A CLICK. Not on hover: hover opens a panel
+ * nobody asked for, does not exist on a touch screen, and cannot be reached from
+ * a keyboard, so one gesture that works everywhere beats three that do not.
+ *
+ * It slides itself out for a few seconds when the engine's state actually
+ * changes, which is the moment its words are worth reading, and closes on Escape,
+ * on a click elsewhere, or on a second click of the lozenge.
  */
 function mountPageBar(root, options, bus, programs, queries) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
   const bar = document.createElement('div');
   bar.className = 'engine-bar';
-  bar.innerHTML = '<div class="controls"><span class="engine-state"></span>'
+  // Its own counter, not the cell one: a page-control id is not a cell name, and
+  // sharing the counter would leave gaps in cell ids for no reason.
+  const panelId = `page-controls-${++panels}`;
+  bar.innerHTML = `<div class="controls" id="${panelId}"><span class="engine-state"></span>`
     + '<button data-act="restart">start engine</button></div>'
-    + '<button class="handle" data-act="handle" aria-expanded="false">'
+    + `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
     + '<span class="dot"></span><span class="count"></span></button>';
   const state = bar.querySelector('.engine-state');
   // One button, whose label is always the thing it will do. "restart engine" over
@@ -126,11 +134,29 @@ function mountPageBar(root, options, bus, programs, queries) {
     render();
   };
 
-  handle.addEventListener('click', () => {
-    pinned = !pinned;
+  const close = () => {
+    pinned = false;
     clearTimeout(flash);
     flash = null;
     render();
+  };
+
+  handle.addEventListener('click', () => {
+    if (pinned || flash !== null) return close();
+    pinned = true;
+    render();
+  });
+
+  // The two ways out of any panel a reader expects to work. Both check that it is
+  // open first, so this adds no listener behaviour to a page that is only reading.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && bar.dataset.open === 'true') {
+      close();
+      handle.focus();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (bar.dataset.open === 'true' && !bar.contains(e.target)) close();
   });
 
   const say = (text, title) => {

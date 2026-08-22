@@ -174,9 +174,12 @@ than a keystroke. The tradeoff that produced out-of-order execution is not ours 
 
 The exception is a cell declaring `:- dynamic`, whose assert/retract state lives in no file.
 The page carries a **restart engine** control for exactly this ([format §8](format.md)), in a
-pill fixed to the corner of the viewport that says what the engine is holding — collapsed to a
-dot and a cell count until the reader hovers it, because a chapter is for reading and a bar
-pinned across every page is a tool insisting on itself. It
+lozenge fixed to the corner of the viewport that says what the engine is holding — a dot and a
+word, with the rest sliding out of it on a click, because a chapter is for reading and a bar
+pinned across every page is a tool insisting on itself. On a click and not on hover: hover
+opens a panel nobody asked for, does not exist on a touch screen, and cannot be reached from a
+keyboard. Its button's label is always the thing it will do — **start engine** when there is
+none, **restart engine** when there is. It
 throws the worker away and replays the consult log, so the clauses come back and the
 assert/retract state does not. Verified in a browser — a counter mutated to 41 is 0 again
 afterwards. Detecting the declaration statically, so the UI can *offer* it rather than wait to

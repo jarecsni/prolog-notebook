@@ -163,17 +163,24 @@ button.primary:hover { background: #98380f; }
   bottom: 1rem;
   z-index: 5;
   display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  gap: .5rem;
-  /* Never wider than the screen: expanded, this is a sentence and two buttons,
-     which do not fit side by side on a phone. */
-  max-width: calc(100vw - 2rem);
-  flex-wrap: wrap;
+  align-items: center;
 }
 
+/* Slid out of the lozenge, on a click — never on hover. Hover opens a panel the
+   reader did not ask for, has no equivalent on a touch screen, and cannot be
+   reached from a keyboard at all; a button that says whether it is expanded can
+   be operated by anyone, in any of the three ways.
+
+   Out of flow, so the closed panel takes no space and cannot push the lozenge off
+   its corner, and so it can never take a click while invisible. */
 .engine-bar .controls {
-  display: none;
+  position: absolute;
+  right: calc(100% + .5rem);
+  /* Anchored to the lozenge's BOTTOM edge, not its middle: wrapped onto three
+     rows on a phone, a centred panel grows downwards off the bottom of the
+     screen. This one grows upwards, into the page. */
+  bottom: 0;
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -186,13 +193,24 @@ button.primary:hover { background: #98380f; }
   border-radius: 1.15rem;
   background: var(--paper);
   box-shadow: 0 2px 12px rgba(0, 0, 0, .09);
+  /* One line by default, wrapping only when the screen really is too narrow.
+     Without max-content the shrink-to-fit width is measured against the lozenge
+     this is anchored to — about 6rem — and every word wraps. */
+  width: max-content;
+  max-width: calc(100vw - 9rem);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(.75rem);
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
 }
-/* Hover and focus-within cost nothing and need no script; data-open is for a tap
-   (there is no hover on a touch screen) and for the moments the page opens it
-   itself. */
-.engine-bar:hover .controls,
-.engine-bar:focus-within .controls,
-.engine-bar[data-open="true"] .controls { display: flex; }
+.engine-bar[data-open="true"] .controls {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .engine-bar .controls { transition: none; transform: none; }
+}
 
 .engine-bar .handle {
   display: flex;
