@@ -19,6 +19,15 @@ the demonstration has to be survivable.
 
 ### Added
 
+- **The chapter is readable before the engine arrives, and without it.** A query cell renders
+  the answers stored in the file — labelled as the chapter's, not the reader's (docs/modes.md
+  §3) — and the 5.9 MB WASM bundle is fetched only when someone presses Run. Verified in a
+  browser by watching the network: on a cold load there is no request for it at all. This is
+  what makes a published chapter degrade to a book rather than to a blank page.
+- **Saved answers that no longer follow from the program above them are marked**, before first
+  paint and with no engine: the stored `input-hash` is compared against a 64-bit FNV-1a of the
+  goal and the program cells preceding it. Marked rather than hidden — never silently
+  discarded and never silently trusted.
 - **A chapter is a file.** `prolog-notebook/page` fetches a `.prolog.md`, parses it, renders
   the whole page and wires up the cells: `await load('chapter-04-cut.prolog.md')`. Program and
   query cells are generated from the model rather than marked up by hand, which is what makes

@@ -29,9 +29,26 @@ and the iPad's `DocumentGroup` can.
 
 ## 2. Read
 
-The chapter renders from its saved outputs with no engine present. `; next` replays the stored
-solution sequence one at a time ([format §6](format.md)), so the teaching device survives on a
-page that never loads 5.9 MB of WebAssembly, and on a printed edition that never could.
+The chapter renders from its saved outputs with no engine present ([869ectt0y]), so it is
+readable the instant it loads and stays readable if the 5.9 MB of WebAssembly never arrives at
+all — on a phone with bad signal, behind a corporate proxy, in ten years. It degrades to a book
+rather than to a blank page.
+
+**The whole sequence is shown, not stepped.** The format stores the solution sequence rather
+than a blob ([format §6](format.md)) precisely so that stepping *could* be replayed without an
+engine, and an earlier draft of this section said it would be. Building it settled the question
+the other way, for two reasons:
+
+- **A book shows its answers.** Print and EPUB have no buttons; if the page withholds what the
+  printed edition prints, the two editions teach differently and the HTML one is worse.
+- **One button, one meaning.** If `; next` sometimes replays a saved answer and sometimes runs
+  a goal, the reader has to know which — and the difference is invisible until it matters.
+  Run recomputes; what is on screen is what the chapter says.
+
+The sequence is still stored rather than flattened, and it still earns its keep: the answers
+are numbered as a live run numbers them, so the layout does not move when the reader presses
+Run, and `false.` under six answers is rendered as *no more solutions* rather than as a denial
+of them.
 
 Nothing is written. Nothing can be.
 
@@ -169,5 +186,6 @@ and export plus the VS Code milestone covers it.
 [869edpd6b]: https://app.clickup.com/t/869edpd6b
 [869eddrfv]: https://app.clickup.com/t/869eddrfv
 [869ectt6g]: https://app.clickup.com/t/869ectt6g
+[869ectt0y]: https://app.clickup.com/t/869ectt0y
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
 [869ejgyaa]: https://app.clickup.com/t/869ejgyaa

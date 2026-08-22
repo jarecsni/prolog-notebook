@@ -11,6 +11,7 @@
 // technically working and visually gone.
 
 import MarkdownIt from 'markdown-it';
+import { hashFor } from './format.js';
 
 // markdown-it rather than marked, in this order of reasons:
 //
@@ -180,21 +181,18 @@ export function renderProgram(cell) {
 }
 
 /**
- * A query cell: the goal, and the buttons that step it.
+ * A query cell: the goal, the buttons that step it, and the answers the chapter
+ * was published with.
  *
  * `; next` is not a convenience beside `all` — a Prolog query yields a stream of
  * proofs, and watching them arrive one at a time is usually the lesson. Both
  * survive into the generated markup for that reason.
  *
- * The `.out` div is deliberately empty even when the cell HAS a saved output in
- * the file. Rendering those without an engine is [869ectt0y], and it needs the
- * attribution rule (docs/modes.md §3) to say whose answers they are; an
- * unlabelled replay would be the exact lie that rule exists to prevent.
- *
- * @param {{id: string, goal: string}} cell
+ * @param {{id: string, goal: string, output: object|null}} cell
+ * @param {{stale?: boolean}} [options]
  * @returns {string}
  */
-export function renderQuery(cell) {
+export function renderQuery(cell, options = {}) {
   return `<div class="cell query" data-cell="${escapeHtml(cell.id)}">
   <div class="bar">query<span class="spacer"></span>
     <button class="primary" data-act="run">Run</button>
@@ -202,17 +200,81 @@ export function renderQuery(cell) {
     <button data-act="all" disabled>all</button>
     <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span><input value="${escapeHtml(cell.goal)}" spellcheck="false"></div>
-  <div class="out"></div>
+  <div class="out">${renderSavedOutput(cell, options)}</div>
 </div>`;
+}
+
+/**
+ * The answers stored in the file, rendered with no engine anywhere.
+ *
+ * This is the property the whole project is for. A chapter is readable the
+ * instant it loads and stays readable if the 5.9 MB of WebAssembly never
+ * arrives at all — on a phone with bad signal, behind a corporate proxy, in ten
+ * years. It degrades to a book rather than to a blank page.
+ *
+ * It is affordable because the format stores the solution SEQUENCE rather than a
+ * blob (format §6), so this is a rendering problem rather than an execution one.
+ */
+function renderSavedOutput(cell, { stale = false } = {}) {
+  if (!cell.output) return '';
+  const lines = [
+    // An output is never shown without saying where it came from
+    // (docs/modes.md §3). These are the author's answers, not the reader's, and
+    // a reader who cannot tell them apart concludes something false about Prolog.
+    { cls: 'from', text: stale ? 'the chapter\u2019s saved answers, from an older version of the program above' : 'the chapter\u2019s saved answers' },
+    { cls: 'echo', text: `?- ${cell.goal}.` },
+    ...replaySolutions(cell.output),
+  ];
+  if (stale) {
+    lines.push({ cls: 'warn', text: 'the program above has changed since these were produced \u2014 press Run to see what it does now' });
+  }
+  return `\n${lines.map((l) => `    <div class="line ${l.cls}">${escapeHtml(l.text)}</div>`).join('\n')}\n  `;
+}
+
+/**
+ * A saved solution sequence to the lines a reader sees.
+ *
+ * The stored spelling is SWI's own toplevel — solutions terminated by ` ;`, and a
+ * final line ending in `.` which may be `false.`, `true.`, or the last solution's
+ * bindings when the query ran deterministically (format §6). The display spelling
+ * is the one the live engine produces, numbered, because a reader pressing Run
+ * must not watch the layout change underneath them.
+ *
+ * @param {{solutions: string[], terminator: string}} output
+ * @returns {{cls: string, text: string}[]}
+ */
+export function replaySolutions(output) {
+  const lines = [];
+  let count = 0;
+  const solution = (text) => lines.push({ cls: 'sol', text: `${++count}.  ${text}` });
+
+  for (const text of output.solutions) solution(text);
+
+  const end = output.terminator ?? '';
+  if (end.startsWith('ERROR:')) {
+    lines.push({ cls: 'err', text: end.replace(/^ERROR:\s*/, '') });
+    return lines;
+  }
+  // `false.` after solutions means the search was exhausted, not that the query
+  // failed — the distinction matters, and "false." under six answers reads as a
+  // contradiction of them.
+  const bindings = end.replace(/\.$/, '');
+  if (bindings !== '' && bindings !== 'false') solution(bindings);
+  lines.push({
+    cls: 'done',
+    text: count === 0 ? 'false.' : 'no more solutions.',
+  });
+  return lines;
 }
 
 /**
  * Render one cell.
  *
  * @param {object} cell
+ * @param {{stale?: boolean}} [options] for a query cell carrying saved answers
  * @returns {string}
  */
-export function renderCell(cell) {
+export function renderCell(cell, options = {}) {
   switch (cell.kind) {
     case 'markdown':
       return renderProse(cell.source);
@@ -221,7 +283,7 @@ export function renderCell(cell) {
     case 'program':
       return renderProgram(cell);
     case 'query':
-      return renderQuery(cell);
+      return renderQuery(cell, options);
     case 'unknown':
       // A cell kind from a later version. It renders as the ordinary code block
       // it looks like, so a v0.2 page degrades instead of dropping content.
@@ -245,7 +307,16 @@ export function renderNotebook(notebook) {
   const parts = [];
   const kicker = renderKicker(notebook.frontMatter);
   if (kicker) parts.push(kicker);
-  for (const cell of notebook.cells) parts.push(renderCell(cell));
+  for (const cell of notebook.cells) {
+    // Staleness is decided here rather than in renderQuery, because it is a fact
+    // about the cell's PLACE in the notebook — the program cells above it — and a
+    // query cell on its own cannot know it. Computed before first paint: a 64-bit
+    // FNV-1a over text we already have, which is why the hash is not a SHA.
+    const stale = cell.kind === 'query' && cell.output?.inputHash
+      ? hashFor(notebook, cell) !== cell.output.inputHash
+      : false;
+    parts.push(renderCell(cell, { stale }));
+  }
   return `${parts.join('\n\n')}\n`;
 }
 
