@@ -34,7 +34,15 @@ export function withEdits(notebook, edits) {
       if (edit.goal !== undefined) next.goal = edit.goal;
       // `output: null` is a deliberate erasure, not a missing key: it is how a
       // query the reader has half-run says "I have no answers to give you".
-      if ('output' in edit) next.output = edit.output;
+      //
+      // An output is more than its answers — it carries the fence's language and
+      // whatever attributes the author wrote on it, and the serialiser needs
+      // every one of them. So the reader's answers are laid OVER the author's
+      // output rather than replacing the object, and a cell that never had one
+      // gets the defaults the parser would have produced.
+      if ('output' in edit) {
+        next.output = edit.output && { ...blankOutput(), ...cell.output, ...edit.output };
+      }
       return next;
     }
     return cell;
@@ -64,6 +72,18 @@ export function withEdits(notebook, edits) {
   }
 
   return updated;
+}
+
+/**
+ * What the parser would have produced for an output that has none of its own.
+ *
+ * A query the chapter never ran has no fence for its answers, so there is
+ * nothing to inherit language or attributes from, and the serialiser reads both
+ * unconditionally — `attrs` in particular is iterated, so a missing one is a
+ * TypeError rather than a silently absent attribute.
+ */
+function blankOutput() {
+  return { solutions: [], terminator: '', inputHash: null, language: 'text', attrs: new Map() };
 }
 
 /**
