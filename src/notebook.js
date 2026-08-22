@@ -96,9 +96,18 @@ export function mount(root = document, options = {}) {
  * on a touch screen, and cannot be reached from a keyboard, so one gesture that
  * works everywhere beats three that do not.
  *
- * It opens itself for a few seconds when the engine's state actually changes,
- * which is the moment its words are worth reading, and closes on Escape, on a
- * click elsewhere, or on a second click of the lozenge.
+ * IT OPENS ITSELF ONLY TO REPORT A FAILURE. An earlier version also opened when
+ * the engine started, on the grounds that its words were worth reading at that
+ * moment — but the reader had pressed Run in a cell, their attention was on that
+ * cell's output, and a second thing moving in the corner competed with the
+ * answers they had actually asked for. It was also redundant: the light says the
+ * engine came on, which is the whole reason a light is there. The panel is the
+ * detail, and detail is fetched, not pushed.
+ *
+ * A failure is the exception, because a message nobody sees is not a message.
+ *
+ * Otherwise it opens on a click and closes on Escape, on a click elsewhere, or on
+ * a second click of the lozenge.
  */
 /**
  * The small line icons the page controls use.
@@ -172,7 +181,7 @@ function mountPageBar(root, options, bus, programs, queries) {
   const controls = bar.querySelector('.controls');
   const count = bar.querySelector('.count');
 
-  // Open because the reader asked, or open because something just happened. Kept
+  // Open because the reader asked, or open because something went wrong. Kept
   // apart so a flash cannot close a pill the reader deliberately pinned.
   let pinned = false;
   let flash = null;
@@ -216,7 +225,7 @@ function mountPageBar(root, options, bus, programs, queries) {
   };
   const show = (ms) => {
     clearTimeout(flash);
-    // Long enough to read a clock time, short enough not to become furniture.
+    // Long enough to read the message, short enough not to become furniture.
     flash = setTimeout(() => { flash = null; render(); }, ms);
     render();
   };
@@ -313,9 +322,6 @@ function mountPageBar(root, options, bus, programs, queries) {
     // On or off, not a count. A count is only readable with the pill open, and by
     // then the words beside it say the same thing at greater length.
     count.textContent = 'Engine on';
-    // Starting and restarting are the two moments the words are worth reading,
-    // and both are things the reader just caused. Consulting one more cell is not.
-    if (event.kind === 'started' || event.kind === 'restarted') show(6000);
   });
 
   // Work the whole chapter cold. Per-cell hiding is right there in each cell, but a
@@ -369,7 +375,6 @@ function mountPageBar(root, options, bus, programs, queries) {
     bar.classList.add('busy');
     count.textContent = starting ? 'Starting…' : 'Restarting…';
     say(starting ? 'starting SWI-Prolog (5.9 MB, first time only)…' : 'restarting…');
-    show(20000);
     try {
       if (starting) {
         // Started empty, deliberately: consulting the chapter here would load
