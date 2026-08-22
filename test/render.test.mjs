@@ -138,7 +138,9 @@ test('a program cell carries the classes the stylesheet targets', () => {
   const html = renderProgram(program);
   assert.match(html, /^<div class="cell program" data-cell="p-family">/);
   assert.match(html, /<div class="bar">program<span class="spacer"><\/span><span class="status"><\/span>/);
-  assert.match(html, /<button class="primary">Consult<\/button>/);
+  assert.match(html, /<button class="primary" data-act="consult">Consult<\/button>/);
+  // The way back from an edit. Disabled until there is an edit to undo.
+  assert.match(html, /<button data-act="reset" disabled>reset<\/button>/);
   assert.match(html, /<textarea spellcheck="false">male\(albert\)\./);
 });
 
@@ -157,14 +159,25 @@ test('the program source survives verbatim, angle brackets included', () => {
   assert.equal(html.includes('X < Y'), false);
 });
 
-test('a query cell carries its goal and the four buttons', () => {
+test('a query cell carries its goal and its buttons', () => {
   const html = renderQuery(query);
   assert.match(html, /^<div class="cell query" data-cell="q-is-son">/);
   assert.match(html, /<div class="prompt"><span>\?-<\/span><input value="is_son\(X\)" spellcheck="false">/);
   // Stepping is the teaching device, so `; next` is not optional chrome.
   const acts = [...html.matchAll(/data-act="([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(acts, ['run', 'next', 'all', 'stop']);
+  assert.deepEqual(acts, ['reset', 'run', 'next', 'all', 'stop']);
   assert.match(html, /<button data-act="next" disabled>/);
+});
+
+test('both runnable cells carry the same tick and the same way back', () => {
+  // One vocabulary across the two cell kinds, because a reader learns it once.
+  // A cell that can be changed has somewhere to say so (.status) and something to
+  // undo it with (reset) — disabled in the markup, since a page whose script
+  // never runs must not offer a way back it cannot honour.
+  for (const html of [renderProgram(program), renderQuery(query)]) {
+    assert.match(html, /<span class="status"><\/span>/);
+    assert.match(html, /<button data-act="reset" disabled>reset<\/button>/);
+  }
 });
 
 test('a goal containing a quote does not break out of the attribute', () => {

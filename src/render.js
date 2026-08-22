@@ -175,7 +175,8 @@ function splitReveal(body) {
 export function renderProgram(cell) {
   return `<div class="cell program" data-cell="${escapeHtml(cell.id)}">
   <div class="bar">program<span class="spacer"></span><span class="status"></span>
-    <button class="primary">Consult</button></div>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="consult">Consult</button></div>
   <textarea spellcheck="false">${escapeHtml(cell.source)}</textarea>
 </div>`;
 }
@@ -194,7 +195,8 @@ export function renderProgram(cell) {
  */
 export function renderQuery(cell, options = {}) {
   return `<div class="cell query" data-cell="${escapeHtml(cell.id)}">
-  <div class="bar">query<span class="spacer"></span>
+  <div class="bar">query<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
     <button class="primary" data-act="run">Run</button>
     <button data-act="next" disabled>; next</button>
     <button data-act="all" disabled>all</button>

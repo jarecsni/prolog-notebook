@@ -1,10 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSession, ConsultLog } from '../src/node.js';
+import { InProcessSession } from '../src/session.js';
+import { WorkerSession } from '../src/browser.js';
 
 // Abort is "throw the engine away and rebuild it", which is only affordable
 // because one cell is one virtual file: replaying a chapter costs milliseconds.
 // These tests are about the replay, since that is what makes termination safe.
+
+test('both sessions expose the same interface', () => {
+  // The browser session had no restart() until 2026-08-18, while the in-process
+  // one and the README both had it — found by pressing a button that called it.
+  // Two implementations of one interface need a test that they ARE one interface,
+  // because nothing else compares them: Node never runs the worker session and
+  // the browser never runs the other.
+  const methods = (klass) => Object.getOwnPropertyNames(klass.prototype)
+    .filter((n) => n !== 'constructor')
+    .sort();
+  for (const name of methods(InProcessSession)) {
+    assert.ok(methods(WorkerSession).includes(name), `WorkerSession is missing ${name}()`);
+  }
+});
 
 test('the log holds one entry per cell, not a history of edits', () => {
   const log = new ConsultLog();
@@ -36,6 +52,54 @@ test('a cell that failed to consult is not current, so Run retries it', async ()
   const session = await createSession();
   await session.consult('broken(', 'cell-bad');
   assert.equal(session.log.isCurrent('cell-bad', 'broken('), false);
+});
+
+test('un-consulting a cell takes its clauses back out of the engine', async () => {
+  // Reset on a program cell means "pretend I never touched this", and a page that
+  // restores the text while leaving the clauses loaded has agreed in words and
+  // disagreed in fact. This is SWI's own semantics rather than bookkeeping: one
+  // cell is one virtual file, and consulting a file replaces what came from it, so
+  // consulting nothing leaves nothing.
+  const session = await createSession();
+  await session.consult('son(a, b).', 'cell-p');
+  assert.equal((await session.query('son(X, Y)').all()).solutions.length, 1);
+
+  await session.unconsult('cell-p');
+
+  const after = await session.query('son(X, Y)').all();
+  assert.deepEqual(after.solutions, []);
+  assert.match(after.error ?? '', /Unknown procedure/, 'genuinely unknown, not merely empty');
+});
+
+test('an un-consulted cell does not come back on a restart', async () => {
+  const session = await createSession();
+  await session.consult('p(1).', 'cell-p');
+  await session.consult('q(2).', 'cell-q');
+  await session.unconsult('cell-p');
+  await session.restart();
+  assert.deepEqual([...session.log].map((e) => e.name), ['cell-q']);
+  assert.deepEqual((await session.query('q(X)').all()).solutions.map((s) => s.X), [2]);
+});
+
+test('un-consulting a cell that was never loaded is not an error', async () => {
+  // Reset is offered on a cell the engine never held, because the reader may have
+  // edited it without consulting. Doing nothing quietly is the right answer.
+  const session = await createSession();
+  const r = await session.unconsult('cell-never');
+  assert.equal(r.ok, true);
+  assert.equal(r.unloaded, false);
+});
+
+test('a cell that used an un-consulted one is untouched, and says so at call time', async () => {
+  // No cascade, deliberately. Prolog has no load-time name binding, so q/1 merely
+  // mentions p/1; the consequence is an ordinary error when the goal runs, which
+  // is the truth rather than a dependency graph we would have to invent.
+  const session = await createSession();
+  await session.consult('p(1).', 'cell-p');
+  await session.consult('q(X) :- p(X).', 'cell-q');
+  await session.unconsult('cell-p');
+  const after = await session.query('q(X)').all();
+  assert.match(after.error ?? '', /Unknown procedure: p\/1/);
 });
 
 test('a deleted cell is forgotten, so its clauses do not come back on replay', () => {
