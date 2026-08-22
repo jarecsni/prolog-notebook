@@ -126,7 +126,11 @@ function renderPredict(cell) {
   const parts = [];
   if (cell.title) parts.push(`<h3>${renderInline(cell.title)}</h3>`);
   if (before) parts.push(renderProse(before));
-  parts.push('<textarea spellcheck="false"></textarea>');
+  // A blank bordered box reads as decoration. The placeholder is generic because
+  // the format has no spelling for a per-prediction one, and inventing an
+  // attribute for it would be a format change to save one line of prose — the
+  // author's own question is directly above it and says what to write.
+  parts.push('<textarea placeholder="your prediction…" spellcheck="false"></textarea>');
   if (reveal !== null) {
     parts.push(`<details>\n<summary>${escapeHtml(summary)}</summary>\n${renderProse(reveal)}\n</details>`);
   }

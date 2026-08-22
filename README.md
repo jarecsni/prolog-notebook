@@ -32,7 +32,7 @@ the reader clicks a link.
 The reason this is not "Jupyter with a different kernel" is the button marked `; next`.
 
 Jupyter's model is request/response: run a cell, get a result. Prolog's model is a stream of
-solutions you walk through. In the included example, `is_son(X)` reports edward *twice* — and
+solutions you walk through. In the included chapter, `is_son(X)` reports edward *twice* — and
 that duplication **is the lesson**, because it means Prolog found two proofs. A notebook that
 showed only a final list of results would have hidden the very thing worth teaching.
 
@@ -60,7 +60,11 @@ are all in it, and there is no HTML anywhere. Point the viewer at any other note
 |---|---|
 | `notebooks/` | chapters. The product. |
 | `viewer/` | one shell page that renders any of them. Replaced by `build` in v0.3. |
-| `example/` | the original hand-written spike, kept until the chapter above replaces it |
+
+The chapter also reads on the repo page, [as a file](notebooks/ch04-cut.prolog.md), with no
+build step and no site: prose as prose, Prolog syntax-highlighted, the saved answers in place,
+and the prediction still hidden behind a `<details>` you have to click. That is the whole
+reason the format is markdown.
 
 It has to be **served over HTTP**. Opening the page straight from disk leaves the buttons
 inert, because browsers block ES modules over `file://` — the page detects this and says so

@@ -65,7 +65,7 @@ test('a prediction gets a heading, a place to answer, and a reveal', () => {
   assert.match(html, /<div class="predict">/);
   assert.match(html, /<h3>Sharpen your pencil<\/h3>/);
   // The author asks the question; the renderer supplies somewhere to answer it.
-  assert.match(html, /<textarea spellcheck="false"><\/textarea>/);
+  assert.match(html, /<textarea placeholder="[^"]+" spellcheck="false"><\/textarea>/);
   assert.match(html, /<details>/);
   assert.match(html, /<summary>Reveal the answer \(run them first!\)<\/summary>/);
   assert.match(html, /<strong>A gives exactly one son\./);
@@ -93,7 +93,7 @@ test('the reveal is emitted from the model, so html:false can stay on', () => {
 test('bullets close a chapter with a heading and a list', () => {
   const html = renderContainer(container('bullets'));
   assert.match(html, /^<div class="bullets">\n<h2>Bullet points<\/h2>/);
-  assert.match(html, /<li>Prolog enumerates <strong>proofs<\/strong>, not answers\.<\/li>/);
+  assert.match(html, /<li>Prolog enumerates <strong>proofs<\/strong>, not answers\./);
 });
 
 test('renderCell covers every kind the parser can produce', () => {
