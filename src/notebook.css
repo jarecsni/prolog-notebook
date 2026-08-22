@@ -243,16 +243,38 @@ button.primary:hover { background: #98380f; }
   color: #8a8371;
 }
 .engine-bar .handle:hover:not(:disabled) { background: var(--code-bg); }
+/* A LIGHT, NOT AN ICON — and the distinction is the whole vocabulary. Every glyph
+   in a button here depicts that button's verb; this one thing depicts a state, so
+   it is deliberately not drawn as a symbol. Grey for no engine, amber while one is
+   arriving, green once it is running: readable without being read. */
 .engine-bar .handle .dot {
   width: .48rem;
   height: .48rem;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: #c8c1ae;
   transition: background .3s ease;
 }
-/* The whole state, for a reader who is not looking: grey until an engine exists,
-   green once one does. */
 .engine-bar.live .handle .dot { background: var(--ok); }
+.engine-bar.busy .handle .dot {
+  background: #d09a2c;
+  animation: engine-pulse 1.1s ease-in-out infinite;
+}
+@keyframes engine-pulse {
+  50% { opacity: .3; }
+}
+
+/* The lozenge's own verb: it opens the panel, and it points the way the panel
+   goes. Rotated, not swapped for a different glyph, so the turn itself reads as
+   the state changing. */
+.engine-bar .chev {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: .1rem;
+  opacity: .55;
+  transition: transform .3s cubic-bezier(.32, .72, 0, 1);
+}
+.engine-bar[data-open="true"] .chev { transform: rotate(180deg); }
 
 .engine-bar .controls button {
   display: inline-flex;
@@ -281,8 +303,10 @@ button.primary:hover { background: #98380f; }
 .engine-bar .controls button:hover:not(:disabled) { background: #ebe5d5; }
 
 @media (prefers-reduced-motion: reduce) {
-  .engine-bar, .engine-bar .controls { transition: none; }
+  .engine-bar, .engine-bar .controls, .engine-bar .chev { transition: none; }
   .engine-bar .controls { transform: none; }
+  /* The amber still says "busy"; only the blinking goes. */
+  .engine-bar.busy .handle .dot { animation: none; }
 }
 
 /* --- teaching devices --- */

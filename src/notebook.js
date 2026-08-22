@@ -103,11 +103,29 @@ export function mount(root = document, options = {}) {
 /**
  * The small line icons the page controls use.
  *
+ * THE RULE, because "should this icon show the state or the action?" has a
+ * different obvious answer every time it is asked, and answering it per control
+ * is how a vocabulary rots:
+ *
+ *   A LIGHT SAYS WHAT IS TRUE.  AN ICON SAYS WHAT WILL HAPPEN.
+ *
+ * So every glyph in a button depicts that button's verb — the eye with a stroke
+ * through it means "hide these", not "these are hidden" — and the one piece of
+ * pure status, the engine's dot, is deliberately not an icon at all. It is a
+ * light: grey for no engine, amber while one is arriving, green once it is
+ * running. Nothing has to be read to see it.
+ *
+ * The chevron is the lozenge's own verb (it opens the panel), which is why the
+ * lozenge can carry a status word without becoming a button that lies: the light
+ * and the word are the state, the chevron is the action, and they are visibly
+ * different things.
+ *
  * Inline SVG rather than a font or a file: this is chrome built at runtime, and a
  * control that depends on a network fetch to say what it does is a control that
  * sometimes does not. They inherit currentColor, so dark mode needs nothing.
  */
 const ICONS = {
+  chevron: '<path d="M15 5.5 8.5 12l6.5 6.5"/>',
   power: '<path d="M12 3.2v8.2"/><path d="M6.6 6.7a7.6 7.6 0 1 0 10.8 0"/>',
   restart: '<path d="M20.4 12a8.4 8.4 0 1 1-2.9-6.4"/><path d="M20.4 4.2v5.4h-5.2"/>',
   hide: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/><path d="M4 4l16 16"/>',
@@ -137,7 +155,7 @@ function mountPageBar(root, options, bus, programs, queries) {
   // is reached before it in the tab order, and sits at the pill's fixed right
   // edge on screen.
   bar.innerHTML = `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
-    + '<span class="dot"></span><span class="count"></span></button>'
+    + `<span class="dot"></span><span class="count"></span><span class="chev">${icon('chevron')}</span></button>`
     + `<div class="controls" id="${panelId}"><span class="engine-state"></span>`
     + `<button data-act="restart"><span class="icon">${icon('power')}</span>`
     + '<span class="label">Start engine</span></button></div>';
@@ -264,6 +282,14 @@ function mountPageBar(root, options, bus, programs, queries) {
   let age = null;
 
   bus.on((event) => {
+    if (event.kind === 'booting') {
+      // Lit from wherever the engine was asked for — a Run halfway up the chapter
+      // starts it just as this button does, and the light should not care which.
+      bar.classList.add('busy');
+      count.textContent = 'Starting…';
+      return;
+    }
+    bar.classList.remove('busy');
     if (event.kind === 'started') {
       live = true;
       label(restart, 'restart', 'Restart engine');
@@ -309,6 +335,8 @@ function mountPageBar(root, options, bus, programs, queries) {
   restart.addEventListener('click', async () => {
     const starting = !live;
     restart.disabled = true;
+    bar.classList.add('busy');
+    count.textContent = starting ? 'Starting…' : 'Restarting…';
     say(starting ? 'starting SWI-Prolog (5.9 MB, first time only)…' : 'restarting…');
     show(20000);
     try {
@@ -322,6 +350,8 @@ function mountPageBar(root, options, bus, programs, queries) {
         bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
       }
     } catch (e) {
+      bar.classList.remove('busy');
+      count.textContent = live ? 'Engine on' : 'Engine off';
       say(`${starting ? 'start' : 'restart'} failed: ${e.message}`);
       show(10000);
     } finally {
@@ -344,6 +374,7 @@ async function boot(options, bus, status) {
     status.className = 'status busy';
   }
   const wasBooted = booted;
+  if (!wasBooted) bus.emit({ kind: 'booting', at: clock() });
   const session = await createSession(options);
   booted = true;
   if (!wasBooted) bus.emit({ kind: 'started', at: clock() });
