@@ -1,10 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSession, ConsultLog } from '../src/node.js';
+import { InProcessSession } from '../src/session.js';
+import { WorkerSession } from '../src/browser.js';
 
 // Abort is "throw the engine away and rebuild it", which is only affordable
 // because one cell is one virtual file: replaying a chapter costs milliseconds.
 // These tests are about the replay, since that is what makes termination safe.
+
+test('both sessions expose the same interface', () => {
+  // The browser session had no restart() until 2026-08-18, while the in-process
+  // one and the README both had it — found by pressing a button that called it.
+  // Two implementations of one interface need a test that they ARE one interface,
+  // because nothing else compares them: Node never runs the worker session and
+  // the browser never runs the other.
+  const methods = (klass) => Object.getOwnPropertyNames(klass.prototype)
+    .filter((n) => n !== 'constructor')
+    .sort();
+  for (const name of methods(InProcessSession)) {
+    assert.ok(methods(WorkerSession).includes(name), `WorkerSession is missing ${name}()`);
+  }
+});
 
 test('the log holds one entry per cell, not a history of edits', () => {
   const log = new ConsultLog();

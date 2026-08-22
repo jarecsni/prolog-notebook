@@ -117,11 +117,13 @@ export class InProcessSession {
   }
 
   async close() {}
-
-  formatSolution(solution) {
-    return this.engine.formatSolution(solution);
-  }
 }
+
+// No formatSolution() on a session, deliberately. The engine-backed one renders
+// through SWI itself and the worker-backed one could not — it would have to fall
+// back to the engine-free spelling, so the same call would quietly mean two
+// different things depending on where it ran. Use `query.next().text`, which SWI
+// renders in both, or the exported formatSolution() when there is no engine at all.
 
 class InProcessQuery {
   constructor(query) {

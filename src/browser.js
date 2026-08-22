@@ -70,7 +70,7 @@ export class WorkerSession {
   }
 
   /**
-   * Stop whatever is running, and rebuild.
+   * Throw the engine away and rebuild it from the consult log.
    *
    * Terminating is not a last resort here, it is the mechanism: it reclaims the
    * whole WASM heap as well as the stuck goal, so a memory blow-up and an
@@ -80,12 +80,21 @@ export class WorkerSession {
    * already the documented behaviour of "restart engine and run all"
    * (format §8) rather than a new surprise.
    */
-  async abort() {
+  async restart() {
     this.#teardown(new Error('aborted'));
     await this.start();
     for (const { name, text } of this.log) {
       await this.#send('consult', { text, name });
     }
+  }
+
+  /**
+   * Stop whatever is running. Identical to restart() here, and named separately
+   * because the two are different intentions: one rescues a page, the other
+   * throws away assert/retract state deliberately.
+   */
+  async abort() {
+    return this.restart();
   }
 
   async close() {

@@ -129,6 +129,23 @@ button.primary:hover { background: #98380f; }
 .line.done { color: #8a8371; font-style: italic; }
 .line.err { color: var(--err); }
 
+/* The engine's own state and the one control over all of it. Chrome, not content:
+   built by notebook.js at runtime, so a printed or GitHub-rendered chapter never
+   shows a button that cannot work. */
+.engine-bar {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  justify-content: flex-end;
+  margin: 2.5rem 0 0;
+  padding-top: .8rem;
+  border-top: 1px solid var(--rule);
+}
+.engine-state {
+  font: 400 .74rem/1 system-ui, sans-serif;
+  color: #8a8371;
+}
+
 /* --- teaching devices --- */
 
 .predict {

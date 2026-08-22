@@ -19,6 +19,20 @@ the demonstration has to be survivable.
 
 ### Added
 
+- **The page says what the engine is holding.** A program cell's tick carries the time it was
+  consulted (`title="consulted at 14:32:05"`, absolute — a relative time baked into an
+  attribute is wrong the moment it is written), and flips to **edited since consulted** as soon
+  as the textarea diverges from what was actually loaded. That state, not the clock, is the
+  reader's real question, and it became easy to get wrong the moment Run started consulting
+  cells by itself.
+- **Reset, at two scales.** Per cell: restore the chapter's text *and re-consult it*, because
+  putting the page back without putting the engine back leaves them disagreeing. Page-level:
+  **restart engine**, which throws the worker away and replays the consult log — the documented
+  answer for a `:- dynamic` cell whose state lives in no file. Verified in a browser: a counter
+  mutated to 41 is 0 again afterwards. Per-cell *unconsult* is deliberately absent; it raises
+  "what happens to the cells that depended on it", and page-level restart has no such question.
+- **The engine's state is visible**: *engine not started* until something needs it, which is
+  also the plainest evidence that a cold chapter is readable without it.
 - **The chapter is readable before the engine arrives, and without it.** A query cell renders
   the answers stored in the file — labelled as the chapter's, not the reader's (docs/modes.md
   §3) — and the 5.9 MB WASM bundle is fetched only when someone presses Run. Verified in a
@@ -76,6 +90,17 @@ the demonstration has to be survivable.
   latest text, not a history — so a replay restores what the reader actually has.
 - `prolog-notebook/format` (0.1.3, listed here for completeness): the notebook parser,
   canonical serialiser and `input-hash`.
+
+### Fixed
+
+- **The browser session had no `restart()`**, while the in-process one and the README both did
+  — found by wiring a button to it. Both sessions now implement one interface, and a test
+  compares them, because nothing else could: Node never runs the worker session and a browser
+  never runs the other.
+- `session.formatSolution()` is **removed** rather than added to the worker session. The
+  engine-backed one renders through SWI; a worker-backed one could only fall back to the
+  engine-free spelling, so the same call would have quietly meant two different things
+  depending on where it ran. Use `query.next().text`, or the exported `formatSolution()`.
 
 ### Changed
 

@@ -13,6 +13,20 @@ import { definedPredicates, unknownProcedure } from './clauses.js';
 let serial = 0;
 let booted = false;
 
+// Whoever is showing the engine's state. A set rather than a variable because
+// mount() can be called on more than one root in a page (an embedded notebook,
+// v0.4), and each of them gets its own bar.
+const engineWatchers = new Set();
+
+function announce(state) {
+  for (const watcher of engineWatchers) watcher(state);
+}
+
+/** Absolute, never relative: "3 minutes ago" is wrong the moment it is written. */
+function clock(date = new Date()) {
+  return date.toLocaleTimeString(undefined, { hour12: false });
+}
+
 export function mount(root = document, options = {}) {
   // A page can carry a #boot-warning element saying "this notebook is not running".
   // It is removed only once mount() has actually run, so any failure that prevents
@@ -36,6 +50,68 @@ export function mount(root = document, options = {}) {
       below: programs.filter((p) => p.index > index),
     });
   });
+
+  if (programs.length) mountEngineBar(root, options, programs);
+}
+
+/**
+ * The engine's own state, and the one control that acts on all of it.
+ *
+ * CHROME, NOT CONTENT: built here at runtime rather than emitted into the
+ * document, so a built page, an EPUB or the GitHub view never carries a button
+ * that cannot work.
+ *
+ * Restart is page-level and deliberately not per-cell. Un-consulting one cell
+ * immediately raises "what happens to the cells that depended on it", which is a
+ * dependency story we do not have and do not need (869eddzfp); throwing the whole
+ * engine away and replaying the consult log has no such question, and costs about
+ * 3.5 ms a cell.
+ */
+function mountEngineBar(root, options, programs) {
+  const host = root === document ? document.querySelector('main') ?? document.body : root;
+  const bar = document.createElement('div');
+  bar.className = 'engine-bar';
+  bar.innerHTML = '<span class="engine-state"></span>'
+    + '<button data-act="restart" disabled>restart engine</button>';
+  const state = bar.querySelector('.engine-state');
+  const restart = bar.querySelector('[data-act="restart"]');
+
+  const say = (text, title) => {
+    state.textContent = text;
+    if (title) state.title = title;
+    else state.removeAttribute('title');
+  };
+
+  // Visible proof of the property the chapter is built on: nothing has been
+  // downloaded, and the answers above are still there to read.
+  say('engine not started', 'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
+
+  engineWatchers.add((event) => {
+    if (event.kind === 'started') {
+      restart.disabled = false;
+      say(`engine started at ${event.at}`, 'SWI-Prolog is running in a Web Worker');
+    }
+    if (event.kind === 'restarted') {
+      say(`engine restarted at ${event.at} \u00b7 ${event.cells} cell(s) re-consulted`,
+        'assert/retract state is gone; the clauses in your cells were loaded again');
+    }
+  });
+
+  restart.addEventListener('click', async () => {
+    restart.disabled = true;
+    say('restarting\u2026');
+    try {
+      const session = await createSession(options);
+      await session.restart();
+      announce({ kind: 'restarted', at: clock(), cells: [...session.log].length });
+    } catch (e) {
+      say(`restart failed: ${e.message}`);
+    } finally {
+      restart.disabled = false;
+    }
+  });
+
+  host.appendChild(bar);
 }
 
 /** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
@@ -44,31 +120,75 @@ async function boot(options, status) {
     status.textContent = 'starting SWI-Prolog (5.9 MB, first time only)…';
     status.className = 'status busy';
   }
+  const wasBooted = booted;
   const session = await createSession(options);
   booted = true;
+  if (!wasBooted) announce({ kind: 'started', at: clock() });
   return session;
 }
 
 function mountProgram(cell, options) {
   const source = cell.querySelector('textarea');
-  const button = cell.querySelector('button');
+  const button = cell.querySelector('[data-act="consult"]') ?? cell.querySelector('button');
+  const resetBtn = cell.querySelector('[data-act="reset"]');
   const status = cell.querySelector('.status');
   // One cell, one virtual file. A generated cell carries its notebook id, so SWI
   // says "/p-family.pl" when this cell redefines another's clauses — a warning
   // that names a cell the reader can actually find in the source.
   const name = cell.dataset.cell || `cell-${serial++}`;
 
+  // The chapter's own version of this cell, for the way back. Correct today,
+  // because mount() runs against markup generated straight from the file. It
+  // becomes WRONG the moment a scratchpad restores the reader's edits before
+  // mount (869ectt5d) — at that point this must come from the parsed model.
+  const published = source.value;
+
+  // What the engine is actually holding for this cell, and when it took it.
+  let loaded = null;
+
   autosize(source);
 
+  /**
+   * Say what is true, which is not always what the reader last pressed.
+   *
+   * A tick that still says "consulted" over text the reader has since edited is
+   * reassuring and wrong — and it became easy to hit the moment Run started
+   * consulting cells by itself (869ejgyaa).
+   */
+  const refresh = () => {
+    if (resetBtn) resetBtn.disabled = source.value === published;
+    if (!loaded) return;
+    const at = `consulted at ${loaded.at}`;
+    if (source.value !== loaded.text) {
+      status.textContent = 'edited since consulted';
+      status.className = 'status warn';
+      status.title = `${at}; press Consult to load your changes`;
+      return;
+    }
+    status.textContent = loaded.warning ?? '✓ consulted';
+    status.className = `status ${loaded.warning ? 'warn' : 'ok'}`;
+    status.title = at;
+  };
+
   const consult = async (session) => {
-    const r = await session.consult(source.value, name);
+    const text = source.value;
+    const r = await session.consult(text, name);
     // A warning here usually means this cell has just destroyed another
     // cell's clauses, which the reader has no other way of finding out.
     const warning = r.messages && r.messages.find((m) => m.kind === 'warning');
-    status.textContent = r.ok ? warning ? warning.text : '✓ consulted' : r.error;
-    status.className = `status ${r.ok ? (warning ? 'warn' : 'ok') : 'err'}`;
+    if (r.ok) {
+      loaded = { text, at: clock(), warning: warning ? warning.text : null };
+      refresh();
+    } else {
+      loaded = null;
+      status.textContent = r.error;
+      status.className = 'status err';
+      status.removeAttribute('title');
+    }
     return r;
   };
+
+  source.addEventListener('input', refresh);
 
   button.addEventListener('click', async () => {
     const label = button.textContent;
@@ -83,6 +203,14 @@ function mountProgram(cell, options) {
       button.disabled = false;
       button.textContent = label;
     }
+  });
+
+  resetBtn?.addEventListener('click', async () => {
+    source.value = published;
+    source.dispatchEvent(new Event('input'));
+    // Put the engine back too, or the page and the engine disagree — which is
+    // the whole thing this ticket exists to stop.
+    if (loaded) await consult(await boot(options, status));
   });
 
   return {
@@ -214,7 +342,9 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
     if (!goal) return;
-    write(hadSaved ? 'your run \u00b7 reload for the chapter\u2019s saved answers' : 'your run', 'from');
+    write(hadSaved
+      ? `your run \u00b7 ${clock()} \u00b7 reload for the chapter\u2019s saved answers`
+      : `your run \u00b7 ${clock()}`, 'from');
     write(`?- ${goal}.`, 'echo');
     setRunning(true);
     try {

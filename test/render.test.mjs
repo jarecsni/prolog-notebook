@@ -138,7 +138,9 @@ test('a program cell carries the classes the stylesheet targets', () => {
   const html = renderProgram(program);
   assert.match(html, /^<div class="cell program" data-cell="p-family">/);
   assert.match(html, /<div class="bar">program<span class="spacer"><\/span><span class="status"><\/span>/);
-  assert.match(html, /<button class="primary">Consult<\/button>/);
+  assert.match(html, /<button class="primary" data-act="consult">Consult<\/button>/);
+  // The way back from an edit. Disabled until there is an edit to undo.
+  assert.match(html, /<button data-act="reset" disabled>reset<\/button>/);
   assert.match(html, /<textarea spellcheck="false">male\(albert\)\./);
 });
 

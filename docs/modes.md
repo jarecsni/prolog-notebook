@@ -65,7 +65,11 @@ Three rules:
 2. **The author's answers and the reader's answers are never confused.** See the rule below;
    it is the one that does the work.
 3. **Reset is always available**, per cell and for the whole notebook. Dropping the scratchpad
-   returns the published chapter exactly.
+   returns the published chapter exactly. Per-cell reset exists now ([869enke58]): it restores
+   the chapter's text *and re-consults it*, because putting the page back without putting the
+   engine back leaves the two disagreeing — which is the same lie in a smaller box. Whole-
+   notebook reset arrives with the scratchpad it undoes ([869ectt5d]); until then a reload is
+   a true reset, and the page says so.
 
 ### Every output is attributable
 
@@ -131,7 +135,11 @@ consult, 1.1 ms for every query in the once/1 chapter. Re-running a whole chapte
 than a keystroke. The tradeoff that produced out-of-order execution is not ours to make.
 
 The exception is a cell declaring `:- dynamic`, whose assert/retract state lives in no file.
-Detected statically; the UI offers *restart engine and run all* ([format §8](format.md)).
+The page carries a **restart engine** control for exactly this ([format §8](format.md)): it
+throws the worker away and replays the consult log, so the clauses come back and the
+assert/retract state does not. Verified in a browser — a counter mutated to 41 is 0 again
+afterwards. Detecting the declaration statically, so the UI can *offer* it rather than wait to
+be found, is still open ([869eddzfp]).
 
 **In the browser the same rule means Run brings its own context.** Pressing Run on a query
 consults every program cell above it first ([869ejgyaa]), so a reader who lands halfway down a
@@ -189,3 +197,5 @@ and export plus the VS Code milestone covers it.
 [869ectt0y]: https://app.clickup.com/t/869ectt0y
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
 [869ejgyaa]: https://app.clickup.com/t/869ejgyaa
+[869enke58]: https://app.clickup.com/t/869enke58
+[869eddzfp]: https://app.clickup.com/t/869eddzfp
