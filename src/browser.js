@@ -3,7 +3,7 @@
 //
 // The 5.9 MB swipl bundle is still fetched by the page's own URL rather than by a
 // bundler — the worker is told where to find it.
-import { ConsultLog, defaultCellName } from './session.js';
+import { ConsultLog, defaultCellName, unconsult } from './session.js';
 
 export * from './engine.js';
 export { ConsultLog } from './session.js';
@@ -67,6 +67,11 @@ export class WorkerSession {
    */
   query(goal) {
     return new WorkerQuery(this, goal);
+  }
+
+  /** Take one cell's clauses back out. See unconsult() in session.js. */
+  async unconsult(name) {
+    return unconsult(this, name);
   }
 
   /**

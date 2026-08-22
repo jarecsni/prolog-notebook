@@ -195,7 +195,8 @@ export function renderProgram(cell) {
  */
 export function renderQuery(cell, options = {}) {
   return `<div class="cell query" data-cell="${escapeHtml(cell.id)}">
-  <div class="bar">query<span class="spacer"></span>
+  <div class="bar">query<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
     <button class="primary" data-act="run">Run</button>
     <button data-act="next" disabled>; next</button>
     <button data-act="all" disabled>all</button>

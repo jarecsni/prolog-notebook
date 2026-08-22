@@ -61,6 +61,38 @@ export class ConsultLog {
   }
 }
 
+/**
+ * Take one cell's clauses back out of a running engine.
+ *
+ * Shared by both sessions because it is not really a session operation at all —
+ * it is one consult and one log edit, and two copies of that would be two things
+ * to keep in step.
+ *
+ * HOW IT WORKS, because it looks like a trick and is not: one cell is one virtual
+ * file (869eddzfp), and consulting a file replaces the clauses that came from it.
+ * Consulting nothing therefore leaves nothing. This is SWI's own semantics, not
+ * bookkeeping of ours, so a predicate whose only clauses lived in this cell goes
+ * back to being genuinely unknown — and a query that calls it says so, exactly as
+ * a real toplevel would.
+ *
+ * There is deliberately NO dependency handling here. A cell that mentioned this
+ * one is untouched, because Prolog has no load-time name binding: `q(X) :- p(X)`
+ * merely mentions p/1 and looks it up when called. The consequence surfaces as an
+ * ordinary Prolog error at call time, which is the truth rather than a cascade we
+ * would have to invent.
+ *
+ * @param {{consult: Function, log: ConsultLog}} session
+ * @param {string} name
+ */
+export async function unconsult(session, name) {
+  if (!session.log.entries.has(name)) return { ok: true, unloaded: false };
+  const result = await session.consult('', name);
+  // Forgotten rather than recorded as empty, so a restart does not spend a
+  // consult loading nothing.
+  session.log.forget(name);
+  return { ...result, unloaded: result.ok };
+}
+
 let anonymousCells = 0;
 
 /**
@@ -98,6 +130,10 @@ export class InProcessSession {
 
   query(goal) {
     return new InProcessQuery(this.engine.query(goal));
+  }
+
+  async unconsult(name) {
+    return unconsult(this, name);
   }
 
   /**

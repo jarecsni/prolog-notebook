@@ -7,24 +7,39 @@
 // The engine runs in a worker (src/browser.js), so every call here is awaited and
 // a goal that never terminates leaves the page usable. That is not a nicety: a
 // Prolog chapter has to be able to demonstrate non-termination.
+//
+// WHY THERE IS SO MUCH STATE IN HERE. A reader is looking at three things that can
+// disagree: the text on screen, what the engine is holding, and the answers below.
+// Any two of them come apart in a single click. So every cell answers the same two
+// questions at all times — is this still what the chapter published, and does the
+// engine agree with what I can see — through a tick that names its state and a
+// reset that undoes it. A blank tick beside a greyed button is indistinguishable
+// from a broken page, which is how an earlier version of this file read.
 import { createSession, formatSolution } from './browser.js';
 import { definedPredicates, unknownProcedure } from './clauses.js';
 
 let serial = 0;
 let booted = false;
 
-// Whoever is showing the engine's state. A set rather than a variable because
-// mount() can be called on more than one root in a page (an embedded notebook,
-// v0.4), and each of them gets its own bar.
-const engineWatchers = new Set();
-
-function announce(state) {
-  for (const watcher of engineWatchers) watcher(state);
-}
-
 /** Absolute, never relative: "3 minutes ago" is wrong the moment it is written. */
 function clock(date = new Date()) {
   return date.toLocaleTimeString(undefined, { hour12: false });
+}
+
+/**
+ * One notebook's internal notifications.
+ *
+ * Cells have to hear about each other: answers stop being current when a program
+ * cell ABOVE them changes, and no query can notice that by itself. Created per
+ * mount() rather than per module, because a page may hold more than one notebook
+ * (an embedded chapter, v0.4) and one notebook's edits are not another's.
+ */
+function createBus() {
+  const watchers = new Set();
+  return {
+    on: (watcher) => watchers.add(watcher),
+    emit: (event) => { for (const watcher of watchers) watcher(event); },
+  };
 }
 
 export function mount(root = document, options = {}) {
@@ -34,6 +49,8 @@ export function mount(root = document, options = {}) {
   // error — leaves the warning on screen instead of silently inert buttons.
   document.getElementById('boot-warning')?.remove();
 
+  const bus = createBus();
+
   // Document order matters, and it is the only thing that does. A query is run
   // against the program cells ABOVE it, and a predicate it cannot find may be
   // defined in one BELOW it — which is worth saying rather than leaving as
@@ -41,17 +58,17 @@ export function mount(root = document, options = {}) {
   const cells = [...root.querySelectorAll('.cell')];
   const programs = [];
   cells.forEach((cell, index) => {
-    if (cell.classList.contains('program')) programs.push({ index, ...mountProgram(cell, options) });
+    if (cell.classList.contains('program')) programs.push({ index, ...mountProgram(cell, options, bus) });
   });
   cells.forEach((cell, index) => {
     if (!cell.classList.contains('query')) return;
-    mountQuery(cell, options, {
+    mountQuery(cell, options, bus, {
       above: programs.filter((p) => p.index < index),
       below: programs.filter((p) => p.index > index),
     });
   });
 
-  if (programs.length) mountEngineBar(root, options, programs);
+  if (programs.length) mountEngineBar(root, options, bus, programs);
 }
 
 /**
@@ -61,13 +78,11 @@ export function mount(root = document, options = {}) {
  * document, so a built page, an EPUB or the GitHub view never carries a button
  * that cannot work.
  *
- * Restart is page-level and deliberately not per-cell. Un-consulting one cell
- * immediately raises "what happens to the cells that depended on it", which is a
- * dependency story we do not have and do not need (869eddzfp); throwing the whole
- * engine away and replaying the consult log has no such question, and costs about
- * 3.5 ms a cell.
+ * Sticky, which is a fix rather than a flourish: this is where the answer to
+ * "what is the engine holding now" lives, and a reader who has to scroll to the
+ * end of the chapter to see it will read every cell above as unexplained.
  */
-function mountEngineBar(root, options, programs) {
+function mountEngineBar(root, options, bus, programs) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
   const bar = document.createElement('div');
   bar.className = 'engine-bar';
@@ -82,28 +97,44 @@ function mountEngineBar(root, options, programs) {
     else state.removeAttribute('title');
   };
 
+  // Counted in cells rather than bytes, because cells are what the reader can act
+  // on — and because "0 of 2 loaded" is the fact that makes a per-cell reset
+  // visibly do something.
+  const loaded = () => {
+    const n = programs.filter((p) => p.isLoaded()).length;
+    return `${n} of ${programs.length} program cell${programs.length === 1 ? '' : 's'} loaded`;
+  };
+
   // Visible proof of the property the chapter is built on: nothing has been
   // downloaded, and the answers above are still there to read.
-  say('engine not started', 'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
+  say('engine not started',
+    'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
 
-  engineWatchers.add((event) => {
+  // How long this engine has been the engine. Kept rather than announced once,
+  // because "restarted 13:53:10" stops being visible the moment anything else
+  // happens — and it is precisely then that the reader wants it.
+  let age = null;
+
+  bus.on((event) => {
     if (event.kind === 'started') {
       restart.disabled = false;
-      say(`engine started at ${event.at}`, 'SWI-Prolog is running in a Web Worker');
+      age = `engine started ${event.at}`;
+    } else if (event.kind === 'restarted') {
+      age = `engine restarted ${event.at}`;
     }
-    if (event.kind === 'restarted') {
-      say(`engine restarted at ${event.at} \u00b7 ${event.cells} cell(s) re-consulted`,
-        'assert/retract state is gone; the clauses in your cells were loaded again');
-    }
+    if (!age) return;
+    say(`${loaded()} · ${age}`, event.kind === 'restarted'
+      ? 'assert/retract state is gone; the clauses in your cells were loaded again'
+      : 'SWI-Prolog is running in a Web Worker');
   });
 
   restart.addEventListener('click', async () => {
     restart.disabled = true;
-    say('restarting\u2026');
+    say('restarting…');
     try {
       const session = await createSession(options);
       await session.restart();
-      announce({ kind: 'restarted', at: clock(), cells: [...session.log].length });
+      bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
     } catch (e) {
       say(`restart failed: ${e.message}`);
     } finally {
@@ -115,7 +146,7 @@ function mountEngineBar(root, options, programs) {
 }
 
 /** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
-async function boot(options, status) {
+async function boot(options, bus, status) {
   if (!booted && status) {
     status.textContent = 'starting SWI-Prolog (5.9 MB, first time only)…';
     status.className = 'status busy';
@@ -123,11 +154,11 @@ async function boot(options, status) {
   const wasBooted = booted;
   const session = await createSession(options);
   booted = true;
-  if (!wasBooted) announce({ kind: 'started', at: clock() });
+  if (!wasBooted) bus.emit({ kind: 'started', at: clock() });
   return session;
 }
 
-function mountProgram(cell, options) {
+function mountProgram(cell, options, bus) {
   const source = cell.querySelector('textarea');
   const button = cell.querySelector('[data-act="consult"]') ?? cell.querySelector('button');
   const resetBtn = cell.querySelector('[data-act="reset"]');
@@ -145,8 +176,16 @@ function mountProgram(cell, options) {
 
   // What the engine is actually holding for this cell, and when it took it.
   let loaded = null;
+  let failure = null;
 
   autosize(source);
+
+  const say = (text, cls, title) => {
+    status.textContent = text;
+    status.className = `status ${cls}`;
+    if (title) status.title = title;
+    else status.removeAttribute('title');
+  };
 
   /**
    * Say what is true, which is not always what the reader last pressed.
@@ -154,20 +193,33 @@ function mountProgram(cell, options) {
    * A tick that still says "consulted" over text the reader has since edited is
    * reassuring and wrong — and it became easy to hit the moment Run started
    * consulting cells by itself (869ejgyaa).
+   *
+   * Every state is named, including the ones that used to be blank: a cell that
+   * says nothing looks like a cell whose buttons do nothing.
    */
   const refresh = () => {
-    if (resetBtn) resetBtn.disabled = source.value === published;
-    if (!loaded) return;
-    const at = `consulted at ${loaded.at}`;
-    if (source.value !== loaded.text) {
-      status.textContent = 'edited since consulted';
-      status.className = 'status warn';
-      status.title = `${at}; press Consult to load your changes`;
-      return;
+    if (resetBtn) {
+      // Enabled whenever this cell is not as the chapter published it — which
+      // includes being LOADED, because a published chapter has no engine at all.
+      // Reset staying grey after a consult is what made this read as broken: the
+      // reader had just changed the world and was offered no way back.
+      const mine = source.value !== published || loaded !== null;
+      resetBtn.disabled = !mine;
+      resetBtn.title = mine
+        ? 'undo this cell: the chapter’s program back, and out of the engine'
+        : 'this cell is exactly as the chapter published it';
     }
-    status.textContent = loaded.warning ?? '✓ consulted';
-    status.className = `status ${loaded.warning ? 'warn' : 'ok'}`;
-    status.title = at;
+    if (failure) return say(failure, 'err');
+    if (!loaded) {
+      return say('not consulted', '',
+        'the engine does not have this cell; Run on a query below loads it');
+    }
+    if (source.value !== loaded.text) {
+      return say('edited since consulted', 'warn',
+        `consulted ${loaded.at}; press Consult to load your changes`);
+    }
+    if (loaded.warning) return say(loaded.warning, 'warn', `consulted ${loaded.at}`);
+    return say(`✓ consulted ${loaded.at}`, 'ok', 'the engine is holding exactly this text');
   };
 
   const consult = async (session) => {
@@ -176,45 +228,84 @@ function mountProgram(cell, options) {
     // A warning here usually means this cell has just destroyed another
     // cell's clauses, which the reader has no other way of finding out.
     const warning = r.messages && r.messages.find((m) => m.kind === 'warning');
-    if (r.ok) {
-      loaded = { text, at: clock(), warning: warning ? warning.text : null };
-      refresh();
-    } else {
-      loaded = null;
-      status.textContent = r.error;
-      status.className = 'status err';
-      status.removeAttribute('title');
-    }
+    failure = r.ok ? null : r.error;
+    loaded = r.ok ? { text, at: clock(), warning: warning ? warning.text : null } : null;
+    refresh();
+    // Any answer below this cell was produced against whatever it held before.
+    bus.emit({ kind: 'consulted', name, at: clock() });
     return r;
   };
 
-  source.addEventListener('input', refresh);
+  source.addEventListener('input', () => {
+    refresh();
+    bus.emit({ kind: 'edited', name });
+  });
 
-  button.addEventListener('click', async () => {
-    const label = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Working…';
+  /** Any button that talks to the engine: busy while it does, honest afterwards. */
+  const working = async (btn, job) => {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Working…';
     try {
-      await consult(await boot(options, status));
+      await job();
     } catch (e) {
-      status.textContent = e.message;
-      status.className = 'status err';
+      failure = e.message;
     } finally {
-      button.disabled = false;
-      button.textContent = label;
+      btn.textContent = label;
+      // refresh() re-decides `disabled` from the state, so a button never comes
+      // back enabled just because it was the one that was pressed.
+      btn.disabled = false;
+      refresh();
+    }
+  };
+
+  button.addEventListener('click', () =>
+    working(button, async () => consult(await boot(options, bus, status))));
+
+  /**
+   * Undo this cell entirely: the chapter's program back, and out of the engine.
+   *
+   * Taking it out matters as much as putting the text back. A reader who presses
+   * reset has said "pretend I never touched this", and a page that restores the
+   * text while quietly leaving the clauses loaded has agreed with them in words
+   * and disagreed in fact.
+   *
+   * The cell is deliberately NOT re-consulted here, and nothing cascades to the
+   * cells that used it: Run on any query below consults the cells above it
+   * (869ejgyaa), so the chapter heals itself on the next click, and until then the
+   * tick says "not consulted" because that is what is true.
+   */
+  resetBtn?.addEventListener('click', () => working(resetBtn, async () => {
+    source.value = published;
+    autosizeNow(source);
+    if (loaded) {
+      const session = await boot(options, bus, status);
+      await session.unconsult(name);
+      loaded = null;
+      failure = null;
+      bus.emit({ kind: 'unconsulted', name, at: clock() });
+    }
+    bus.emit({ kind: 'edited', name });
+  }));
+
+  // A rebuilt engine consulted this cell again, at a new time. Saying the old one
+  // is a small lie that costs nothing to avoid and is invisible right up until the
+  // reader is trying to work out what the engine is holding — the one thing this
+  // tick exists to tell them.
+  bus.on((event) => {
+    if (event.kind === 'restarted' && loaded) {
+      loaded = { ...loaded, at: event.at };
+      refresh();
     }
   });
 
-  resetBtn?.addEventListener('click', async () => {
-    source.value = published;
-    source.dispatchEvent(new Event('input'));
-    // Put the engine back too, or the page and the engine disagree — which is
-    // the whole thing this ticket exists to stop.
-    if (loaded) await consult(await boot(options, status));
-  });
+  refresh();
 
   return {
     name,
+    /** The exact text the engine would be given, for a query deciding if it is stale. */
+    text: () => source.value,
+    isLoaded: () => loaded !== null,
     /**
      * Load this cell unless it is already loaded at exactly this text.
      *
@@ -228,19 +319,101 @@ function mountProgram(cell, options) {
   };
 }
 
-function mountQuery(cell, options, { above = [], below = [] } = {}) {
+function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   const input = cell.querySelector('input');
   const runBtn = cell.querySelector('[data-act="run"]');
   const nextBtn = cell.querySelector('[data-act="next"]');
   const allBtn = cell.querySelector('[data-act="all"]');
   const stopBtn = cell.querySelector('[data-act="stop"]');
+  const resetBtn = cell.querySelector('[data-act="reset"]');
+  const status = cell.querySelector('.status');
   const out = cell.querySelector('.out');
+
+  // The chapter's own query and the chapter's own answers, kept together because
+  // they only mean anything together (docs/modes.md §3). Same caveat as a program
+  // cell: correct until a scratchpad restores the reader's version before mount.
+  const published = { goal: input.value, out: out.innerHTML };
 
   let query = null;
   let session = null;
   let count = 0;
   let running = false;
   let aborting = false;
+  // The reader's own run: when, against what — and what has happened since.
+  let ran = null;
+  // Latched, unlike everything else here, because it is the one change that
+  // leaves no trace in the text: a rebuilt engine looks exactly like the old one.
+  let engineChanged = false;
+
+  /**
+   * Everything these answers depended on.
+   *
+   * Only the cells ABOVE, because those are the only ones Run loads. Compared as
+   * text rather than as a hash because the strings are already in hand and there
+   * are five of them, not five thousand.
+   */
+  const context = () => above.map((p) => `${p.name} ${p.text()}`).join('\n');
+
+  /**
+   * Are the answers on screen still the answers this page would produce?
+   *
+   * The question a reader cannot answer by looking, and the one that quietly makes
+   * a notebook untrustworthy when nobody answers it: they edit a program cell, the
+   * answers below sit there unchanged, and nothing says those answers came from a
+   * program that no longer exists. This is the live twin of the input-hash check
+   * the renderer does for SAVED answers (render.js) — the same question, asked of
+   * a run that happened a minute ago rather than at publish time.
+   */
+  /**
+   * Why these answers are no longer trustworthy, or null.
+   *
+   * DERIVED, not remembered. A reader who edits a program cell and then undoes
+   * the edit is back where they started, and a warning that stays put through
+   * that teaches them to ignore warnings — which is worse than never having
+   * shown one.
+   */
+  const staleReason = () => {
+    if (!ran) return null;
+    // A restart replays the same clauses, so answers only really change for a
+    // query that depended on assert/retract state — but that is exactly the case
+    // format §8 says restart exists for, and the reader is owed the flag.
+    if (engineChanged) return 'engine restarted since this ran';
+    // Comparing the whole context ignores cells BELOW without this having to know
+    // which cell is which: they were never part of it.
+    if (ran.context !== context()) return 'program changed since this ran';
+    if (input.value.trim().replace(/\.$/, '') !== ran.goal) return 'query edited since this ran';
+    return null;
+  };
+
+  const refresh = () => {
+    if (resetBtn) {
+      const mine = input.value !== published.goal || out.innerHTML !== published.out;
+      resetBtn.disabled = !mine;
+      resetBtn.title = mine
+        ? 'put the chapter’s query and its saved answers back'
+        : 'this query and these answers are exactly as the chapter published them';
+    }
+    if (!status) return;
+    if (!ran) {
+      // Deliberately silent: the output's own first line already says whose
+      // answers those are, and a second label saying it again is noise.
+      status.textContent = '';
+      status.className = 'status';
+      status.removeAttribute('title');
+      return;
+    }
+    const stale = staleReason();
+    status.textContent = stale ?? `✓ ran ${ran.at}`;
+    status.className = `status ${stale ? 'warn' : 'ok'}`;
+    status.title = stale
+      ? `ran ${ran.at}; press Run to see what the program does now`
+      : 'these answers came from the cells above, exactly as they are now';
+  };
+
+  bus.on((event) => {
+    if (event.kind === 'restarted' && ran) engineChanged = true;
+    refresh();
+  });
 
   const write = (text, cls) => {
     const line = document.createElement('div');
@@ -260,6 +433,7 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
     nextBtn.disabled = true;
     allBtn.disabled = true;
     if (stopBtn) stopBtn.disabled = true;
+    refresh();
   };
 
   /** While a goal is in flight the only useful button is Stop. */
@@ -269,6 +443,7 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
     nextBtn.disabled = state || !query;
     allBtn.disabled = state || !query;
     if (stopBtn) stopBtn.disabled = !state;
+    refresh();
   };
 
   /**
@@ -335,24 +510,30 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
   runBtn.addEventListener('click', async () => {
     // The chapter's saved answers are on screen until this moment. Replacing them
     // with the reader's own is fine; replacing them SILENTLY is not, so the run is
-    // labelled and the way back is stated (docs/modes.md §3). Reload is that way
-    // back until a scratchpad exists (869ectt5d).
-    const hadSaved = out.querySelector('.line.from') !== null;
+    // labelled and the way back is stated (docs/modes.md §3) — and the way back is
+    // now a button on this cell rather than a page reload.
+    const hadSaved = ran === null && out.querySelector('.line.from') !== null;
     out.innerHTML = '';
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
     if (!goal) return;
+    const at = clock();
     write(hadSaved
-      ? `your run \u00b7 ${clock()} \u00b7 reload for the chapter\u2019s saved answers`
-      : `your run \u00b7 ${clock()}`, 'from');
+      ? `your run · ${at} · press reset for the chapter’s saved answers`
+      : `your run · ${at}`, 'from');
     write(`?- ${goal}.`, 'echo');
     setRunning(true);
     try {
       if (!booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
-      session = await boot(options);
-      const loaded = await loadPrograms(session);
-      if (!loaded.ok) {
-        write(`cell ${loaded.name} did not load: ${loaded.error}`, 'err');
+      session = await boot(options, bus);
+      const ok = await loadPrograms(session);
+      // Recorded whatever happened, and recorded AFTER the consults: these answers
+      // are the reader's either way, and the context is the one the goal actually
+      // ran against rather than the one it was about to.
+      ran = { at, goal, context: context() };
+      engineChanged = false;
+      if (!ok.ok) {
+        write(`cell ${ok.name} did not load: ${ok.error}`, 'err');
         finish();
         return;
       }
@@ -388,7 +569,27 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
     write('stopped. the engine was restarted and every cell re-consulted.', 'done');
     finish();
     aborting = false;
+    // Announced as a restart, because that is what it was: every other query that
+    // had run is now showing answers from an engine that no longer exists.
+    bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
   });
+
+  /**
+   * Put the chapter's query and its answers back.
+   *
+   * No engine work, and none needed: the chapter's saved answers make no claim
+   * about what the engine is holding. They say whose they are, which is the only
+   * claim they have ever made (docs/modes.md §3).
+   */
+  resetBtn?.addEventListener('click', () => {
+    input.value = published.goal;
+    out.innerHTML = published.out;
+    ran = null;
+    engineChanged = false;
+    finish();
+  });
+
+  input.addEventListener('input', refresh);
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') runBtn.click();
@@ -397,13 +598,16 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
       if (!nextBtn.disabled) step();
     }
   });
+
+  refresh();
+}
+
+function autosizeNow(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = `${ta.scrollHeight}px`;
 }
 
 function autosize(ta) {
-  const fit = () => {
-    ta.style.height = 'auto';
-    ta.style.height = `${ta.scrollHeight}px`;
-  };
-  ta.addEventListener('input', fit);
-  requestAnimationFrame(fit);
+  ta.addEventListener('input', () => autosizeNow(ta));
+  requestAnimationFrame(() => autosizeNow(ta));
 }

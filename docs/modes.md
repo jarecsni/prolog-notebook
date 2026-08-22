@@ -65,11 +65,23 @@ Three rules:
 2. **The author's answers and the reader's answers are never confused.** See the rule below;
    it is the one that does the work.
 3. **Reset is always available**, per cell and for the whole notebook. Dropping the scratchpad
-   returns the published chapter exactly. Per-cell reset exists now ([869enke58]): it restores
-   the chapter's text *and re-consults it*, because putting the page back without putting the
-   engine back leaves the two disagreeing — which is the same lie in a smaller box. Whole-
-   notebook reset arrives with the scratchpad it undoes ([869ectt5d]); until then a reload is
-   a true reset, and the page says so.
+   returns the published chapter exactly. Per-cell reset exists now, on both runnable cell
+   kinds ([869enke58]), and it means one thing in both: *put this back the way the chapter
+   published it*.
+
+   - On a **program** cell that is the chapter's text **and** out of the engine — reset
+     un-consults it, because a published chapter has no engine at all. Restoring the text
+     while quietly leaving the clauses loaded would agree with the reader in words and
+     disagree in fact. Nothing cascades to the cells that used it, and nothing needs to:
+     Prolog has no load-time name binding, so the consequence surfaces as an ordinary
+     "Unknown procedure" when a goal actually calls it — and Run on any query below consults
+     the cells above it, so the chapter heals itself on the next click ([869ejgyaa]).
+   - On a **query** cell it is the chapter's goal and the chapter's saved answers, together,
+     because they only mean anything together. No engine work is involved: saved answers make
+     no claim about what the engine is holding.
+
+   Whole-notebook reset arrives with the scratchpad it undoes ([869ectt5d]); until then a
+   reload is a true reset, and the page says so.
 
 ### Every output is attributable
 
@@ -85,6 +97,16 @@ which:
 | **authored** | the saved output from the file, from a clean run at publish time | the default; what a cold page shows, engine or no engine |
 | **yours** | produced by this reader, from the program currently on screen | after they press Run — labelled, with a way back to authored |
 | **stale** | either kind, whose `input-hash` no longer matches the program above it | marked, never silently discarded and never silently trusted ([869eddzgq]) |
+
+**Staleness is derived, not remembered.** A displayed answer records what it was produced
+against — the goal, and the text of every program cell above it — and the cell re-derives on
+every change whether that is still true, saying *program changed since this ran*, *query edited
+since this ran*, or *engine restarted since this ran*. This is the live twin of the `input-hash`
+check the renderer does for saved answers ([format §6](format.md)): the same question, asked of
+a run that happened a minute ago rather than at publish time. Derived rather than latched for a
+reason — a reader who makes an edit and then undoes it is back where they started, and a
+warning that survives that teaches them to ignore warnings, which is worse than never showing
+one.
 
 **The invariant: an output is never shown without being attributable.** Everything else in
 Explore mode follows from it — why reset exists, why edits and outputs persist together, why
