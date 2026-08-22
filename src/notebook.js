@@ -205,10 +205,16 @@ function mountQuery(cell, options, { above = [], below = [] } = {}) {
   };
 
   runBtn.addEventListener('click', async () => {
+    // The chapter's saved answers are on screen until this moment. Replacing them
+    // with the reader's own is fine; replacing them SILENTLY is not, so the run is
+    // labelled and the way back is stated (docs/modes.md §3). Reload is that way
+    // back until a scratchpad exists (869ectt5d).
+    const hadSaved = out.querySelector('.line.from') !== null;
     out.innerHTML = '';
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
     if (!goal) return;
+    write(hadSaved ? 'your run \u00b7 reload for the chapter\u2019s saved answers' : 'your run', 'from');
     write(`?- ${goal}.`, 'echo');
     setRunning(true);
     try {

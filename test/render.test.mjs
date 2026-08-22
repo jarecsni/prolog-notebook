@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { parse } from '../src/format.js';
 import {
   renderProse, renderContainer, renderCell, renderKicker,
-  renderProgram, renderQuery, renderNotebook,
+  renderProgram, renderQuery, renderNotebook, replaySolutions,
 } from '../src/render.js';
 
 // The real chapter, not a fixture: if a chapter someone is meant to read stops
@@ -172,12 +172,97 @@ test('a goal containing a quote does not break out of the attribute', () => {
   assert.match(html, /value="X = &quot;str&quot;, atom_string\(A, X\)"/);
 });
 
-test('a saved output is not rendered yet, and the output area stays empty', () => {
-  // 869ectt0y owns replaying saved solutions, and it needs the attribution rule
-  // (docs/modes.md §3) to say whose answers they are. An unlabelled replay would
-  // be exactly the lie that rule exists to prevent, so this renders nothing.
-  assert.notEqual(query.output, null, 'the fixture should carry a saved output');
-  assert.match(renderQuery(query), /<div class="out"><\/div>\n<\/div>$/);
+test('a query with no saved answers has an empty output area', () => {
+  // .out:empty is display:none, so an unanswered query is a cell with nothing
+  // under it rather than an empty box.
+  const html = renderQuery({ id: 'q-1', goal: 'is_son(X)', output: null });
+  assert.match(html, /<div class="out"><\/div>\n<\/div>$/);
+});
+
+// --- the saved answers -----------------------------------------------------
+// The property this project is for: a chapter is readable the instant it loads,
+// and stays readable if the 5.9 MB engine never arrives at all.
+
+test('a chapter renders its own answers with no engine anywhere', () => {
+  const html = renderQuery(query);
+  assert.match(html, /<div class="line sol">1\.  X = edward<\/div>/);
+  assert.match(html, /<div class="line sol">6\.  X = george<\/div>/);
+  assert.match(html, /<div class="line done">no more solutions\.<\/div>/);
+});
+
+test('the saved answers say whose they are', () => {
+  // docs/modes.md §3: an output is never shown without being attributable. A
+  // reader who mistakes the author's answers for their own concludes something
+  // false about Prolog rather than about us.
+  assert.match(renderQuery(query), /<div class="line from">[^<]*saved answers<\/div>/);
+});
+
+test('the goal is echoed above its answers, as a live run echoes it', () => {
+  // A reader pressing Run must not watch the layout change underneath them.
+  assert.match(renderQuery(query), /<div class="line echo">\?- is_son\(X\)\.<\/div>/);
+});
+
+test('answers older than the program above them are marked, not hidden', () => {
+  const stale = renderQuery(query, { stale: true });
+  assert.match(stale, /<div class="line warn">[^<]*press Run[^<]*<\/div>/);
+  assert.match(stale, /class="line from">[^<]*older version/);
+  // Marked, never silently discarded and never silently trusted: the answers are
+  // still there to read.
+  assert.match(stale, /<div class="line sol">1\.  X = edward<\/div>/);
+});
+
+test('a deterministic answer is a solution, not a terminator', () => {
+  // format §6 stores it as the last line, ending in "." with no ";" prompt,
+  // because that is what SWI's toplevel prints when nothing is left to retry.
+  // Rendering it as commentary would lose an answer.
+  assert.deepEqual(replaySolutions({ solutions: [], terminator: 'X = edward.' }), [
+    { cls: 'sol', text: '1.  X = edward' },
+    { cls: 'done', text: 'no more solutions.' },
+  ]);
+});
+
+test('a failed query says false, and does not claim a solution', () => {
+  assert.deepEqual(replaySolutions({ solutions: [], terminator: 'false.' }), [
+    { cls: 'done', text: 'false.' },
+  ]);
+});
+
+test('false after solutions means exhausted, not contradicted', () => {
+  // "false." printed under six answers reads as a denial of them.
+  const lines = replaySolutions({ solutions: ['X = a', 'X = b'], terminator: 'false.' });
+  assert.deepEqual(lines.map((l) => l.text), ['1.  X = a', '2.  X = b', 'no more solutions.']);
+});
+
+test('a ground success is true, counted as the answer it is', () => {
+  assert.deepEqual(replaySolutions({ solutions: [], terminator: 'true.' }), [
+    { cls: 'sol', text: '1.  true' },
+    { cls: 'done', text: 'no more solutions.' },
+  ]);
+});
+
+test('a saved error is shown as an error', () => {
+  assert.deepEqual(replaySolutions({ solutions: [], terminator: 'ERROR: Unknown procedure: p/1' }), [
+    { cls: 'err', text: 'Unknown procedure: p/1' },
+  ]);
+});
+
+test('editing the program above a query marks its answers stale, before first paint', () => {
+  // No engine, no re-run, no network: a 64-bit FNV-1a over text we already have.
+  // That is why the hash is not a SHA — WebCrypto is async in the browser and
+  // would push this past the first paint it exists to beat.
+  const edited = parse(readFileSync(NOTEBOOK, 'utf8'));
+  const family = edited.cells.find((c) => c.id === 'p-family');
+  family.source += '\nmale(henry).';
+  const html = renderNotebook(edited);
+  assert.equal((html.match(/class="line warn"/g) ?? []).length, 4, 'every answer below it is stale');
+});
+
+test('a whole chapter renders its answers, and marks none of them stale', () => {
+  // The chapter agrees with itself, so nothing is marked. This is the same check
+  // format.test.mjs makes on the hashes, seen from the reader's side.
+  const html = renderNotebook(notebook);
+  assert.equal((html.match(/class="line warn"/g) ?? []).length, 0);
+  assert.equal((html.match(/class="line from"/g) ?? []).length, 4, 'four answered queries');
 });
 
 // --- the whole notebook ----------------------------------------------------

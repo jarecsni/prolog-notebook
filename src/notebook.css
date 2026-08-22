@@ -114,6 +114,17 @@ button.primary:hover { background: #98380f; }
 }
 .out:empty { display: none; }
 .line.echo { color: #8a8371; }
+/* Attribution. An output is never shown without saying whose it is
+   (docs/modes.md §3), so this line is structural rather than decorative. */
+.line.from {
+  color: #8a8371;
+  font: 600 .74rem/1.6 system-ui, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+/* Saved answers that no longer follow from the program above them. Marked, never
+   silently dropped and never silently trusted. */
+.line.warn { color: #a8730f; }
 .line.sol { color: var(--ok); }
 .line.done { color: #8a8371; font-style: italic; }
 .line.err { color: var(--err); }
@@ -182,6 +193,7 @@ button.primary:hover { background: #98380f; }
   }
   .cell, textarea, input { background: #1c1b22; }
   .out { background: #1a191f; }
+  .line.warn { color: #d9a441; }
   .predict { background: #201e19; border-color: #5a4f36; }
   .aside { background: #201d1c; }
   button { background: #24232b; border-color: #454150; color: var(--ink); }
