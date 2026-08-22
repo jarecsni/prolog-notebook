@@ -204,8 +204,17 @@ button.primary:hover { background: #98380f; }
   right: 0;
   bottom: 100%;
   margin-bottom: .5rem;
-  width: max-content;
-  max-width: min(23rem, calc(100vw - 2rem));
+  /* TWO COLUMNS, AND A WIDTH THAT DOES NOT MOVE. Every button sits in the second
+     column, so they are all as wide as the widest of them — and because the card
+     itself is a fixed width, nothing shifts when a label changes under the
+     reader's cursor. Sized by content, it twitched on every click: "Hide saved
+     answers" and "Show saved answers" are not the same length, and neither are
+     "Start engine" and "Restart engine". */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  width: 25rem;
+  max-width: calc(100vw - 2rem);
   padding: .1rem .9rem;
   border: 1px solid var(--rule);
   border-radius: 14px;
@@ -230,14 +239,11 @@ button.primary:hover { background: #98380f; }
 /* One row per thing the page controls: what is true, then the button that changes
    it. Ruled rather than merely spaced, because two state phrases in a column
    otherwise read as one paragraph. */
-.page-controls .unit {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.4rem;
-  padding: .6rem 0;
-}
-.page-controls .unit + .unit { border-top: 1px solid var(--rule); }
+/* The unit is a grouping, not a box: its two children join the card's own grid so
+   that every state phrase and every button line up down the card. */
+.page-controls .unit { display: contents; }
+.page-controls .unit > .state { padding: .6rem 1.4rem .6rem 0; }
+.page-controls .unit + .unit > * { border-top: 1px solid var(--rule); }
 
 /* Free to wrap, now that there is a column to wrap in. The widening pill had to
    ellipsise this sentence to keep the buttons on screen; a row has the width it
@@ -304,11 +310,14 @@ button.primary:hover { background: #98380f; }
 .page-controls[data-open="true"] .chev { transform: rotate(270deg); }
 
 .page-controls .panel button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: .38rem;
-  flex: 0 0 auto;
-  padding: .4rem .8rem .4rem .65rem;
+  /* Fills its column, so all three are one width. */
+  width: 100%;
+  margin: .6rem 0;
+  padding: .4rem .8rem;
   border-radius: 999px;
   border-color: transparent;
   background: var(--code-bg);

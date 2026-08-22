@@ -335,7 +335,17 @@ function mountPageBar(root, options, bus, programs, queries) {
   // only appear while they are visible — so a control with no state phrase leaves
   // its own label as the only clue, and that clue has to be read backwards. That
   // was the asymmetry: the engine had both, this had only the verb.
+  // Cells that HAVE saved answers in the file — but what this unit reports on is
+  // the ones SHOWING them. A cell displaying the reader's own run is not a spoiler:
+  // its saved answers are behind reset, and it refuses to hide precisely because
+  // they are no longer what is on screen.
+  //
+  // Counting the file rather than the screen is what jammed this control. The run
+  // cell could never be hidden, so "is anything still showing?" was permanently
+  // true, the set never reached all-hidden, the label never flipped to Show, and
+  // every click after the first re-hid the same cells and did nothing visible.
   const spoilers = queries.filter((q) => q.hasSaved);
+  const showing = () => spoilers.filter((q) => q.showsChapter());
   const answersUnit = bar.querySelector('.unit.answers');
   const answersState = bar.querySelector('.answers-state');
   let refreshAnswers = () => {};
@@ -351,19 +361,27 @@ function mountPageBar(root, options, bus, programs, queries) {
     refreshAnswers = () => {
       // Counted rather than remembered, so hiding one output by hand leaves this
       // telling the truth instead of contradicting the page.
-      const hidden = spoilers.filter((q) => q.isHidden()).length;
-      const all = hidden === spoilers.length;
-      answersState.textContent = hidden === 0 ? 'Answers shown'
+      const on = showing();
+      const hidden = on.filter((q) => q.isHidden()).length;
+      const all = on.length > 0 && hidden === on.length;
+      // Every cell is showing the reader's own answers: there is nothing here of
+      // the chapter's to put away. Saying so and going quiet beats offering a
+      // button that cannot do anything — a control that does nothing reads as a
+      // broken page, which is how this one was reported.
+      peek.disabled = on.length === 0;
+      answersState.textContent = on.length === 0 ? 'No saved answers on screen'
+        : hidden === 0 ? 'Answers shown'
         : all ? 'Answers hidden'
-        : `${hidden} of ${spoilers.length} hidden`;
+        : `${hidden} of ${on.length} hidden`;
       label(peek, all ? 'show' : 'hide', all ? 'Show saved answers' : 'Hide saved answers');
       render();
     };
 
     peek.addEventListener('click', () => {
       // Anything still showing means the useful move is to hide the rest.
-      const away = spoilers.some((q) => !q.isHidden());
-      for (const q of spoilers) q.setHidden(away);
+      const on = showing();
+      const away = on.some((q) => !q.isHidden());
+      for (const q of on) q.setHidden(away);
       refreshAnswers();
     });
     refreshAnswers();
@@ -942,6 +960,11 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     const hadSaved = !mine && out.querySelector('.line.from') !== null;
     out.innerHTML = '';
     mine = true;
+    // This cell has just stopped showing the chapter's answers, which changes what
+    // the page's control is counting. setHidden only speaks up when the hidden
+    // flag itself moves, so a cell that was already visible would leave the count
+    // reporting on a spoiler that is no longer on screen.
+    bus.emit({ kind: 'answers' });
     produced = [];
     failed = null;
     exhausted = false;
@@ -1021,6 +1044,8 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     ran = null;
     engineChanged = false;
     decorateSaved();
+    // Back in the set the page's control acts on, for the same reason.
+    bus.emit({ kind: 'answers' });
     finish();
   });
 
@@ -1050,6 +1075,14 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   return {
     id: cell.dataset.cell,
     hasSaved: published.out !== '',
+    /**
+     * Is the chapter's own output what this cell is showing right now?
+     *
+     * Not the same question as `hasSaved`, which is about the FILE. The page's
+     * control acts on what is on screen, and after a run the chapter's answers
+     * are behind reset rather than in front of the reader.
+     */
+    showsChapter: () => !mine && published.out !== '',
     setHidden,
     isHidden: () => hidden,
     isEdited: () => mine || input.value !== published.goal,
