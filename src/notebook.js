@@ -696,6 +696,11 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   // reader actually saw rather than a reconstruction of them from the screen.
   let produced = [];
   let failed = null;
+  // Whether the SEARCH ended, which is not the same as whether the RUN ended. A
+  // reader who takes three of six and stops leaves a query that was never
+  // exhausted, and only the engine saying `done` can tell us otherwise — the
+  // buttons look identical either way (format §6).
+  let exhausted = false;
   // Whose answers are on screen. A flag rather than a diff of out.innerHTML: the
   // reader's own controls live in there too, and chrome must never read as a change
   // to the chapter.
@@ -906,6 +911,7 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
         return false;
       }
       if (r.done) {
+        exhausted = true;
         write(count === 0 ? 'false.' : 'no more solutions.', 'done');
         finish();
         return false;
@@ -931,6 +937,7 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     mine = true;
     produced = [];
     failed = null;
+    exhausted = false;
     setHidden(false);
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
@@ -1036,17 +1043,21 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
      * Three answers, and the distinctions are the point:
      *   undefined  the chapter's answers are on screen — leave the file's own
      *              output, and its own hash, exactly where they are
-     *   null       the reader ran this and stopped part-way. A partial sequence
-     *              has no honest terminator, and writing one would claim the
-     *              search was exhausted when it was not. So the cell exports with
-     *              NO output, which the format already allows and which says the
-     *              true thing: we have no answers to give you for this.
-     *   an object  a completed run of theirs
+     *   null       the reader ran this and produced nothing at all — no answers,
+     *              no failure, no exhausted search. There is nothing to write
+     *              down, and a query with no output block is already valid.
+     *   an object  a run of theirs. Its terminator is empty when they stopped
+     *              part-way: the answers they took are theirs to keep, and an
+     *              unterminated sequence is the format's own way of saying the
+     *              search was never exhausted (§6). Writing `false.` there would
+     *              forge an exhaustion, which is the one thing we may not do.
      */
     output: () => {
       if (!mine) return undefined;
-      if (query) return null;
       if (failed) return { solutions: produced, terminator: `ERROR: ${failed}` };
+      // Stopping and finishing look the same from outside — both leave no open
+      // query — so this asks the only thing that distinguishes them.
+      if (!exhausted) return produced.length ? { solutions: produced, terminator: '' } : null;
       if (!produced.length) return { solutions: [], terminator: 'false.' };
       // The last solution IS the terminator when a query ran deterministically,
       // and `false.` after the others when it exhausted. replaySolutions() reads

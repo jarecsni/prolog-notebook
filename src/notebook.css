@@ -167,6 +167,10 @@ button.primary:hover { background: #98380f; }
 }
 .line.sol { color: var(--ok); }
 .line.done { color: #8a8371; font-style: italic; }
+/* "more solutions may follow." must never be mistaken for "no more solutions." at
+   a glance, so the sequence is marked as continuing rather than closed. This is
+   also where the cold-page `; next` affordance will attach (869ectt0y). */
+.line.done.partial::before { content: '\22EE  '; opacity: .7; }
 .line.err { color: var(--err); }
 
 /* The page's own controls. Chrome, not content: built by notebook.js at runtime,
