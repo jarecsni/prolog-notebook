@@ -53,8 +53,8 @@ of them.
 **But the reader can put them away.** A chapter whose prose says *press Run for the first
 answer, then `; next` to walk through the rest* is arguing with a page that has already printed
 all six: the reader loses either the exercise or their trust in the instructions. So every
-saved output carries a **hide**, and the page bar carries one that hides them all at once, for
-working through a chapter cold ([869enke58]).
+saved output carries a **hide**, and the page's own pill carries one that hides them all at
+once, for working through a chapter cold ([869enke58]).
 
 Hidden, never discarded — they are the chapter's answers and one click brings them back, which
 is also why this is not what reset does: there is nothing here to undo. The attribution line
@@ -173,7 +173,10 @@ consult, 1.1 ms for every query in the once/1 chapter. Re-running a whole chapte
 than a keystroke. The tradeoff that produced out-of-order execution is not ours to make.
 
 The exception is a cell declaring `:- dynamic`, whose assert/retract state lives in no file.
-The page carries a **restart engine** control for exactly this ([format §8](format.md)): it
+The page carries a **restart engine** control for exactly this ([format §8](format.md)), in a
+pill fixed to the corner of the viewport that says what the engine is holding — collapsed to a
+dot and a cell count until the reader hovers it, because a chapter is for reading and a bar
+pinned across every page is a tool insisting on itself. It
 throws the worker away and replays the consult log, so the clauses come back and the
 assert/retract state does not. Verified in a browser — a counter mutated to 41 is 0 again
 afterwards. Detecting the declaration statically, so the UI can *offer* it rather than wait to

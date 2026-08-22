@@ -145,26 +145,77 @@ button.primary:hover { background: #98380f; }
 .line.done { color: #8a8371; font-style: italic; }
 .line.err { color: var(--err); }
 
-/* The engine's own state and the one control over all of it. Chrome, not content:
-   built by notebook.js at runtime, so a printed or GitHub-rendered chapter never
-   shows a button that cannot work.
+/* The page's own controls. Chrome, not content: built by notebook.js at runtime,
+   so a printed or GitHub-rendered chapter never shows a button that cannot work.
 
-   Sticky, because it answers "what is the engine holding right now" and a reader
-   who has to scroll to the end of a chapter to read that will read every cell
-   above it as unexplained. */
+   Always in view, because it answers "what is the engine holding right now" and a
+   reader who has to scroll to the end of a chapter to read that will read every
+   cell above it as unexplained. Tucked into a pill, because a chapter is for
+   reading and a bar pinned across every page is a tool insisting on itself.
+
+   Fixed to the VIEWPORT's corner rather than sticky inside the column: the column
+   is where the prose is, and a control that floats over the sentence being read is
+   worse than one that is hard to find. On a wide screen it sits in the margin
+   beside the text and overlaps nothing at all. */
 .engine-bar {
-  position: sticky;
-  bottom: 0;
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
   z-index: 5;
   display: flex;
-  align-items: center;
-  gap: .8rem;
+  align-items: flex-end;
   justify-content: flex-end;
-  margin: 2.5rem 0 0;
-  padding: .8rem 0;
-  border-top: 1px solid var(--rule);
-  background: var(--paper);
+  gap: .5rem;
+  /* Never wider than the screen: expanded, this is a sentence and two buttons,
+     which do not fit side by side on a phone. */
+  max-width: calc(100vw - 2rem);
+  flex-wrap: wrap;
 }
+
+.engine-bar .controls {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .5rem .8rem;
+  padding: .35rem .45rem .35rem .95rem;
+  border: 1px solid var(--rule);
+  /* Exactly a pill at one row's height, and a rounded box when it wraps to two on
+     a narrow screen — which 999px would leave looking like a lozenge stretched
+     out of shape. */
+  border-radius: 1.15rem;
+  background: var(--paper);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .09);
+}
+/* Hover and focus-within cost nothing and need no script; data-open is for a tap
+   (there is no hover on a touch screen) and for the moments the page opens it
+   itself. */
+.engine-bar:hover .controls,
+.engine-bar:focus-within .controls,
+.engine-bar[data-open="true"] .controls { display: flex; }
+
+.engine-bar .handle {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .35rem .65rem;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .09);
+  font: 600 .7rem/1 system-ui, sans-serif;
+  letter-spacing: .04em;
+  color: #8a8371;
+}
+.engine-bar .handle .dot {
+  width: .48rem;
+  height: .48rem;
+  border-radius: 50%;
+  background: #c8c1ae;
+}
+/* The whole state, for a reader who is not looking: grey until an engine exists,
+   green once one does. */
+.engine-bar.live .handle .dot { background: var(--ok); }
+
 .engine-state {
   font: 400 .74rem/1 system-ui, sans-serif;
   color: #8a8371;
@@ -243,6 +294,12 @@ button.primary:hover { background: #98380f; }
   button { background: #24232b; border-color: #454150; color: var(--ink); }
   button:hover:not(:disabled) { background: #2d2b35; }
   button.primary { background: var(--accent); color: #16151a; }
+  /* A shadow is invisible on a dark page, so the pill needs an edge instead. */
+  .engine-bar .handle, .engine-bar .controls {
+    background: #1c1b22;
+    border: 1px solid var(--rule);
+    box-shadow: none;
+  }
 }
 
 /* Shown until mount() runs; see notebook.js. Its presence means the page is inert. */

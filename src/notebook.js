@@ -84,20 +84,57 @@ export function mount(root = document, options = {}) {
  * Sticky, which is a fix rather than a flourish: this is where the answer to
  * "what is the engine holding now" lives, and a reader who has to scroll to the
  * end of the chapter to see it will read every cell above as unexplained.
+ *
+ * But a chapter is for reading, and a full-width bar pinned across the foot of
+ * every page is a tool insisting on itself. So it is tucked away as a small pill
+ * carrying only the state at a glance — a dot and a count — and opens on hover,
+ * on focus, or on a tap for anyone without a pointer. It opens itself briefly
+ * when the engine's state actually changes, which is the moment its words are
+ * worth reading, and tucks itself back when the reader is done with it.
  */
 function mountPageBar(root, options, bus, programs, queries) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
   const bar = document.createElement('div');
   bar.className = 'engine-bar';
-  bar.innerHTML = '<span class="engine-state"></span>'
-    + '<button data-act="restart" disabled>restart engine</button>';
+  bar.innerHTML = '<div class="controls"><span class="engine-state"></span>'
+    + '<button data-act="restart" disabled>restart engine</button></div>'
+    + '<button class="handle" data-act="handle" aria-expanded="false">'
+    + '<span class="dot"></span><span class="count"></span></button>';
   const state = bar.querySelector('.engine-state');
   const restart = bar.querySelector('[data-act="restart"]');
+  const handle = bar.querySelector('.handle');
+  const count = bar.querySelector('.count');
+
+  // Open because the reader asked, or open because something just happened. Kept
+  // apart so a flash cannot close a pill the reader deliberately pinned.
+  let pinned = false;
+  let flash = null;
+  const render = () => {
+    const open = pinned || flash !== null;
+    bar.dataset.open = String(open);
+    handle.setAttribute('aria-expanded', String(open));
+  };
+  const show = (ms) => {
+    clearTimeout(flash);
+    // Long enough to read a clock time, short enough not to become furniture.
+    flash = setTimeout(() => { flash = null; render(); }, ms);
+    render();
+  };
+
+  handle.addEventListener('click', () => {
+    pinned = !pinned;
+    clearTimeout(flash);
+    flash = null;
+    render();
+  });
 
   const say = (text, title) => {
     state.textContent = text;
     if (title) state.title = title;
     else state.removeAttribute('title');
+    // The pill's own label, for when the words are tucked away: the state at a
+    // glance, which is all a reader wants until they want the buttons.
+    handle.title = text;
   };
 
   // Counted in cells rather than bytes, because cells are what the reader can act
@@ -112,6 +149,10 @@ function mountPageBar(root, options, bus, programs, queries) {
   // downloaded, and the answers above are still there to read.
   say('engine not started',
     'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
+  // "off" on its own says nothing about what is off. The word anchors what the
+  // pill is for, which is most of what makes a two-inch control discoverable.
+  count.textContent = 'engine off';
+  render();
 
   // How long this engine has been the engine. Kept rather than announced once,
   // because "restarted 13:53:10" stops being visible the moment anything else
@@ -129,6 +170,11 @@ function mountPageBar(root, options, bus, programs, queries) {
     say(`${loaded()} · ${age}`, event.kind === 'restarted'
       ? 'assert/retract state is gone; the clauses in your cells were loaded again'
       : 'SWI-Prolog is running in a Web Worker');
+    bar.classList.add('live');
+    count.textContent = `engine ${programs.filter((p) => p.isLoaded()).length}/${programs.length}`;
+    // Starting and restarting are the two moments the words are worth reading,
+    // and both are things the reader just caused. Consulting one more cell is not.
+    if (event.kind === 'started' || event.kind === 'restarted') show(6000);
   });
 
   // Work the whole chapter cold. Per-cell hiding is right there in each cell, but a
@@ -146,7 +192,7 @@ function mountPageBar(root, options, bus, programs, queries) {
       for (const q of spoilers) q.setHidden(away);
       peek.textContent = away ? 'show saved answers' : 'hide saved answers';
     });
-    bar.insertBefore(peek, restart);
+    bar.querySelector('.controls').insertBefore(peek, restart);
   }
 
   restart.addEventListener('click', async () => {
@@ -158,6 +204,7 @@ function mountPageBar(root, options, bus, programs, queries) {
       bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
     } catch (e) {
       say(`restart failed: ${e.message}`);
+      show(10000);
     } finally {
       restart.disabled = false;
     }
