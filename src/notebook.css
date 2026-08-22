@@ -189,13 +189,27 @@ button.primary:hover { background: #98380f; }
   gap: .45rem;
   min-width: 0;
   padding: 0 .1rem 0 1rem;
+  /* HIDDEN, not merely transparent. An opacity of 0 leaves a button clickable, and
+     these were landing on top of the lozenge while the pill was closed — swallowing
+     every click on the one control the page has. Invisible things must not be
+     touchable, and visibility says so in a way opacity does not. */
+  visibility: hidden;
   opacity: 0;
+  /* Rigid while closed so it overflows and is clipped, rather than being squeezed
+     to nothing and spilling its buttons over the handle. Free to shrink once open,
+     which is what lets the sentence ellipsise on a narrow screen. */
+  flex: 0 0 auto;
   transform: translateX(.6rem);
   /* Contents arrive a beat after the pill starts widening, which is what makes it
      read as one thing opening rather than two things moving. */
-  transition: opacity .18s ease, transform .3s cubic-bezier(.32, .72, 0, 1);
+  transition: opacity .18s ease, transform .3s cubic-bezier(.32, .72, 0, 1), visibility .3s;
 }
-.engine-bar[data-open="true"] .controls { opacity: 1; transform: none; }
+.engine-bar[data-open="true"] .controls {
+  visibility: visible;
+  opacity: 1;
+  flex: 0 1 auto;
+  transform: none;
+}
 
 /* Ellipsis rather than a hard clip: on a narrow screen the sentence is the part
    that gives way, and the buttons are the part that must not. */
