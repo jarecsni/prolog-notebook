@@ -113,6 +113,11 @@ button.primary:hover { background: #98380f; }
 }
 .badge.stateful { color: #a8730f; }
 
+/* The reader's copy is the point of export, so the button that hands it over is
+   the one primary action in the page controls. */
+.engine-bar .controls [data-act="download"] { background: var(--accent); color: #fff; }
+.engine-bar .controls [data-act="download"]:hover:not(:disabled) { background: #98380f; }
+
 .status { font: 400 .74rem/1.3 system-ui, sans-serif; text-transform: none; letter-spacing: 0; text-align: right; }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--err); }
