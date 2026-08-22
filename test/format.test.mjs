@@ -135,6 +135,38 @@ test('an output block with nothing in it is an error, not an answerless answer',
   assert.throws(() => parse(source), /output for="q-1" is empty/);
 });
 
+test('hold is parsed, kept and written back where the author put it', () => {
+  // The output block itself is untouched by a hold: the answers are parsed, kept
+  // and round-tripped exactly as always. Only the RENDERING withholds them.
+  const notebook = parse(readFileSync(NOTEBOOK, 'utf8'));
+  const held = notebook.cells.find((c) => c.id === 'q-son-a');
+  assert.equal(held.hold, 'until-answered');
+  assert.ok(held.output.solutions.length + held.output.terminator.length > 0);
+  assert.equal(notebook.cells.find((c) => c.id === 'q-son-b-george').hold, null);
+  assert.match(serialise(notebook), /query id="q-son-a" hold="until-answered"/);
+});
+
+test('a hold nobody can honour is an error, not a silent no-op', () => {
+  // `hold="untill-run"` that quietly did nothing would spoil the very prediction
+  // it was written to protect, and the author would never find out.
+  assert.throws(
+    () => parse('```prolog query id="q-1" hold="untill-run"\nfoo\n```\n'),
+    /hold="untill-run" is not until-run or until-answered/
+  );
+});
+
+test('holding until a prediction is answered needs a prediction to wait for', () => {
+  // The author declared the wait; only its subject is positional. A chapter whose
+  // answers would never appear should not be publishable.
+  assert.throws(
+    () => parse('```prolog query id="q-1" hold="until-answered"\nfoo\n```\n'),
+    /has no prediction above it/
+  );
+  // and with one above, it parses
+  const ok = parse('> [!predict] Guess\n> how many?\n\n```prolog query id="q-1" hold="until-answered"\nfoo\n```\n');
+  assert.equal(ok.cells.find((c) => c.kind === 'query').hold, 'until-answered');
+});
+
 test('containers are parsed for the four variants the stylesheet knows', () => {
   const { cells } = parse(CHAPTER);
   const variants = cells.filter((c) => c.kind === 'container').map((c) => c.variant);

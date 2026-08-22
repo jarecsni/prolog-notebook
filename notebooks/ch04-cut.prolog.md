@@ -104,7 +104,7 @@ son_b(X) :- male(X), once(parent(_, X)).
 >
 > </details>
 
-```prolog query id="q-son-a"
+```prolog query id="q-son-a" hold="until-answered"
 son_a(X)
 ```
 
@@ -112,7 +112,7 @@ son_a(X)
 X = edward.
 ```
 
-```prolog query id="q-son-b"
+```prolog query id="q-son-b" hold="until-answered"
 son_b(X)
 ```
 

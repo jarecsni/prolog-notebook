@@ -19,7 +19,7 @@ const CONTAINERS = new Set(['predict', 'aside', 'margin', 'bullets']);
 /** Attribute order in canonical form: id first, then the kind's own, then the rest. */
 const ATTR_ORDER = {
   program: ['id', 'src'],
-  query: ['id', 'rerun'],
+  query: ['id', 'rerun', 'hold'],
   output: ['for', 'input-hash'],
 };
 
@@ -113,6 +113,13 @@ export function parse(text) {
         }
         if (ids.has(cell.id)) throw new NotebookError(`duplicate cell id "${cell.id}"`, lineNo);
         ids.add(cell.id);
+      }
+      // A cell held until a prediction is answered has to have one to wait for.
+      // The author declared the wait; only its SUBJECT is positional, and an
+      // author who moved the prediction away learns here rather than shipping a
+      // chapter whose answers never appear.
+      if (cell.hold === 'until-answered' && !cells.some((c) => c.variant === 'predict')) {
+        throw new NotebookError('hold="until-answered" has no prediction above it', lineNo);
       }
       cells.push(cell);
       continue;
@@ -233,10 +240,25 @@ function buildQuery(info, block, lineNo) {
     id: info.attrs.get('id') ?? null,
     goal,
     rerun: info.attrs.get('rerun') ?? null,
+    hold: readHold(info.attrs.get('hold'), lineNo),
     language: info.language,
     attrs: otherAttrs(info.attrs, 'query'),
     output: null,
   };
+}
+
+/**
+ * `hold` withholds this cell's saved answers from a reader who has not earned
+ * them yet (§5). Two values, and a typo is an error rather than a silent no-op:
+ * `hold="untill-run"` that quietly did nothing would spoil the prediction it was
+ * written to protect, and the author would never find out.
+ */
+function readHold(value, lineNo) {
+  if (value === undefined) return null;
+  if (value !== 'until-run' && value !== 'until-answered') {
+    throw new NotebookError(`hold="${value}" is not until-run or until-answered`, lineNo);
+  }
+  return value;
 }
 
 /**
@@ -486,6 +508,7 @@ function orderedAttrs(cell, kind) {
   } else if (kind === 'query') {
     out.set('id', cell.id);
     if (cell.rerun) out.set('rerun', cell.rerun);
+    if (cell.hold) out.set('hold', cell.hold);
     for (const [k, v] of cell.attrs) out.set(k, v);
   } else {
     out.set('for', cell.id);
