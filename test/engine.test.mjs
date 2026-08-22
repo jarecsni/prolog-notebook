@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSession, formatSolution, formatTerm, argumentsOf } from '../src/node.js';
+import { createSession, formatSolution, formatTerm, argumentsOf, readableInCell } from '../src/node.js';
 
 const FAMILY = `
 male(albert). male(edward). male(alfred). male(george).
@@ -166,4 +166,38 @@ test('a clean consult reports nothing', async () => {
 test('a cell name already ending in .pl is not doubled', async () => {
   (await session.consult('named(1).', 'chapter.pl'));
   assert.equal((await session.query('source_file(named(_), F)').next()).text, "F = '/chapter.pl'");
+});
+
+// --- an error about this cell, said the way the cell would say it ---
+
+test('a syntax error loses the path and keeps the position', () => {
+  // One cell is one virtual file, so SWI's line numbers are already the cell's
+  // own — that half solved itself. What is left is a filename the reader never
+  // chose and cannot open, printed on the very cell that caused the error.
+  assert.equal(
+    readableInCell('/p-family.pl:4:6: Syntax error: Operator expected', 'p-family'),
+    'line 4, column 6: Syntax error: Operator expected',
+  );
+  assert.equal(
+    readableInCell('/p-family.pl:9: Clauses of male/1 are not together', 'p-family'),
+    'line 9: Clauses of male/1 are not together',
+  );
+});
+
+test('a message about ANOTHER cell keeps the name of that cell', () => {
+  // "Redefined static procedure male/1 in /p-family.pl" is only useful because
+  // it names the other file — that is how a reader finds the cell whose clauses
+  // have just been destroyed. A regex that stripped any path would delete
+  // exactly the part worth reading.
+  const warning = 'Redefined static procedure male/1 in /p-family.pl';
+  assert.equal(readableInCell(warning, 'p-fixes'), warning);
+  const elsewhere = '/p-family.pl:4:6: Syntax error: Operator expected';
+  assert.equal(readableInCell(elsewhere, 'p-fixes'), elsewhere);
+});
+
+test('the wasm frame is still stripped underneath', () => {
+  assert.equal(
+    readableInCell('wasm:wasm_call_string/3: Unknown procedure: is_son/1', 'p-family'),
+    'Unknown procedure: is_son/1',
+  );
 });
