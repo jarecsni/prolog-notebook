@@ -15,7 +15,7 @@
 // engine agree with what I can see — through a tick that names its state and a
 // reset that undoes it. A blank tick beside a greyed button is indistinguishable
 // from a broken page, which is how an earlier version of this file read.
-import { createSession, formatSolution } from './browser.js';
+import { createSession, formatSolution, readableInCell } from './browser.js';
 import { declaredDynamic, definedPredicates, unknownProcedure } from './clauses.js';
 
 let serial = 0;
@@ -511,8 +511,13 @@ function mountProgram(cell, options, bus) {
     // A warning here usually means this cell has just destroyed another
     // cell's clauses, which the reader has no other way of finding out.
     const warning = r.messages && r.messages.find((m) => m.kind === 'warning');
-    failure = r.ok ? null : r.error;
-    loaded = r.ok ? { text, at: clock(), warning: warning ? warning.text : null } : null;
+    // Said the way this cell would say it: one cell is one virtual file, so SWI's
+    // line numbers are already the cell's own, and the path in front of them is a
+    // filename the reader never chose and cannot open.
+    failure = r.ok ? null : readableInCell(r.error, name);
+    loaded = r.ok
+      ? { text, at: clock(), warning: warning ? readableInCell(warning.text, name) : null }
+      : null;
     refresh();
     // Any answer below this cell was produced against whatever it held before.
     bus.emit({ kind: 'consulted', name, at: clock() });

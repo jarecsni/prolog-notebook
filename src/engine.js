@@ -204,6 +204,37 @@ export function readableError(message) {
   return String(message ?? '').replace(/^wasm:wasm_call_string\/\d+:\s*/, '');
 }
 
+/**
+ * A message about THIS cell, said the way the cell would say it.
+ *
+ * One cell is one virtual file, so SWI's line numbers are already the cell's own
+ * — that half of the problem solved itself. What is left is the path: a reader
+ * looking at a syntax error printed on the very cell that caused it does not need
+ * to be told which file it was in, and `/p-family.pl` is a filename they never
+ * chose and cannot open.
+ *
+ *   /p-family.pl:4:6: Syntax error: Operator expected
+ *   line 4, column 6: Syntax error: Operator expected
+ *
+ * ONLY THIS CELL'S OWN PATH IS REMOVED, which is the whole reason the name is a
+ * parameter rather than a wildcard. A consult warning naming a DIFFERENT cell —
+ * "Redefined static procedure male/1", the one that says another cell's clauses
+ * have just been destroyed — is only useful because it names that other file, and
+ * a regex that stripped any path would delete exactly the part worth reading.
+ *
+ * @param {string} message
+ * @param {string} name the cell's own consult name
+ */
+export function readableInCell(message, name) {
+  const path = `/${String(name ?? '')}.pl:`;
+  const text = readableError(message);
+  if (!text.startsWith(path)) return text;
+  return text
+    .slice(path.length)
+    .replace(/^(\d+):(\d+):\s*/, 'line $1, column $2: ')
+    .replace(/^(\d+):\s*/, 'line $1: ');
+}
+
 /** Strip the engine's bookkeeping keys from a solution. */
 export function bindingsOf(value) {
   const out = {};
