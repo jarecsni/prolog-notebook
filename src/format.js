@@ -294,8 +294,15 @@ function attachOutput(cells, info, block, lineNo) {
   if (declared !== undefined && previous.id !== null && declared !== previous.id) {
     throw new NotebookError(`output for="${declared}" follows query "${previous.id}"`, lineNo);
   }
+  const body = trimBlankEdges(block.body);
+  // An output block with nothing in it claims a query has answers and then shows
+  // none. There is no reading of that which is true: a query with no answers to
+  // show simply has no output block, and that is already valid (§6).
+  if (body.length === 0) {
+    throw new NotebookError(`output for="${previous.id ?? ''}" is empty`, lineNo);
+  }
   previous.output = {
-    ...parseSolutions(trimBlankEdges(block.body)),
+    ...parseSolutions(body),
     inputHash: info.attrs.get('input-hash') ?? null,
     language: info.language,
     attrs: otherAttrs(info.attrs, 'output'),
@@ -309,6 +316,13 @@ function attachOutput(cells, info, block, lineNo) {
  *
  * Bindings can wrap across lines, so a solution is every line up to and including
  * the one ending in ` ;`.
+ *
+ * A sequence whose LAST line ends in ` ;` has no terminator, and that is the
+ * format's spelling for NOT EXHAUSTED (§6): the reader took three of six and
+ * stopped, or the author is showing the first four of infinitely many. It falls
+ * out of the loop below rather than being detected — the last ` ;` closes a
+ * solution and leaves `current` empty, so `terminator` stays `''`, which is the
+ * one value no finished sequence can have.
  */
 function parseSolutions(bodyLines) {
   const solutions = [];
@@ -431,7 +445,13 @@ export function serialise(notebook) {
       case 'query': {
         parts.push(fenced(cell.language ?? 'prolog', 'query', orderedAttrs(cell, 'query'), cell.goal));
         if (cell.output) {
-          const body = [...cell.output.solutions.map((s) => `${s} ;`), cell.output.terminator];
+          // No terminator means the sequence was never exhausted, and the file
+          // says so by ending on a ` ;` — writing a blank line in its place
+          // would not round-trip, since the parser trims blank edges.
+          const solutions = cell.output.solutions.map((s) => `${s} ;`);
+          const body = cell.output.terminator
+            ? [...solutions, cell.output.terminator]
+            : solutions;
           parts.push(fenced(
             cell.output.language ?? 'text',
             'output',

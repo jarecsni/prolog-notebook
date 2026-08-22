@@ -39,10 +39,24 @@ test("a reader's answers serialise, and parse back as answers", () => {
   assert.equal(cell.output.terminator, 'X = george.');
 });
 
-test('a query the reader half-ran exports with no answers at all', () => {
-  // A partial sequence has no honest terminator: writing one would claim the
-  // search was exhausted when the reader stopped it after two of six. A query
-  // cell with no output block is already valid, and says the true thing.
+test('a query the reader stopped part-way keeps the answers they took', () => {
+  // The reader took two of six and stopped. Those two are theirs and the file
+  // keeps them — ending on a ` ;` with no final line, which is the format's way
+  // of saying the search was never exhausted (§6). Writing `false.` here would
+  // forge an exhaustion; writing nothing at all would throw their work away.
+  const edits = new Map([['q-son-a', {
+    goal: 'son_a(X)',
+    output: { solutions: ['X = edward', 'X = alfred'], terminator: '' },
+  }]]);
+  const text = exportSource(chapter(), edits);
+  const cell = parse(text).cells.find((c) => c.id === 'q-son-a');
+  assert.deepEqual(cell.output.solutions, ['X = edward', 'X = alfred']);
+  assert.equal(cell.output.terminator, '', 'a partial sequence must not gain a terminator');
+});
+
+test('a query the reader ran with nothing to show exports with no answers at all', () => {
+  // Run, then Stop before the first solution arrived. There is nothing to write
+  // down, and a query cell with no output block is already valid.
   const text = exportSource(chapter(), new Map([['q-son-a', { goal: 'son_a(X)', output: null }]]));
   const reparsed = parse(text);
   assert.equal(reparsed.cells.find((c) => c.id === 'q-son-a').output, null);

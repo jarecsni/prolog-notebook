@@ -144,6 +144,14 @@ back as a pull request. Cheap, because `serialise()` already emits canonical byt
 This is fork-by-download rather than save-back, and it is the right shape: the reader leaves
 with something real, and the published chapter is untouched.
 
+Every output in the downloaded file says whose it is and whether it still follows from the
+program above it. Answers the reader produced are hashed against the reader's program;
+answers still belonging to the chapter keep the author's hash untouched, so a reader who
+edited a program and did not re-run opens their copy with those answers marked stale —
+exactly what the page they downloaded it from was showing. And a query they stopped part-way
+keeps the answers they took, written as a sequence that was never exhausted ([869enmq2y]);
+the file never claims a search finished that nobody finished.
+
 ## 4. Own
 
 The environment holds the file, so edits and outputs are saved to it. No scratchpad, no

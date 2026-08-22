@@ -253,6 +253,18 @@ test('a ground success is true, counted as the answer it is', () => {
   ]);
 });
 
+test('a sequence that was never exhausted says so, and does not claim to be done', () => {
+  // The reader took two of six and stopped, or the author is showing the first
+  // three of infinitely many. Either way nobody ever said the search finished,
+  // and "no more solutions." here would be that claim (format §6).
+  const lines = replaySolutions({ solutions: ['N = 0', 'N = s(0)'], terminator: '' });
+  assert.deepEqual(lines, [
+    { cls: 'sol', text: '1.  N = 0' },
+    { cls: 'sol', text: '2.  N = s(0)' },
+    { cls: 'done partial', text: 'more solutions may follow.' },
+  ]);
+});
+
 test('a saved error is shown as an error', () => {
   assert.deepEqual(replaySolutions({ solutions: [], terminator: 'ERROR: Unknown procedure: p/1' }), [
     { cls: 'err', text: 'Unknown procedure: p/1' },

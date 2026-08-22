@@ -107,6 +107,34 @@ test('the solution SEQUENCE is kept, so ; next can replay with no engine', () =>
   assert.equal(output.solutions.length, 3);
 });
 
+test('a sequence with no final line was never exhausted, and round-trips as one', () => {
+  // The one ending that is not a claim about the search finishing (§6): the file
+  // stops on a ` ;`, exactly as a toplevel does when somebody walks away from it.
+  // An empty terminator is the model's way of saying "nobody said this was all".
+  const source = `\`\`\`prolog query id="q-nat"
+nat(N)
+\`\`\`
+
+\`\`\`text output for="q-nat"
+N = 0 ;
+N = s(0) ;
+\`\`\`
+`;
+  const notebook = parse(source);
+  const { output } = notebook.cells.find((c) => c.kind === 'query');
+  assert.deepEqual(output.solutions, ['N = 0', 'N = s(0)']);
+  assert.equal(output.terminator, '');
+  // Byte-exact, which is the property that matters: the missing final line has to
+  // stay missing. A blank line in its place would be trimmed on the way back in
+  // and the file would drift a byte per save.
+  assert.equal(serialise(notebook), source);
+});
+
+test('an output block with nothing in it is an error, not an answerless answer', () => {
+  const source = '```prolog query id="q-1"\nfoo\n```\n\n```text output for="q-1"\n```\n';
+  assert.throws(() => parse(source), /output for="q-1" is empty/);
+});
+
 test('containers are parsed for the four variants the stylesheet knows', () => {
   const { cells } = parse(CHAPTER);
   const variants = cells.filter((c) => c.kind === 'container').map((c) => c.variant);

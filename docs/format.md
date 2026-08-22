@@ -238,6 +238,27 @@ faithful to what the reader will see:
 - the sequence ends with a line ending in `.` — `false.` (exhausted), `true.` (success, no
   bindings), or the last solution's bindings when the query ran deterministically
 - an error ends the sequence with a line beginning `ERROR:`
+- **or it does not end at all.** A sequence whose *last* line ends in ` ;`, with no final `.`
+  line, was **never exhausted**:
+
+  ````markdown
+  ```text output for="q-nat" input-hash="4f1c0a8e2b7d6390"
+  N = 0 ;
+  N = s(0) ;
+  N = s(s(0)) ;
+  ```
+  ````
+
+  Every other ending is a claim that the search *finished*, and there has to be a spelling
+  for the commonest thing a reader does: press Run, take three answers out of six, and stop.
+  Without one, a downloaded half-run must either throw those three answers away or forge an
+  exhaustion that never happened — and an author showing the first four of infinitely many
+  `nat(N)` has no honest way to write them down at all. This needs no invention: it is the
+  literal transcript of a toplevel somebody walked away from, which is exactly what SWI
+  prints and then waits. The renderer ends it with *"more solutions may follow."*, never
+  *"no more solutions."* — the two must not be confusable.
+- an output block with **no lines at all** is an error. It claims a query has answers and
+  then shows none; a query with nothing to show simply has no output block.
 
 We store the **sequence, not a blob**, because `; next` must replay saved solutions one at a
 time with no engine present ([869ectt0y]). That is the thing this project exists for, and it

@@ -238,7 +238,8 @@ function renderSavedOutput(cell, { stale = false } = {}) {
  *
  * The stored spelling is SWI's own toplevel — solutions terminated by ` ;`, and a
  * final line ending in `.` which may be `false.`, `true.`, or the last solution's
- * bindings when the query ran deterministically (format §6). The display spelling
+ * bindings when the query ran deterministically — or NO final line at all, which
+ * says the search was never exhausted (format §6). The display spelling
  * is the one the live engine produces, numbered, because a reader pressing Run
  * must not watch the layout change underneath them.
  *
@@ -255,6 +256,13 @@ export function replaySolutions(output) {
   const end = output.terminator ?? '';
   if (end.startsWith('ERROR:')) {
     lines.push({ cls: 'err', text: end.replace(/^ERROR:\s*/, '') });
+    return lines;
+  }
+  // No terminator at all: the sequence was never exhausted (format §6). These
+  // answers are the ones somebody stopped after, not all the ones there are, and
+  // "no more solutions." under them would be a claim nobody ever made.
+  if (end === '') {
+    lines.push({ cls: 'done partial', text: 'more solutions may follow.' });
     return lines;
   }
   // `false.` after solutions means the search was exhausted, not that the query
