@@ -87,15 +87,18 @@ export function mount(root = document, options = {}) {
  * end of the chapter to see it will read every cell above as unexplained.
  *
  * But a chapter is for reading, and a full-width bar pinned across the foot of
- * every page is a tool insisting on itself. So it is tucked away as a small
- * lozenge carrying only the state at a glance — a dot and a word — and the rest
- * slides out of it, leftward, ON A CLICK. Not on hover: hover opens a panel
- * nobody asked for, does not exist on a touch screen, and cannot be reached from
- * a keyboard, so one gesture that works everywhere beats three that do not.
+ * every page is a tool insisting on itself. So it is a lozenge in the corner
+ * carrying the state at a glance — a dot and a word — and clicking it WIDENS THAT
+ * SAME LOZENGE leftward until its controls fit. The thing the reader clicked is
+ * the thing that opens.
  *
- * It slides itself out for a few seconds when the engine's state actually
- * changes, which is the moment its words are worth reading, and closes on Escape,
- * on a click elsewhere, or on a second click of the lozenge.
+ * On a click, not on hover: hover opens a panel nobody asked for, does not exist
+ * on a touch screen, and cannot be reached from a keyboard, so one gesture that
+ * works everywhere beats three that do not.
+ *
+ * It opens itself for a few seconds when the engine's state actually changes,
+ * which is the moment its words are worth reading, and closes on Escape, on a
+ * click elsewhere, or on a second click of the lozenge.
  */
 function mountPageBar(root, options, bus, programs, queries) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
@@ -104,10 +107,14 @@ function mountPageBar(root, options, bus, programs, queries) {
   // Its own counter, not the cell one: a page-control id is not a cell name, and
   // sharing the counter would leave gaps in cell ids for no reason.
   const panelId = `page-controls-${++panels}`;
-  bar.innerHTML = `<div class="controls" id="${panelId}"><span class="engine-state"></span>`
-    + '<button data-act="restart">start engine</button></div>'
-    + `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
-    + '<span class="dot"></span><span class="count"></span></button>';
+  // The handle comes FIRST in the markup and last in the layout (the pill is
+  // row-reverse), which is the order both want: the button that opens the panel
+  // is reached before it in the tab order, and sits at the pill's fixed right
+  // edge on screen.
+  bar.innerHTML = `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
+    + '<span class="dot"></span><span class="count"></span></button>'
+    + `<div class="controls" id="${panelId}"><span class="engine-state"></span>`
+    + '<button data-act="restart">start engine</button></div>';
   const state = bar.querySelector('.engine-state');
   // One button, whose label is always the thing it will do. "restart engine" over
   // an engine that has never started names a state the reader cannot act on and
@@ -122,10 +129,35 @@ function mountPageBar(root, options, bus, programs, queries) {
   // apart so a flash cannot close a pill the reader deliberately pinned.
   let pinned = false;
   let flash = null;
+
+  /**
+   * How wide the pill wants to be, open.
+   *
+   * Measured rather than declared, because CSS cannot transition to `auto` and
+   * the contents change length as the engine's state does. Measuring means one
+   * forced reflow per toggle, which is the price of the animation.
+   */
+  const naturalWidth = () => {
+    const previous = bar.style.width;
+    bar.style.transition = 'none';
+    bar.style.width = 'auto';
+    // getBoundingClientRect, not offsetWidth: offsetWidth rounds DOWN to a whole
+    // pixel, and the pill was landing a third of a pixel short of its own
+    // contents — enough for text-overflow to decide the sentence did not fit and
+    // eat a whole word to make room for an ellipsis. The extra pixel is the
+    // same fraction, rounded the honest way.
+    const width = Math.ceil(bar.getBoundingClientRect().width) + 1;
+    bar.style.width = previous;
+    bar.offsetWidth; // flush, or the browser coalesces this into no transition
+    bar.style.transition = '';
+    return width;
+  };
+
   const render = () => {
     const open = pinned || flash !== null;
     bar.dataset.open = String(open);
     handle.setAttribute('aria-expanded', String(open));
+    bar.style.width = `${open ? naturalWidth() : Math.ceil(handle.getBoundingClientRect().width) + 1}px`;
   };
   const show = (ms) => {
     clearTimeout(flash);
@@ -166,6 +198,9 @@ function mountPageBar(root, options, bus, programs, queries) {
     // The pill's own label, for when the words are tucked away: the state at a
     // glance, which is all a reader wants until they want the buttons.
     handle.title = text;
+    // These words are inside the pill, so changing them changes how wide it wants
+    // to be. Re-measured here rather than left to drift.
+    if (bar.isConnected) render();
   };
 
   // Counted in cells rather than bytes, because cells are what the reader can act
@@ -259,6 +294,11 @@ function mountPageBar(root, options, bus, programs, queries) {
   });
 
   host.appendChild(bar);
+  // Only measurable once it is in the document, and again once the web font it is
+  // set in has actually arrived.
+  render();
+  document.fonts?.ready.then(render);
+  window.addEventListener('resize', render);
 }
 
 /** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */

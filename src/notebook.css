@@ -135,7 +135,8 @@ button.primary:hover { background: #98380f; }
 .out.answers-hidden .line:not(.from) { display: none; }
 .line.from button.peek {
   margin-left: .6rem;
-  padding: .1rem .45rem;
+  padding: .13rem .55rem;
+  border-radius: 999px;
   font: 600 .68rem/1.4 system-ui, sans-serif;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -148,95 +149,102 @@ button.primary:hover { background: #98380f; }
 /* The page's own controls. Chrome, not content: built by notebook.js at runtime,
    so a printed or GitHub-rendered chapter never shows a button that cannot work.
 
-   Always in view, because it answers "what is the engine holding right now" and a
-   reader who has to scroll to the end of a chapter to read that will read every
-   cell above it as unexplained. Tucked into a pill, because a chapter is for
-   reading and a bar pinned across every page is a tool insisting on itself.
+   ONE PILL THAT GROWS. Closed it is a lozenge in the corner of the viewport — a
+   dot and a word — and opening it widens that same lozenge leftward until the
+   controls inside it fit. Not a second panel emerging from behind: the thing the
+   reader clicked is the thing that opens, which is both prettier and easier to
+   follow.
 
-   Fixed to the VIEWPORT's corner rather than sticky inside the column: the column
-   is where the prose is, and a control that floats over the sentence being read is
-   worse than one that is hard to find. On a wide screen it sits in the margin
-   beside the text and overlaps nothing at all. */
+   Fixed to the VIEWPORT rather than sticky inside the column, because the column
+   is where the prose is and a control floating over the sentence being read is
+   worse than one that is hard to find.
+
+   row-reverse pins the handle to the pill's right edge and lets the controls
+   overflow to the LEFT, where overflow:hidden clips them. The width itself is set
+   in notebook.js, because CSS cannot transition to `auto`. */
 .engine-bar {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
   z-index: 5;
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
-}
-
-/* Slid out of the lozenge, on a click — never on hover. Hover opens a panel the
-   reader did not ask for, has no equivalent on a touch screen, and cannot be
-   reached from a keyboard at all; a button that says whether it is expanded can
-   be operated by anyone, in any of the three ways.
-
-   Out of flow, so the closed panel takes no space and cannot push the lozenge off
-   its corner, and so it can never take a click while invisible. */
-.engine-bar .controls {
-  position: absolute;
-  right: calc(100% + .5rem);
-  /* Anchored to the lozenge's BOTTOM edge, not its middle: wrapped onto three
-     rows on a phone, a centred panel grows downwards off the bottom of the
-     screen. This one grows upwards, into the page. */
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: .5rem .8rem;
-  padding: .35rem .45rem .35rem .95rem;
+  max-width: calc(100vw - 2rem);
+  overflow: hidden;
+  white-space: nowrap;
   border: 1px solid var(--rule);
-  /* Exactly a pill at one row's height, and a rounded box when it wraps to two on
-     a narrow screen — which 999px would leave looking like a lozenge stretched
-     out of shape. */
-  border-radius: 1.15rem;
+  border-radius: 999px;
   background: var(--paper);
   box-shadow: 0 2px 12px rgba(0, 0, 0, .09);
-  /* One line by default, wrapping only when the screen really is too narrow.
-     Without max-content the shrink-to-fit width is measured against the lozenge
-     this is anchored to — about 6rem — and every word wraps. */
-  width: max-content;
-  max-width: calc(100vw - 9rem);
+  transition: width .3s cubic-bezier(.32, .72, 0, 1), box-shadow .3s ease;
+}
+/* Lifted a little while open, so an open pill reads as being in front of the page
+   rather than printed on it. */
+.engine-bar[data-open="true"] { box-shadow: 0 5px 22px rgba(0, 0, 0, .14); }
+
+.engine-bar .controls {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-width: 0;
+  padding: 0 .1rem 0 1rem;
   opacity: 0;
-  visibility: hidden;
-  transform: translateX(.75rem);
-  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  transform: translateX(.6rem);
+  /* Contents arrive a beat after the pill starts widening, which is what makes it
+     read as one thing opening rather than two things moving. */
+  transition: opacity .18s ease, transform .3s cubic-bezier(.32, .72, 0, 1);
 }
-.engine-bar[data-open="true"] .controls {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(0);
-}
-@media (prefers-reduced-motion: reduce) {
-  .engine-bar .controls { transition: none; transform: none; }
+.engine-bar[data-open="true"] .controls { opacity: 1; transform: none; }
+
+/* Ellipsis rather than a hard clip: on a narrow screen the sentence is the part
+   that gives way, and the buttons are the part that must not. */
+.engine-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 400 .74rem/1 system-ui, sans-serif;
+  color: #8a8371;
 }
 
 .engine-bar .handle {
   display: flex;
   align-items: center;
-  gap: .4rem;
-  padding: .35rem .65rem;
+  gap: .45rem;
+  flex: 0 0 auto;
+  padding: .48rem .8rem;
+  border: 0;
   border-radius: 999px;
-  background: var(--paper);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, .09);
+  background: transparent;
+  box-shadow: none;
   font: 600 .7rem/1 system-ui, sans-serif;
   letter-spacing: .04em;
   color: #8a8371;
 }
+.engine-bar .handle:hover:not(:disabled) { background: var(--code-bg); }
 .engine-bar .handle .dot {
   width: .48rem;
   height: .48rem;
   border-radius: 50%;
   background: #c8c1ae;
+  transition: background .3s ease;
 }
 /* The whole state, for a reader who is not looking: grey until an engine exists,
    green once one does. */
 .engine-bar.live .handle .dot { background: var(--ok); }
 
-.engine-state {
-  font: 400 .74rem/1 system-ui, sans-serif;
-  color: #8a8371;
+.engine-bar .controls button {
+  flex: 0 0 auto;
+  padding: .4rem .85rem;
+  border-radius: 999px;
+  border-color: transparent;
+  background: var(--code-bg);
+}
+.engine-bar .controls button:hover:not(:disabled) { background: #ebe5d5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .engine-bar, .engine-bar .controls { transition: none; }
+  .engine-bar .controls { transform: none; }
 }
 
 /* --- teaching devices --- */
@@ -312,12 +320,13 @@ button.primary:hover { background: #98380f; }
   button { background: #24232b; border-color: #454150; color: var(--ink); }
   button:hover:not(:disabled) { background: #2d2b35; }
   button.primary { background: var(--accent); color: #16151a; }
-  /* A shadow is invisible on a dark page, so the pill needs an edge instead. */
-  .engine-bar .handle, .engine-bar .controls {
-    background: #1c1b22;
-    border: 1px solid var(--rule);
-    box-shadow: none;
-  }
+  /* A shadow is invisible on a dark page, so the pill leans on its edge instead. */
+  .engine-bar { background: #1c1b22; box-shadow: none; }
+  .engine-bar[data-open="true"] { box-shadow: none; border-color: #4b4656; }
+  .engine-bar .handle { background: transparent; }
+  .engine-bar .handle:hover:not(:disabled) { background: #2d2b35; }
+  .engine-bar .controls button { background: #2a2833; }
+  .engine-bar .controls button:hover:not(:disabled) { background: #35323f; }
 }
 
 /* Shown until mount() runs; see notebook.js. Its presence means the page is inert. */
