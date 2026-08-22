@@ -190,8 +190,12 @@ than a keystroke. The tradeoff that produced out-of-order execution is not ours 
 The exception is a cell declaring `:- dynamic`, whose assert/retract state lives in no file.
 The page carries a **restart engine** control for exactly this ([format §8](format.md)), in a
 lozenge fixed to the corner of the viewport that says what the engine is holding — a dot and a
-word, and clicking it widens that same lozenge until its controls fit, because a chapter is for
-reading and a bar pinned across every page is a tool insisting on itself. On a click and not on hover: hover
+word, and clicking it raises a card directly above it, one row per thing the page controls,
+because a chapter is for reading and a bar pinned across every page is a tool insisting on
+itself. It **rises rather than widening** ([869enmuy9]), which is a correctness decision as much
+as a visual one: a control that widens has to be measured from the DOM every time its words
+change, and a measured animation is cancelled by anything that re-renders while it runs. A row
+costs vertical space, which nobody is short of. On a click and not on hover: hover
 opens a panel nobody asked for, does not exist on a touch screen, and cannot be reached from a
 keyboard. Its button's label is always the thing it will do — **start engine** when there is
 none, **restart engine** when there is. It
@@ -264,3 +268,4 @@ and export plus the VS Code milestone covers it.
 [869enke58]: https://app.clickup.com/t/869enke58
 [869eddzfp]: https://app.clickup.com/t/869eddzfp
 [869enkdd2]: https://app.clickup.com/t/869enkdd2
+[869enmuy9]: https://app.clickup.com/t/869enmuy9

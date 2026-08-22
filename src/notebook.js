@@ -104,9 +104,16 @@ export function mount(root = document, options = {}) {
  *
  * But a chapter is for reading, and a full-width bar pinned across the foot of
  * every page is a tool insisting on itself. So it is a lozenge in the corner
- * carrying the state at a glance — a dot and a word — and clicking it WIDENS THAT
- * SAME LOZENGE leftward until its controls fit. The thing the reader clicked is
- * the thing that opens.
+ * carrying the state at a glance — a dot and a word — and clicking it RAISES A
+ * CARD directly above it, right edges aligned, one row per thing the page
+ * controls. The thing the reader pressed is visibly the thing that opened.
+ *
+ * It rises rather than widening, and that is a correctness decision as much as a
+ * visual one: a widening pill has to be measured from the DOM every time its
+ * words change, and a measured animation is cancelled by anything that re-renders
+ * while it runs (869enmuy9). A row also costs vertical space, which nobody is
+ * short of — the widening pill had reached the edge of the viewport with three
+ * units in it, and there are more coming.
  *
  * On a click, not on hover: hover opens a panel nobody asked for, does not exist
  * on a touch screen, and cannot be reached from a keyboard, so one gesture that
@@ -172,17 +179,17 @@ function label(button, name, text) {
 function mountPageBar(root, options, bus, programs, queries) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
   const bar = document.createElement('div');
-  bar.className = 'engine-bar';
+  bar.className = 'page-controls';
+  bar.dataset.open = 'false';
   // Its own counter, not the cell one: a page-control id is not a cell name, and
   // sharing the counter would leave gaps in cell ids for no reason.
   const panelId = `page-controls-${++panels}`;
-  // The handle comes FIRST in the markup and last in the layout (the pill is
-  // row-reverse), which is the order both want: the button that opens the panel
-  // is reached before it in the tab order, and sits at the pill's fixed right
-  // edge on screen.
+  // The handle comes FIRST in the markup and sits below the panel on screen, which
+  // is the order both want: the button that opens the panel is reached before it
+  // in the tab order, and the card rises from the thing that was pressed.
   bar.innerHTML = `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
     + `<span class="dot"></span><span class="count"></span><span class="chev">${icon('chevron')}</span></button>`
-    + `<div class="controls" id="${panelId}">`
+    + `<div class="panel" id="${panelId}">`
     + '<div class="unit answers"><span class="state answers-state"></span></div>'
     + '<div class="unit"><span class="state engine-state"></span>'
     + `<button data-act="restart"><span class="icon">${icon('power')}</span>`
@@ -195,7 +202,6 @@ function mountPageBar(root, options, bus, programs, queries) {
   const restart = bar.querySelector('[data-act="restart"]');
   let live = false;
   const handle = bar.querySelector('.handle');
-  const controls = bar.querySelector('.controls');
   const count = bar.querySelector('.count');
 
   // Open because the reader asked, or open because something went wrong. Kept
@@ -204,41 +210,23 @@ function mountPageBar(root, options, bus, programs, queries) {
   let flash = null;
 
   /**
-   * How wide the pill wants to be, open.
+   * Open or shut, and that is the whole of it.
    *
-   * Measured rather than declared, because CSS cannot transition to `auto` and
-   * the contents change length as the engine's state does. Measuring means one
-   * forced reflow per toggle, which is the price of the animation.
+   * NOTHING IS MEASURED HERE, which is the point. The first version of this
+   * control was one pill that widened, so its open width had to be measured from
+   * the DOM on every state change — CSS cannot transition to `auto`. That made
+   * the animation cancellable by anything that re-rendered while it ran, and
+   * export's "has anything changed?" listener re-rendered on the frame after
+   * every click, including the click that opened it. The pill stopped animating
+   * and nobody could see why from the CSS, because the CSS was fine.
+   *
+   * A card that rises needs one attribute and a transform. It cannot be cancelled
+   * by a re-render, it costs no reflow, and a unit added tomorrow costs a row.
    */
-  const widthFor = (open) => {
-    const previousWidth = bar.style.width;
-    const previousDisplay = controls.style.display;
-    bar.style.transition = 'none';
-    // Taken out of the flex line entirely rather than merely hidden, since a
-    // hidden-but-laid-out panel still contributes its width to `auto`.
-    if (!open) controls.style.display = 'none';
-    bar.style.width = 'auto';
-    // getBoundingClientRect, not offsetWidth: offsetWidth rounds DOWN to a whole
-    // pixel, and the pill was landing a third of a pixel short of its own
-    // contents — enough for text-overflow to decide the sentence did not fit and
-    // eat a whole word to make room for an ellipsis. The extra pixel is the same
-    // fraction, rounded the honest way.
-    //
-    // Measuring BOTH states this way means the pill's own padding is counted
-    // without anyone having to remember it exists.
-    const width = Math.ceil(bar.getBoundingClientRect().width) + 1;
-    bar.style.width = previousWidth;
-    controls.style.display = previousDisplay;
-    bar.offsetWidth; // flush, or the browser coalesces this into no transition
-    bar.style.transition = '';
-    return width;
-  };
-
   const render = () => {
     const open = pinned || flash !== null;
     bar.dataset.open = String(open);
     handle.setAttribute('aria-expanded', String(open));
-    bar.style.width = `${widthFor(open)}px`;
   };
   const show = (ms) => {
     clearTimeout(flash);
@@ -279,9 +267,6 @@ function mountPageBar(root, options, bus, programs, queries) {
     // The pill's own label, for when the words are tucked away: the state at a
     // glance, which is all a reader wants until they want the buttons.
     handle.title = text;
-    // These words are inside the pill, so changing them changes how wide it wants
-    // to be. Re-measured here rather than left to drift.
-    if (bar.isConnected) render();
   };
 
   // Counted in cells rather than bytes, because cells are what the reader can act
@@ -412,14 +397,8 @@ function mountPageBar(root, options, bus, programs, queries) {
     }
   });
 
-  bar.addEventListener('page-bar-refresh', render);
-
   host.appendChild(bar);
-  // Only measurable once it is in the document, and again once the web font it is
-  // set in has actually arrived.
   render();
-  document.fonts?.ready.then(render);
-  window.addEventListener('resize', render);
 }
 
 /**
@@ -438,7 +417,7 @@ function mountPageBar(root, options, bus, programs, queries) {
  */
 export function offerDownload(root, produce) {
   const scope = root && root.querySelector ? root : document;
-  const bar = scope.querySelector('.engine-bar') ?? document.querySelector('.engine-bar');
+  const bar = scope.querySelector('.page-controls') ?? document.querySelector('.page-controls');
   if (!bar) return;
 
   const unit = document.createElement('div');
@@ -446,7 +425,7 @@ export function offerDownload(root, produce) {
   unit.innerHTML = '<span class="state notebook-state"></span>'
     + `<button data-act="download"><span class="icon">${icon('download')}</span>`
     + '<span class="label">Download .prolog.md</span></button>';
-  bar.querySelector('.controls').prepend(unit);
+  bar.querySelector('.panel').prepend(unit);
 
   const state = unit.querySelector('.notebook-state');
   const say = () => {
@@ -455,8 +434,6 @@ export function offerDownload(root, produce) {
     state.title = edited
       ? 'this notebook has your edits or your answers in it; the download carries them'
       : 'nothing here differs from the chapter yet; the download is the chapter itself';
-    // The pill measures its own width, and these words are inside it.
-    bar.dispatchEvent(new CustomEvent('page-bar-refresh'));
   };
 
   unit.querySelector('button').addEventListener('click', () => {
