@@ -128,6 +128,19 @@ button.primary:hover { background: #98380f; }
 /* Saved answers that no longer follow from the program above them. Marked, never
    silently dropped and never silently trusted. */
 .line.warn { color: #a8730f; }
+/* Put away, never discarded: a chapter shows its answers (docs/modes.md §2), but
+   prose that says "press Run, then ; next to walk through the rest" is arguing
+   with a page that has already printed all six. The attribution line stays
+   visible while they are hidden, so the reader can always see that they exist. */
+.out.answers-hidden .line:not(.from) { display: none; }
+.line.from button.peek {
+  margin-left: .6rem;
+  padding: .1rem .45rem;
+  font: 600 .68rem/1.4 system-ui, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: baseline;
+}
 .line.sol { color: var(--ok); }
 .line.done { color: #8a8371; font-style: italic; }
 .line.err { color: var(--err); }

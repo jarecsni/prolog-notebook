@@ -60,19 +60,22 @@ export function mount(root = document, options = {}) {
   cells.forEach((cell, index) => {
     if (cell.classList.contains('program')) programs.push({ index, ...mountProgram(cell, options, bus) });
   });
+  const queries = [];
   cells.forEach((cell, index) => {
     if (!cell.classList.contains('query')) return;
-    mountQuery(cell, options, bus, {
+    queries.push(mountQuery(cell, options, bus, {
       above: programs.filter((p) => p.index < index),
       below: programs.filter((p) => p.index > index),
-    });
+    }));
   });
 
-  if (programs.length) mountEngineBar(root, options, bus, programs);
+  if (programs.length) mountPageBar(root, options, bus, programs, queries);
 }
 
 /**
- * The engine's own state, and the one control that acts on all of it.
+ * The controls that belong to the page rather than to any one cell: what the
+ * engine is holding, whether the chapter is showing its answers, and the one
+ * button that acts on all of the first.
  *
  * CHROME, NOT CONTENT: built here at runtime rather than emitted into the
  * document, so a built page, an EPUB or the GitHub view never carries a button
@@ -82,7 +85,7 @@ export function mount(root = document, options = {}) {
  * "what is the engine holding now" lives, and a reader who has to scroll to the
  * end of the chapter to see it will read every cell above as unexplained.
  */
-function mountEngineBar(root, options, bus, programs) {
+function mountPageBar(root, options, bus, programs, queries) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
   const bar = document.createElement('div');
   bar.className = 'engine-bar';
@@ -127,6 +130,24 @@ function mountEngineBar(root, options, bus, programs) {
       ? 'assert/retract state is gone; the clauses in your cells were loaded again'
       : 'SWI-Prolog is running in a Web Worker');
   });
+
+  // Work the whole chapter cold. Per-cell hiding is right there in each cell, but a
+  // reader who wants to do the exercises should not have to click every one of them
+  // first — and pressing Run on any cell brings that cell's answers back anyway.
+  const spoilers = queries.filter((q) => q.hasSaved);
+  if (spoilers.length) {
+    const peek = document.createElement('button');
+    peek.dataset.act = 'peek-all';
+    peek.textContent = 'hide saved answers';
+    peek.title = 'put every saved answer in this chapter out of sight, to work through it cold';
+    let away = false;
+    peek.addEventListener('click', () => {
+      away = !away;
+      for (const q of spoilers) q.setHidden(away);
+      peek.textContent = away ? 'show saved answers' : 'hide saved answers';
+    });
+    bar.insertBefore(peek, restart);
+  }
 
   restart.addEventListener('click', async () => {
     restart.disabled = true;
@@ -341,6 +362,11 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   let aborting = false;
   // The reader's own run: when, against what — and what has happened since.
   let ran = null;
+  // Whose answers are on screen. A flag rather than a diff of out.innerHTML: the
+  // reader's own controls live in there too, and chrome must never read as a change
+  // to the chapter.
+  let mine = false;
+  let hidden = false;
   // Latched, unlike everything else here, because it is the one change that
   // leaves no trace in the text: a rebuilt engine looks exactly like the old one.
   let engineChanged = false;
@@ -355,7 +381,8 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   const context = () => above.map((p) => `${p.name} ${p.text()}`).join('\n');
 
   /**
-   * Are the answers on screen still the answers this page would produce?
+   * Why the answers on screen are no longer the answers this page would produce,
+   * or null.
    *
    * The question a reader cannot answer by looking, and the one that quietly makes
    * a notebook untrustworthy when nobody answers it: they edit a program cell, the
@@ -363,14 +390,10 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
    * program that no longer exists. This is the live twin of the input-hash check
    * the renderer does for SAVED answers (render.js) — the same question, asked of
    * a run that happened a minute ago rather than at publish time.
-   */
-  /**
-   * Why these answers are no longer trustworthy, or null.
    *
-   * DERIVED, not remembered. A reader who edits a program cell and then undoes
-   * the edit is back where they started, and a warning that stays put through
-   * that teaches them to ignore warnings — which is worse than never having
-   * shown one.
+   * DERIVED, not remembered. A reader who edits a program cell and then undoes the
+   * edit is back where they started, and a warning that stays put through that
+   * teaches them to ignore warnings — which is worse than never having shown one.
    */
   const staleReason = () => {
     if (!ran) return null;
@@ -387,9 +410,9 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
 
   const refresh = () => {
     if (resetBtn) {
-      const mine = input.value !== published.goal || out.innerHTML !== published.out;
-      resetBtn.disabled = !mine;
-      resetBtn.title = mine
+      const changed = mine || input.value !== published.goal;
+      resetBtn.disabled = !changed;
+      resetBtn.title = changed
         ? 'put the chapter’s query and its saved answers back'
         : 'this query and these answers are exactly as the chapter published them';
     }
@@ -414,6 +437,51 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     if (event.kind === 'restarted' && ran) engineChanged = true;
     refresh();
   });
+
+  /**
+   * Put the chapter's answers away, so the reader can work the question cold.
+   *
+   * A chapter shows its answers, always — that is the property the whole project
+   * is for (docs/modes.md §2), and it is why this is opt-in rather than the
+   * default. But prose that says "press Run for the first answer, then ; next to
+   * walk through the rest" is arguing with a page that has already printed all
+   * six, and the reader loses either the exercise or the trust.
+   *
+   * The answers are hidden, never discarded: they are the chapter's, and one click
+   * brings them back. That is also why this is not what reset does — there is
+   * nothing here to undo.
+   *
+   * Author-declared hiding — a cell marked as a spoiler in the file itself — is a
+   * format question and still open (869enkdd2). This needs no format change at
+   * all, which is a good reason for it to come first.
+   */
+  const setHidden = (value) => {
+    hidden = value && !mine;
+    out.classList.toggle('answers-hidden', hidden);
+    const toggle = out.querySelector('[data-act="peek"]');
+    if (toggle) toggle.textContent = hidden ? 'show' : 'hide';
+    const note = out.querySelector('.peek-note');
+    if (note) note.textContent = hidden ? ' · hidden' : '';
+  };
+
+  /**
+   * CHROME, NOT CONTENT, and injected rather than rendered for the usual reason: a
+   * built page, an EPUB or the GitHub view must not carry a hide button that
+   * cannot work — and a printed chapter has no way to unhide.
+   */
+  const decorateSaved = () => {
+    const from = out.querySelector('.line.from');
+    if (mine || !from || from.querySelector('[data-act="peek"]')) return;
+    const note = document.createElement('span');
+    note.className = 'peek-note';
+    const toggle = document.createElement('button');
+    toggle.className = 'peek';
+    toggle.dataset.act = 'peek';
+    toggle.title = 'the chapter’s answers stay here either way; this only puts them out of sight';
+    toggle.addEventListener('click', () => setHidden(!hidden));
+    from.append(note, toggle);
+    setHidden(hidden);
+  };
 
   const write = (text, cls) => {
     const line = document.createElement('div');
@@ -512,8 +580,10 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     // with the reader's own is fine; replacing them SILENTLY is not, so the run is
     // labelled and the way back is stated (docs/modes.md §3) — and the way back is
     // now a button on this cell rather than a page reload.
-    const hadSaved = ran === null && out.querySelector('.line.from') !== null;
+    const hadSaved = !mine && out.querySelector('.line.from') !== null;
     out.innerHTML = '';
+    mine = true;
+    setHidden(false);
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
     if (!goal) return;
@@ -584,8 +654,10 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   resetBtn?.addEventListener('click', () => {
     input.value = published.goal;
     out.innerHTML = published.out;
+    mine = false;
     ran = null;
     engineChanged = false;
+    decorateSaved();
     finish();
   });
 
@@ -599,7 +671,10 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     }
   });
 
+  decorateSaved();
   refresh();
+
+  return { hasSaved: published.out !== '', setHidden };
 }
 
 function autosizeNow(ta) {

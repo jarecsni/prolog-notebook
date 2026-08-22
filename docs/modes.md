@@ -50,6 +50,22 @@ are numbered as a live run numbers them, so the layout does not move when the re
 Run, and `false.` under six answers is rendered as *no more solutions* rather than as a denial
 of them.
 
+**But the reader can put them away.** A chapter whose prose says *press Run for the first
+answer, then `; next` to walk through the rest* is arguing with a page that has already printed
+all six: the reader loses either the exercise or their trust in the instructions. So every
+saved output carries a **hide**, and the page bar carries one that hides them all at once, for
+working through a chapter cold ([869enke58]).
+
+Hidden, never discarded — they are the chapter's answers and one click brings them back, which
+is also why this is not what reset does: there is nothing here to undo. The attribution line
+stays visible while they are away, so the reader can always see that they exist. And it is
+opt-in, because a chapter that shows its answers is the property this whole document is about.
+
+This is the reader's half of the question. The author's half — a cell declared a spoiler in the
+file itself, so the first-time reader is not the one who has to think of hiding it — is a format
+change and still open ([869enkdd2]). The reader's half needs no format change at all, which is
+the reason it comes first.
+
 Nothing is written. Nothing can be.
 
 ## 3. Explore
@@ -221,3 +237,4 @@ and export plus the VS Code milestone covers it.
 [869ejgyaa]: https://app.clickup.com/t/869ejgyaa
 [869enke58]: https://app.clickup.com/t/869enke58
 [869eddzfp]: https://app.clickup.com/t/869eddzfp
+[869enkdd2]: https://app.clickup.com/t/869enkdd2
