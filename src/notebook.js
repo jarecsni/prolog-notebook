@@ -156,9 +156,11 @@ function mountPageBar(root, options, bus, programs, queries) {
   // edge on screen.
   bar.innerHTML = `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
     + `<span class="dot"></span><span class="count"></span><span class="chev">${icon('chevron')}</span></button>`
-    + `<div class="controls" id="${panelId}"><span class="engine-state"></span>`
+    + `<div class="controls" id="${panelId}">`
+    + '<div class="unit answers"><span class="state answers-state"></span></div>'
+    + '<div class="unit"><span class="state engine-state"></span>'
     + `<button data-act="restart"><span class="icon">${icon('power')}</span>`
-    + '<span class="label">Start engine</span></button></div>';
+    + '<span class="label">Start engine</span></button></div></div>';
   const state = bar.querySelector('.engine-state');
   // One button, whose label is always the thing it will do. "restart engine" over
   // an engine that has never started names a state the reader cannot act on and
@@ -266,10 +268,13 @@ function mountPageBar(root, options, bus, programs, queries) {
 
   // Visible proof of the property the chapter is built on: nothing has been
   // downloaded, and the answers above are still there to read.
-  // Says how it starts, rather than only that it has not. Pressing the button is
+  //
+  // Says how it starts rather than only that it has not: pressing the button is
   // the second way and the slower question to answer, so the sentence names the
-  // first: nothing here needs an engine until the reader asks for one.
-  say('engine not started · starts on your first Run',
+  // first. It does not repeat "engine off" either — the light two inches to its
+  // right already says that, and a panel that restates its own summary is one
+  // nobody finishes reading.
+  say('starts on your first Run',
     'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
   // "off" on its own says nothing about what is off. The word anchors what the
   // pill is for, which is most of what makes a two-inch control discoverable.
@@ -282,6 +287,8 @@ function mountPageBar(root, options, bus, programs, queries) {
   let age = null;
 
   bus.on((event) => {
+    // A cell's own hide control moved something this panel is reporting on.
+    if (event.kind === 'answers') return refreshAnswers();
     if (event.kind === 'booting') {
       // Lit from wherever the engine was asked for — a Run halfway up the chapter
       // starts it just as this button does, and the light should not care which.
@@ -294,9 +301,9 @@ function mountPageBar(root, options, bus, programs, queries) {
       live = true;
       label(restart, 'restart', 'Restart engine');
       restart.title = 'throw this engine away and load your cells into a fresh one';
-      age = `engine started ${event.at}`;
+      age = `started ${event.at}`;
     } else if (event.kind === 'restarted') {
-      age = `engine restarted ${event.at}`;
+      age = `restarted ${event.at}`;
     }
     if (!age) return;
     say(`${loaded()} · ${age}`, event.kind === 'restarted'
@@ -314,20 +321,44 @@ function mountPageBar(root, options, bus, programs, queries) {
   // Work the whole chapter cold. Per-cell hiding is right there in each cell, but a
   // reader who wants to do the exercises should not have to click every one of them
   // first — and pressing Run on any cell brings that cell's answers back anyway.
+  //
+  // A STATE AND A VERB, like the engine beside it. A button labelled with its
+  // action always implies the opposite of what is true — "Hide saved answers" can
+  // only appear while they are visible — so a control with no state phrase leaves
+  // its own label as the only clue, and that clue has to be read backwards. That
+  // was the asymmetry: the engine had both, this had only the verb.
   const spoilers = queries.filter((q) => q.hasSaved);
-  if (spoilers.length) {
+  const answersUnit = bar.querySelector('.unit.answers');
+  const answersState = bar.querySelector('.answers-state');
+  let refreshAnswers = () => {};
+  if (!spoilers.length) {
+    answersUnit.remove();
+  } else {
     const peek = document.createElement('button');
     peek.dataset.act = 'peek-all';
     peek.innerHTML = '<span class="icon"></span><span class="label"></span>';
-    label(peek, 'hide', 'Hide saved answers');
     peek.title = 'put every saved answer in this chapter out of sight, to work through it cold';
-    let away = false;
+    answersUnit.appendChild(peek);
+
+    refreshAnswers = () => {
+      // Counted rather than remembered, so hiding one output by hand leaves this
+      // telling the truth instead of contradicting the page.
+      const hidden = spoilers.filter((q) => q.isHidden()).length;
+      const all = hidden === spoilers.length;
+      answersState.textContent = hidden === 0 ? 'Answers shown'
+        : all ? 'Answers hidden'
+        : `${hidden} of ${spoilers.length} hidden`;
+      label(peek, all ? 'show' : 'hide', all ? 'Show saved answers' : 'Hide saved answers');
+      render();
+    };
+
     peek.addEventListener('click', () => {
-      away = !away;
+      // Anything still showing means the useful move is to hide the rest.
+      const away = spoilers.some((q) => !q.isHidden());
       for (const q of spoilers) q.setHidden(away);
-      label(peek, away ? 'show' : 'hide', away ? 'Show saved answers' : 'Hide saved answers');
+      refreshAnswers();
     });
-    bar.querySelector('.controls').insertBefore(peek, restart);
+    refreshAnswers();
   }
 
   restart.title = 'download SWI-Prolog and have it ready, so your first Run is not the slow one';
@@ -658,7 +689,10 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
    * all, which is a good reason for it to come first.
    */
   const setHidden = (value) => {
+    const was = hidden;
     hidden = value && !mine;
+    // The page's own control reports on every cell, so it has to hear about one.
+    if (hidden !== was) bus.emit({ kind: 'answers' });
     out.classList.toggle('answers-hidden', hidden);
     const toggle = out.querySelector('[data-act="peek"]');
     // Same word and same icon as the whole-chapter control in the page pill: one
@@ -879,7 +913,7 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   decorateSaved();
   refresh();
 
-  return { hasSaved: published.out !== '', setHidden };
+  return { hasSaved: published.out !== '', setHidden, isHidden: () => hidden };
 }
 
 function autosizeNow(ta) {

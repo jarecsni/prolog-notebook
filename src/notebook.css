@@ -218,9 +218,24 @@ button.primary:hover { background: #98380f; }
   transform: none;
 }
 
+/* One unit per thing the page controls: what is true, then the button that
+   changes it. Divided rather than merely spaced, because two state phrases sitting in
+   a row read as one sentence. */
+.engine-bar .unit {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+}
+.engine-bar .unit + .unit {
+  margin-left: .5rem;
+  padding-left: .7rem;
+  border-left: 1px solid var(--rule);
+}
+
 /* Ellipsis rather than a hard clip: on a narrow screen the sentence is the part
    that gives way, and the buttons are the part that must not. */
-.engine-state {
+.engine-bar .state {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
