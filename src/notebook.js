@@ -16,7 +16,7 @@
 // reset that undoes it. A blank tick beside a greyed button is indistinguishable
 // from a broken page, which is how an earlier version of this file read.
 import { createSession, formatSolution } from './browser.js';
-import { definedPredicates, unknownProcedure } from './clauses.js';
+import { declaredDynamic, definedPredicates, unknownProcedure } from './clauses.js';
 
 let serial = 0;
 let panels = 0;
@@ -422,6 +422,23 @@ function mountProgram(cell, options, bus) {
   const button = cell.querySelector('[data-act="consult"]') ?? cell.querySelector('button');
   const resetBtn = cell.querySelector('[data-act="reset"]');
   const status = cell.querySelector('.status');
+
+  /**
+   * The one cell whose state a re-consult does not undo (format §8).
+   *
+   * Chrome, not content: whether a cell is stateful is a fact about what happens
+   * when you run it, and a printed page has no engine for it to be true of. It is
+   * also derived from the text on every keystroke rather than at mount, so typing
+   * `:- dynamic` makes the badge appear — which is the moment the reader most
+   * wants to be told, rather than after they have asserted something and found it
+   * survived an edit.
+   */
+  const stateful = document.createElement('span');
+  stateful.className = 'badge stateful';
+  stateful.textContent = 'stateful';
+  stateful.hidden = true;
+  status.parentNode.insertBefore(stateful, status);
+
   // One cell, one virtual file. A generated cell carries its notebook id, so SWI
   // says "/p-family.pl" when this cell redefines another's clauses — a warning
   // that names a cell the reader can actually find in the source.
@@ -457,6 +474,13 @@ function mountProgram(cell, options, bus) {
    * says nothing looks like a cell whose buttons do nothing.
    */
   const refresh = () => {
+    const dynamic = declaredDynamic(source.value);
+    stateful.hidden = dynamic.size === 0;
+    if (!stateful.hidden) {
+      stateful.title = `this cell declares :- dynamic ${[...dynamic].join(', ')}.`
+        + ' Whatever a goal asserts into it lives in no file, so re-consulting the cell will'
+        + ' not undo it and neither will reset — restart the engine to clear it.';
+    }
     if (resetBtn) {
       // Enabled whenever this cell is not as the chapter published it — which
       // includes being LOADED, because a published chapter has no engine at all.
