@@ -61,10 +61,17 @@ is also why this is not what reset does: there is nothing here to undo. The attr
 stays visible while they are away, so the reader can always see that they exist. And it is
 opt-in, because a chapter that shows its answers is the property this whole document is about.
 
-This is the reader's half of the question. The author's half — a cell declared a spoiler in the
-file itself, so the first-time reader is not the one who has to think of hiding it — is a format
-change and still open ([869enkdd2]). The reader's half needs no format change at all, which is
-the reason it comes first.
+That is the reader's half of the question. The author's half is `hold` on a query cell
+(format §5, [869enkdd2]): the chapter itself says these answers are withheld until the reader
+runs the cell, or until they have written the prediction the answers would spoil. The
+first-time reader is then not the one who has to think of hiding them — which they cannot do,
+since by the time they know to hide an answer they have read it.
+
+Both halves are the same mechanism on screen, and neither is a lock. A held output says what
+it is waiting for and carries the same *show* control, because withholding an answer from a
+reader who has decided they want it is theatre rather than teaching. And it is the runtime
+that holds, never the renderer: print, EPUB and the GitHub view show every answer, since a
+book cannot withhold and a reader on the repo page has no Run button to press.
 
 Nothing is written. Nothing can be.
 

@@ -194,7 +194,14 @@ export function renderProgram(cell) {
  * @returns {string}
  */
 export function renderQuery(cell, options = {}) {
-  return `<div class="cell query" data-cell="${escapeHtml(cell.id)}">
+  // The answers go into the page whatever `hold` says. Holding them is a property
+  // of the INTERACTIVE rendering, not of the content (format §5): a book cannot
+  // withhold anything, and a reader on the GitHub page or a printed chapter has
+  // no Run button to press. So the attribute is passed to the runtime as a data-
+  // attribute and notebook.js puts them out of sight — the same chrome-not-content
+  // rule the hide button already follows.
+  const hold = cell.hold ? ` data-hold="${escapeHtml(cell.hold)}"` : '';
+  return `<div class="cell query" data-cell="${escapeHtml(cell.id)}"${hold}>
   <div class="bar">query<span class="spacer"></span><span class="status"></span>
     <button data-act="reset" disabled>reset</button>
     <button class="primary" data-act="run">Run</button>

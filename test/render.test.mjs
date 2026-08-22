@@ -253,6 +253,19 @@ test('a ground success is true, counted as the answer it is', () => {
   ]);
 });
 
+test('a held cell still renders its answers, and tells the runtime to hold them', () => {
+  // THE RULE (format §5): holding is a property of the interactive rendering, not
+  // of the content. A book cannot withhold anything and a reader on the GitHub
+  // page has no Run button to press, so the answers go into the HTML either way —
+  // the data-attribute is how notebook.js knows to put them out of sight.
+  const held = notebook.cells.find((c) => c.id === 'q-son-a');
+  const html = renderQuery(held);
+  assert.match(html, /data-hold="until-answered"/);
+  assert.match(html, /X = edward/, 'the answers must be in the page for print and GitHub');
+  const plain = notebook.cells.find((c) => c.id === 'q-son-b-george');
+  assert.equal(/data-hold/.test(renderQuery(plain)), false);
+});
+
 test('a sequence that was never exhausted says so, and does not claim to be done', () => {
   // The reader took two of six and stopped, or the author is showing the first
   // three of infinitely many. Either way nobody ever said the search finished,

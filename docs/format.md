@@ -193,6 +193,30 @@ is_son(X)
   *Run again*. `rerun="auto"` re-runs when a dependency changes. A cell with an unanswered
   prediction attached is forced to manual whatever it declares — reactivity spoils
   prediction, and prediction is the teaching device. Details on [869eddzgq].
+- `hold` **withholds this cell's saved answers from a reader who has not earned them yet**
+  ([869enkdd2]). Two values, and an unrecognised one is an error — a `hold="untill-run"`
+  that quietly did nothing would spoil the prediction it was written to protect, and the
+  author would never find out.
+
+  | value | the wait ends when |
+  |---|---|
+  | `until-run` | the reader runs this cell |
+  | `until-answered` | the reader writes something in the nearest prediction above it — or runs the cell, since they are looking at the real answer by then |
+
+  This is **the author's call, per cell, in the file**. Do not infer it from position: "a
+  query that follows a predict container" is a rule that is invisible in the source, breaks
+  when prose is reordered, and cannot be turned off. `until-answered` does use position, but
+  only to find the prediction the author already said to wait for — and a cell that declares
+  it with no prediction above it is an error rather than a chapter whose answers never
+  appear.
+
+  **It is a property of the interactive rendering, not of the content.** The output block is
+  parsed, kept and round-tripped as always, and it is emitted into the page as always; the
+  runtime is what puts it out of sight. So print, EPUB and the GitHub view show the answers —
+  a book cannot withhold anything, and a reader on the repo page has no Run button to press.
+  Nor is it a lock: the held line says what it is waiting for and carries the same *show*
+  control any hidden output has. Withholding an answer from a reader who has decided they
+  want it is theatre, not teaching.
 
 ## 6. Output blocks
 
@@ -324,7 +348,7 @@ second parser. DOM-free, like `src/engine.js`, so the CLI runner (v0.3) reuses i
 ```js
 { kind: 'markdown',  source }                       // verbatim, never re-generated
 { kind: 'program',   id, source, src, attrs }       // src XOR source; src unused in v0.2
-{ kind: 'query',     id, goal, rerun, attrs,
+{ kind: 'query',     id, goal, rerun, hold, attrs,
                      output: { solutions: [string], terminator, inputHash } | null }
 { kind: 'container', variant, title, body, attrs }  // §10
 { kind: 'unknown',   source }                       // future cell kinds, preserved
@@ -396,7 +420,7 @@ alternating between two spellings of the same file.
 2. Fence: exactly three backticks, at column 0, lengthened only if the content forces it.
 3. Info string: single spaces, `<language> <kind>`, then attributes in **fixed order** —
    `id` first, then the kind's own attributes in the order documented here (`src`;
-   `rerun`; `for`, `input-hash`), then unrecognised attributes in the order they were read.
+   `rerun`, `hold`; `for`, `input-hash`), then unrecognised attributes in the order they were read.
 4. Attribute values always double-quoted, `\"`/`\\` escaped, no other escaping.
 5. Exactly one blank line between an output block and the query cell above it; exactly one
    blank line between a cell and adjacent prose. Runs of blank lines *within* prose are the

@@ -62,12 +62,22 @@ export function mount(root = document, options = {}) {
   cells.forEach((cell, index) => {
     if (cell.classList.contains('program')) programs.push({ index, ...mountProgram(cell, options, bus) });
   });
+  // A cell held until a prediction is answered names that prediction by POSITION:
+  // the nearest one above it. That is not the position-inferred spoiler rule the
+  // format refuses — the AUTHOR opted in, per cell, in the file (format §5). This
+  // is only how the cell finds the box it was told to wait for.
+  const predictions = [...root.querySelectorAll('.predict textarea')];
+  const predictionAbove = (el) => predictions
+    .filter((box) => box.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)
+    .pop() ?? null;
+
   const queries = [];
   cells.forEach((cell, index) => {
     if (!cell.classList.contains('query')) return;
     queries.push(mountQuery(cell, options, bus, {
       above: programs.filter((p) => p.index < index),
       below: programs.filter((p) => p.index > index),
+      prediction: predictionAbove(cell),
     }));
   });
 
@@ -670,7 +680,7 @@ function mountProgram(cell, options, bus) {
   };
 }
 
-function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
+function mountQuery(cell, options, bus, { above = [], below = [], prediction = null } = {}) {
   const input = cell.querySelector('input');
   const runBtn = cell.querySelector('[data-act="run"]');
   const nextBtn = cell.querySelector('[data-act="next"]');
@@ -706,6 +716,11 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   // to the chapter.
   let mine = false;
   let hidden = false;
+  // The author's own spoiler mark (format §5). It is a starting state rather than
+  // a lock: the reader can always press show, because withholding the answer from
+  // someone who has decided they want it is theatre, not teaching.
+  const hold = cell.dataset.hold ?? null;
+  let held = hold !== null && published.out !== '';
   // Latched, unlike everything else here, because it is the one change that
   // leaves no trace in the text: a rebuilt engine looks exactly like the old one.
   let engineChanged = false;
@@ -791,13 +806,25 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
    * brings them back. That is also why this is not what reset does — there is
    * nothing here to undo.
    *
-   * Author-declared hiding — a cell marked as a spoiler in the file itself — is a
-   * format question and still open (869enkdd2). This needs no format change at
-   * all, which is a good reason for it to come first.
+   * The author can declare the same thing in the file — `hold="until-run"` on a
+   * query cell (format §5) — and it arrives here as the same mechanism, because a
+   * held answer and a hidden one differ only in who asked for it and what ends the
+   * wait. The reader's half needed no format change, which is why it came first.
    */
+  /** What a held cell is waiting for, in the words of the thing that ends it. */
+  const heldNote = () => (hold === 'until-answered'
+    ? ' · held until you write your prediction above'
+    : ' · held until you run it');
+
   const setHidden = (value) => {
     const was = hidden;
     hidden = value && !mine;
+    // Showing an answer ENDS THE AUTHOR'S WAIT for it, by whatever route it was
+    // shown — this cell's control, the page's, a prediction answered, a run, a
+    // reset afterwards. The reader has seen it, and a cell that goes back to
+    // saying "held until you run it" is arguing with them. Withholding it twice
+    // is theatre; the first time is the teaching.
+    if (!hidden) held = false;
     // The page's own control reports on every cell, so it has to hear about one.
     if (hidden !== was) bus.emit({ kind: 'answers' });
     out.classList.toggle('answers-hidden', hidden);
@@ -806,8 +833,11 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     // vocabulary, learned once.
     if (toggle) label(toggle, hidden ? 'show' : 'hide', hidden ? 'show' : 'hide');
     const note = out.querySelector('.peek-note');
-    if (note) note.textContent = hidden ? ' · hidden' : '';
+    // A held cell says WHY it is empty and what ends the wait. "hidden" alone
+    // reads as something the reader did and forgot doing.
+    if (note) note.textContent = hidden ? (held ? heldNote() : ' · hidden') : '';
   };
+
 
   /**
    * CHROME, NOT CONTENT, and injected rather than rendered for the usual reason: a
@@ -1026,6 +1056,16 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
       if (!nextBtn.disabled) step();
     }
   });
+
+  if (held) {
+    hidden = true;
+    // `change` rather than `input`: it fires when they leave the box, so the
+    // answers do not appear under a reader who is still mid-sentence. An empty
+    // box is not a prediction, so it does not end the wait.
+    prediction?.addEventListener('change', () => {
+      if (held && prediction.value.trim() !== '') setHidden(false);
+    });
+  }
 
   decorateSaved();
   refresh();
