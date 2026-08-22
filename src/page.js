@@ -6,7 +6,8 @@
 // a prerendered chapter from downloading 137 KB of markdown-it to render nothing.
 import { parse } from './format.js';
 import { renderNotebook } from './render.js';
-import { mount } from './notebook.js';
+import { mount, offerDownload } from './notebook.js';
+import { exportSource, filenameFor } from './export.js';
 
 /**
  * Render notebook source into an element and wire up its cells.
@@ -17,6 +18,7 @@ import { mount } from './notebook.js';
  * @returns {{frontMatter: Map<string, string>, cells: object[]}} the parsed notebook
  */
 export function renderInto(text, root, options = {}) {
+  const { filename = 'notebook.prolog.md', ...rest } = options;
   const notebook = parse(text);
   root.innerHTML = renderNotebook(notebook);
   // The title is the first H1 in the body, not a front-matter key (format §2):
@@ -24,8 +26,32 @@ export function renderInto(text, root, options = {}) {
   // heading hidden in metadata.
   const title = root.querySelector('h1')?.textContent;
   if (title) document.title = title;
-  mount(root, options);
+  const cells = mount(root, rest);
+
+  // EXPORT LIVES HERE, not in notebook.js, for the same reason the parser does:
+  // only this module has the prose. The DOM carries every program and every goal,
+  // but a markdown cell has been rendered to HTML and cannot be read back out of
+  // it — a chapter exported from the DOM alone would lose its writing.
+  offerDownload(root, () => ({
+    filename,
+    text: exportSource(notebook, edits(cells)),
+  }));
   return notebook;
+}
+
+/** What the cells now say, keyed by id, for src/export.js to fold into the model. */
+function edits(cells) {
+  const map = new Map();
+  for (const program of cells.programs) {
+    map.set(program.name, { source: program.text() });
+  }
+  for (const query of cells.queries) {
+    const output = query.output();
+    map.set(query.id, output === undefined
+      ? { goal: query.goal() }
+      : { goal: query.goal(), output });
+  }
+  return map;
 }
 
 /**
@@ -42,5 +68,8 @@ export function renderInto(text, root, options = {}) {
 export async function load(url, { root = document.querySelector('main'), ...options } = {}) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url}: ${response.status} ${response.statusText}`);
-  return renderInto(await response.text(), root, options);
+  // The reader's copy is named after the file they came from, not after the
+  // title: a title can contain anything, and the filename is how they recognise
+  // what they downloaded.
+  return renderInto(await response.text(), root, { filename: filenameFor(url), ...options });
 }

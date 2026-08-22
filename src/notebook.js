@@ -17,6 +17,7 @@
 // from a broken page, which is how an earlier version of this file read.
 import { createSession, formatSolution, readableInCell } from './browser.js';
 import { declaredDynamic, definedPredicates, unknownProcedure } from './clauses.js';
+import { download } from './export.js';
 
 let serial = 0;
 let panels = 0;
@@ -71,6 +72,11 @@ export function mount(root = document, options = {}) {
   });
 
   if (programs.length) mountPageBar(root, options, bus, programs, queries);
+
+  // Returned so a shell that HAS the parsed model — page.js, today — can ask the
+  // cells what they now say and hand the reader a file (869ejgbxf). notebook.js
+  // still knows nothing about markdown, and does not gain a parser to do it.
+  return { programs, queries };
 }
 
 /**
@@ -137,6 +143,7 @@ const ICONS = {
   chevron: '<path d="M15 5.5 8.5 12l6.5 6.5"/>',
   power: '<path d="M12 3.2v8.2"/><path d="M6.6 6.7a7.6 7.6 0 1 0 10.8 0"/>',
   restart: '<path d="M20.4 12a8.4 8.4 0 1 1-2.9-6.4"/><path d="M20.4 4.2v5.4h-5.2"/>',
+  download: '<path d="M12 3.6v10.6"/><path d="m7.6 10.2 4.4 4.4 4.4-4.4"/><path d="M4.6 19.4h14.8"/>',
   hide: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/><path d="M4 4l16 16"/>',
   show: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/>',
 };
@@ -395,12 +402,64 @@ function mountPageBar(root, options, bus, programs, queries) {
     }
   });
 
+  bar.addEventListener('page-bar-refresh', render);
+
   host.appendChild(bar);
   // Only measurable once it is in the document, and again once the web font it is
   // set in has actually arrived.
   render();
   document.fonts?.ready.then(render);
   window.addEventListener('resize', render);
+}
+
+/**
+ * Add "download this notebook" to the page's controls.
+ *
+ * Called by whoever HAS the parsed model — page.js, because a markdown cell has
+ * been rendered to HTML by the time it reaches this file and cannot be read back
+ * out of the DOM. So notebook.js offers the affordance and someone else supplies
+ * the bytes; this module still knows nothing about markdown.
+ *
+ * A state and a verb, like everything else in that pill: whether the notebook on
+ * screen is still the chapter's, and the button that hands you a copy of it.
+ *
+ * @param {Element|Document} root
+ * @param {() => {filename: string, text: string}} produce
+ */
+export function offerDownload(root, produce) {
+  const scope = root && root.querySelector ? root : document;
+  const bar = scope.querySelector('.engine-bar') ?? document.querySelector('.engine-bar');
+  if (!bar) return;
+
+  const unit = document.createElement('div');
+  unit.className = 'unit notebook';
+  unit.innerHTML = '<span class="state notebook-state"></span>'
+    + `<button data-act="download"><span class="icon">${icon('download')}</span>`
+    + '<span class="label">Download .prolog.md</span></button>';
+  bar.querySelector('.controls').prepend(unit);
+
+  const state = unit.querySelector('.notebook-state');
+  const say = () => {
+    const edited = [...scope.querySelectorAll('.cell')].some((cell) => cell.dataset.edited === 'true');
+    state.textContent = edited ? 'Your version' : 'As published';
+    state.title = edited
+      ? 'this notebook has your edits or your answers in it; the download carries them'
+      : 'nothing here differs from the chapter yet; the download is the chapter itself';
+    // The pill measures its own width, and these words are inside it.
+    bar.dispatchEvent(new CustomEvent('page-bar-refresh'));
+  };
+
+  unit.querySelector('button').addEventListener('click', () => {
+    const { filename, text } = produce();
+    download(filename, text);
+  });
+
+  // Anything a reader does that could change the answer is a click or a
+  // keystroke, and both bubble. Cheaper than a subscription, and it cannot go
+  // stale by forgetting to fire.
+  scope.addEventListener('input', say);
+  scope.addEventListener('click', () => requestAnimationFrame(say));
+  say();
 }
 
 /** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
@@ -487,6 +546,9 @@ function mountProgram(cell, options, bus) {
       // Reset staying grey after a consult is what made this read as broken: the
       // reader had just changed the world and was offered no way back.
       const mine = source.value !== published || loaded !== null;
+      // On the element, so the page-level control can read "is any of this the
+      // reader's?" without holding a reference to every cell.
+      cell.dataset.edited = String(source.value !== published);
       resetBtn.disabled = !mine;
       resetBtn.title = mine
         ? 'undo this cell: the chapter’s program back, and out of the engine'
@@ -593,6 +655,7 @@ function mountProgram(cell, options, bus) {
     name,
     /** The exact text the engine would be given, for a query deciding if it is stale. */
     text: () => source.value,
+    isEdited: () => source.value !== published,
     isLoaded: () => loaded !== null,
     /**
      * Load this cell unless it is already loaded at exactly this text.
@@ -629,6 +692,10 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   let aborting = false;
   // The reader's own run: when, against what — and what has happened since.
   let ran = null;
+  // Kept as SWI rendered each solution, so an export carries the answers the
+  // reader actually saw rather than a reconstruction of them from the screen.
+  let produced = [];
+  let failed = null;
   // Whose answers are on screen. A flag rather than a diff of out.innerHTML: the
   // reader's own controls live in there too, and chrome must never read as a change
   // to the chapter.
@@ -678,6 +745,7 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   const refresh = () => {
     if (resetBtn) {
       const changed = mine || input.value !== published.goal;
+      cell.dataset.edited = String(changed);
       resetBtn.disabled = !changed;
       resetBtn.title = changed
         ? 'put the chapter’s query and its saved answers back'
@@ -824,8 +892,13 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     try {
       const r = await query.next();
       // r.text is rendered by SWI itself, so operators and quoting are right.
-      if (r.solution) write(`${++count}.  ${r.text ?? formatSolution(r.solution)}`, 'sol');
+      if (r.solution) {
+        const text = r.text ?? formatSolution(r.solution);
+        produced.push(text);
+        write(`${++count}.  ${text}`, 'sol');
+      }
       if (r.error) {
+        failed = r.error;
         write(r.error, 'err');
         const hint = locate(r.error);
         if (hint) write(hint, 'done');
@@ -856,6 +929,8 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     const hadSaved = !mine && out.querySelector('.line.from') !== null;
     out.innerHTML = '';
     mine = true;
+    produced = [];
+    failed = null;
     setHidden(false);
     count = 0;
     const goal = input.value.trim().replace(/\.$/, '');
@@ -876,7 +951,8 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
       ran = { at, goal, context: context() };
       engineChanged = false;
       if (!ok.ok) {
-        write(`cell ${ok.name} did not load: ${ok.error}`, 'err');
+        failed = `cell ${ok.name} did not load: ${ok.error}`;
+        write(failed, 'err');
         finish();
         return;
       }
@@ -947,7 +1023,38 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
   decorateSaved();
   refresh();
 
-  return { hasSaved: published.out !== '', setHidden, isHidden: () => hidden };
+  return {
+    id: cell.dataset.cell,
+    hasSaved: published.out !== '',
+    setHidden,
+    isHidden: () => hidden,
+    isEdited: () => mine || input.value !== published.goal,
+    goal: () => input.value,
+    /**
+     * This cell's answers for an export, in the format's own spelling (§6).
+     *
+     * Three answers, and the distinctions are the point:
+     *   undefined  the chapter's answers are on screen — leave the file's own
+     *              output, and its own hash, exactly where they are
+     *   null       the reader ran this and stopped part-way. A partial sequence
+     *              has no honest terminator, and writing one would claim the
+     *              search was exhausted when it was not. So the cell exports with
+     *              NO output, which the format already allows and which says the
+     *              true thing: we have no answers to give you for this.
+     *   an object  a completed run of theirs
+     */
+    output: () => {
+      if (!mine) return undefined;
+      if (query) return null;
+      if (failed) return { solutions: produced, terminator: `ERROR: ${failed}` };
+      if (!produced.length) return { solutions: [], terminator: 'false.' };
+      // The last solution IS the terminator when a query ran deterministically,
+      // and `false.` after the others when it exhausted. replaySolutions() reads
+      // it back the same way, which is what keeps a downloaded file rendering
+      // identically to the page it came from.
+      return { solutions: produced.slice(0, -1), terminator: `${produced[produced.length - 1]}.` };
+    },
+  };
 }
 
 function autosizeNow(ta) {
