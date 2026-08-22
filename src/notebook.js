@@ -97,11 +97,16 @@ function mountPageBar(root, options, bus, programs, queries) {
   const bar = document.createElement('div');
   bar.className = 'engine-bar';
   bar.innerHTML = '<div class="controls"><span class="engine-state"></span>'
-    + '<button data-act="restart" disabled>restart engine</button></div>'
+    + '<button data-act="restart">start engine</button></div>'
     + '<button class="handle" data-act="handle" aria-expanded="false">'
     + '<span class="dot"></span><span class="count"></span></button>';
   const state = bar.querySelector('.engine-state');
+  // One button, whose label is always the thing it will do. "restart engine" over
+  // an engine that has never started names a state the reader cannot act on and
+  // leaves them asking how to switch it on — which is a fair question to ask of a
+  // control that says "off".
   const restart = bar.querySelector('[data-act="restart"]');
+  let live = false;
   const handle = bar.querySelector('.handle');
   const count = bar.querySelector('.count');
 
@@ -147,7 +152,10 @@ function mountPageBar(root, options, bus, programs, queries) {
 
   // Visible proof of the property the chapter is built on: nothing has been
   // downloaded, and the answers above are still there to read.
-  say('engine not started',
+  // Says how it starts, rather than only that it has not. Pressing the button is
+  // the second way and the slower question to answer, so the sentence names the
+  // first: nothing here needs an engine until the reader asks for one.
+  say('engine not started · starts on your first Run',
     'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
   // "off" on its own says nothing about what is off. The word anchors what the
   // pill is for, which is most of what makes a two-inch control discoverable.
@@ -161,7 +169,9 @@ function mountPageBar(root, options, bus, programs, queries) {
 
   bus.on((event) => {
     if (event.kind === 'started') {
-      restart.disabled = false;
+      live = true;
+      restart.textContent = 'restart engine';
+      restart.title = 'throw this engine away and load your cells into a fresh one';
       age = `engine started ${event.at}`;
     } else if (event.kind === 'restarted') {
       age = `engine restarted ${event.at}`;
@@ -171,7 +181,9 @@ function mountPageBar(root, options, bus, programs, queries) {
       ? 'assert/retract state is gone; the clauses in your cells were loaded again'
       : 'SWI-Prolog is running in a Web Worker');
     bar.classList.add('live');
-    count.textContent = `engine ${programs.filter((p) => p.isLoaded()).length}/${programs.length}`;
+    // On or off, not a count. A count is only readable with the pill open, and by
+    // then the words beside it say the same thing at greater length.
+    count.textContent = 'engine on';
     // Starting and restarting are the two moments the words are worth reading,
     // and both are things the reader just caused. Consulting one more cell is not.
     if (event.kind === 'started' || event.kind === 'restarted') show(6000);
@@ -195,15 +207,25 @@ function mountPageBar(root, options, bus, programs, queries) {
     bar.querySelector('.controls').insertBefore(peek, restart);
   }
 
+  restart.title = 'download SWI-Prolog and have it ready, so your first Run is not the slow one';
+
   restart.addEventListener('click', async () => {
+    const starting = !live;
     restart.disabled = true;
-    say('restarting…');
+    say(starting ? 'starting SWI-Prolog (5.9 MB, first time only)…' : 'restarting…');
+    show(20000);
     try {
-      const session = await createSession(options);
-      await session.restart();
-      bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
+      if (starting) {
+        // Started empty, deliberately: consulting the chapter here would load
+        // cells the reader has not asked for, and Run loads what it needs anyway.
+        await boot(options, bus);
+      } else {
+        const session = await createSession(options);
+        await session.restart();
+        bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
+      }
     } catch (e) {
-      say(`restart failed: ${e.message}`);
+      say(`${starting ? 'start' : 'restart'} failed: ${e.message}`);
       show(10000);
     } finally {
       restart.disabled = false;
