@@ -120,6 +120,115 @@ function countArguments(text) {
   return null;
 }
 
+/**
+ * The predicates a cell declares `:- dynamic`, as `name/arity`.
+ *
+ * WHY THIS IS WORTH KNOWING WITHOUT RUNNING ANYTHING (format §8): a cell that
+ * declares one is **stateful**. Its assert/retract state lives in no file, so
+ * re-consulting the cell does not undo it and neither does resetting the cell —
+ * only throwing the engine away does. That is the one place where the otherwise
+ * reliable promise "the clause store self-heals" stops being true, and a reader
+ * who does not know it will conclude something false about Prolog rather than
+ * about us.
+ *
+ * Read statically so the page can say so BEFORE the reader has asserted anything,
+ * rather than after they are already confused. Shallow like the rest of this file
+ * and for the same reason: at worst it fails to warn, and it can never change
+ * what a goal does.
+ *
+ * @param {string} source Prolog text
+ * @returns {Set<string>} predicate indicators
+ */
+export function declaredDynamic(source) {
+  const found = new Set();
+  for (const body of directives(source)) {
+    // `:- dynamic foo/1.` and `:- dynamic(foo/1).` are the same declaration.
+    const m = /^dynamic\b\s*(.*)$/s.exec(body);
+    if (!m) continue;
+    let list = m[1].trim();
+    if (list.startsWith('(') && list.endsWith(')')) list = list.slice(1, -1);
+    for (const item of splitTopLevel(list)) {
+      const indicator = /^\s*(?:'((?:[^'\\]|\\.)*)'|([a-z][a-zA-Z0-9_]*))\s*\/\s*(\d+)\s*$/.exec(item);
+      if (indicator) {
+        const name = indicator[1] !== undefined ? indicator[1].replace(/\\(.)/g, '$1') : indicator[2];
+        found.add(`${name}/${indicator[3]}`);
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * The body of every `:- …` directive, with comments stripped.
+ *
+ * Directives wrap across lines far more often than clauses do — a chapter that
+ * declares six dynamic predicates will list them one per line — so this cannot be
+ * the line scanner the rest of the file uses. It reads to the terminating full
+ * stop instead.
+ */
+function directives(source) {
+  const bodies = [];
+  const text = stripComments(source);
+  const pattern = /(^|\n)\s*:-\s*/g;
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    const start = m.index + m[0].length;
+    const end = endOfTerm(text, start);
+    if (end === -1) break;
+    bodies.push(text.slice(start, end).trim());
+    pattern.lastIndex = end;
+  }
+  return bodies;
+}
+
+/** Index of the `.` that ends a term, skipping quotes. -1 if it never ends. */
+function endOfTerm(text, from) {
+  let quote = null;
+  for (let i = from; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { quote = c; continue; }
+    // A full stop ends a term only when whitespace or the end of input follows,
+    // which is exactly SWI's own rule — otherwise `1.5` would end one.
+    if (c === '.' && (i + 1 === text.length || /\s/.test(text[i + 1]))) return i;
+  }
+  return -1;
+}
+
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n')
+    .map((line) => line.replace(/(^|\s)%.*$/, '$1'))
+    .join('\n');
+}
+
+/** Split on commas that are not inside brackets or quotes. */
+function splitTopLevel(text) {
+  const parts = [];
+  let depth = 0;
+  let quote = null;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { quote = c; continue; }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    else if (c === ',' && depth === 0) { parts.push(text.slice(start, i)); start = i + 1; }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
 /** The predicate indicator an "Unknown procedure" error is complaining about. */
 export function unknownProcedure(message) {
   const m = /Unknown procedure:\s*(?:[a-z][a-zA-Z0-9_]*:)?((?:'[^']*'|[^\s/]+)\/\d+)/.exec(message ?? '');

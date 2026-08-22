@@ -182,8 +182,13 @@ keyboard. Its button's label is always the thing it will do — **start engine**
 none, **restart engine** when there is. It
 throws the worker away and replays the consult log, so the clauses come back and the
 assert/retract state does not. Verified in a browser — a counter mutated to 41 is 0 again
-afterwards. Detecting the declaration statically, so the UI can *offer* it rather than wait to
-be found, is still open ([869eddzfp]).
+afterwards.
+
+**A cell that declares one says so before anything is asserted** ([869eddzfp]). The declaration
+is read out of the text with no engine involved, on every keystroke, and the cell carries a
+*stateful* badge naming the predicates and what will not undo them. Saying it afterwards would
+be saying it too late: the reader has already edited the cell, re-consulted, watched their
+asserted fact survive, and drawn a conclusion about Prolog.
 
 **In the browser the same rule means Run brings its own context.** Pressing Run on a query
 consults every program cell above it first ([869ejgyaa]), so a reader who lands halfway down a

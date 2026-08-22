@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { definedPredicates, unknownProcedure } from '../src/clauses.js';
+import { declaredDynamic, definedPredicates, unknownProcedure } from '../src/clauses.js';
 import { parse } from '../src/format.js';
 
 // This reading exists to answer one question: "the predicate you called is
@@ -85,4 +85,49 @@ test('the predicate an unknown-procedure error names is recoverable', () => {
   assert.equal(unknownProcedure('wasm:wasm_call_string/3: Unknown procedure: is_son/1'), 'is_son/1');
   assert.equal(unknownProcedure('Unknown procedure: son_a/1'), 'son_a/1');
   assert.equal(unknownProcedure('Arithmetic: evaluation error'), null);
+});
+
+// --- :- dynamic, and why it is worth reading statically ---
+//
+// A cell that declares one is the single exception to "the clause store
+// self-heals" (format §8): its assert/retract state lives in no file, so neither
+// a re-consult nor a reset undoes it. Reading the declaration without running
+// anything is what lets the page say so BEFORE the reader is confused rather
+// than after.
+
+test('a dynamic declaration is found in both of its spellings', () => {
+  assert.deepEqual([...declaredDynamic(':- dynamic counter/1.\ncounter(0).')], ['counter/1']);
+  assert.deepEqual([...declaredDynamic(':- dynamic(counter/1).')], ['counter/1']);
+});
+
+test('every predicate in one declaration is found', () => {
+  assert.deepEqual([...declaredDynamic(':- dynamic counter/1, log/2.')], ['counter/1', 'log/2']);
+});
+
+test('a declaration that wraps across lines is still one declaration', () => {
+  // Directives wrap far more often than clauses do — six dynamic predicates get
+  // listed one per line — so this cannot be the line scanner the rest of the
+  // file uses.
+  const source = ':- dynamic\n     counter/1,\n     log/2.\ncounter(0).';
+  assert.deepEqual([...declaredDynamic(source)], ['counter/1', 'log/2']);
+});
+
+test('a quoted functor keeps its name', () => {
+  assert.deepEqual([...declaredDynamic(":- dynamic 'odd name'/3.")], ['odd name/3']);
+});
+
+test('a commented-out declaration declares nothing', () => {
+  assert.deepEqual([...declaredDynamic('% :- dynamic counter/1.\ncounter(0).')], []);
+  assert.deepEqual([...declaredDynamic('/* :- dynamic counter/1. */')], []);
+});
+
+test('dynamic as an ordinary goal or clause head is not a declaration', () => {
+  // `dynamic(x).` is a fact about a predicate called dynamic/1, and a chapter
+  // about meta-programming may well have one.
+  assert.deepEqual([...declaredDynamic('dynamic(x).')], []);
+  assert.deepEqual([...declaredDynamic(':- discontiguous foo/1.')], []);
+});
+
+test('a cell with no directives at all is not stateful', () => {
+  assert.deepEqual([...declaredDynamic('p(1).\nq(X) :- p(X).')], []);
 });
