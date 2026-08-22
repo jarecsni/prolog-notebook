@@ -100,6 +100,31 @@ export function mount(root = document, options = {}) {
  * which is the moment its words are worth reading, and closes on Escape, on a
  * click elsewhere, or on a second click of the lozenge.
  */
+/**
+ * The small line icons the page controls use.
+ *
+ * Inline SVG rather than a font or a file: this is chrome built at runtime, and a
+ * control that depends on a network fetch to say what it does is a control that
+ * sometimes does not. They inherit currentColor, so dark mode needs nothing.
+ */
+const ICONS = {
+  power: '<path d="M12 3.2v8.2"/><path d="M6.6 6.7a7.6 7.6 0 1 0 10.8 0"/>',
+  restart: '<path d="M20.4 12a8.4 8.4 0 1 1-2.9-6.4"/><path d="M20.4 4.2v5.4h-5.2"/>',
+  hide: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/><path d="M4 4l16 16"/>',
+  show: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/>',
+};
+
+function icon(name) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"`
+    + ` stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+}
+
+/** Set a button's icon and words without disturbing the other. */
+function label(button, name, text) {
+  button.querySelector('.icon').innerHTML = icon(name);
+  button.querySelector('.label').textContent = text;
+}
+
 function mountPageBar(root, options, bus, programs, queries) {
   const host = root === document ? document.querySelector('main') ?? document.body : root;
   const bar = document.createElement('div');
@@ -114,7 +139,8 @@ function mountPageBar(root, options, bus, programs, queries) {
   bar.innerHTML = `<button class="handle" data-act="handle" aria-expanded="false" aria-controls="${panelId}">`
     + '<span class="dot"></span><span class="count"></span></button>'
     + `<div class="controls" id="${panelId}"><span class="engine-state"></span>`
-    + '<button data-act="restart">start engine</button></div>';
+    + `<button data-act="restart"><span class="icon">${icon('power')}</span>`
+    + '<span class="label">Start engine</span></button></div>';
   const state = bar.querySelector('.engine-state');
   // One button, whose label is always the thing it will do. "restart engine" over
   // an engine that has never started names a state the reader cannot act on and
@@ -123,6 +149,7 @@ function mountPageBar(root, options, bus, programs, queries) {
   const restart = bar.querySelector('[data-act="restart"]');
   let live = false;
   const handle = bar.querySelector('.handle');
+  const controls = bar.querySelector('.controls');
   const count = bar.querySelector('.count');
 
   // Open because the reader asked, or open because something just happened. Kept
@@ -137,17 +164,25 @@ function mountPageBar(root, options, bus, programs, queries) {
    * the contents change length as the engine's state does. Measuring means one
    * forced reflow per toggle, which is the price of the animation.
    */
-  const naturalWidth = () => {
-    const previous = bar.style.width;
+  const widthFor = (open) => {
+    const previousWidth = bar.style.width;
+    const previousDisplay = controls.style.display;
     bar.style.transition = 'none';
+    // Taken out of the flex line entirely rather than merely hidden, since a
+    // hidden-but-laid-out panel still contributes its width to `auto`.
+    if (!open) controls.style.display = 'none';
     bar.style.width = 'auto';
     // getBoundingClientRect, not offsetWidth: offsetWidth rounds DOWN to a whole
     // pixel, and the pill was landing a third of a pixel short of its own
     // contents — enough for text-overflow to decide the sentence did not fit and
-    // eat a whole word to make room for an ellipsis. The extra pixel is the
-    // same fraction, rounded the honest way.
+    // eat a whole word to make room for an ellipsis. The extra pixel is the same
+    // fraction, rounded the honest way.
+    //
+    // Measuring BOTH states this way means the pill's own padding is counted
+    // without anyone having to remember it exists.
     const width = Math.ceil(bar.getBoundingClientRect().width) + 1;
-    bar.style.width = previous;
+    bar.style.width = previousWidth;
+    controls.style.display = previousDisplay;
     bar.offsetWidth; // flush, or the browser coalesces this into no transition
     bar.style.transition = '';
     return width;
@@ -157,7 +192,7 @@ function mountPageBar(root, options, bus, programs, queries) {
     const open = pinned || flash !== null;
     bar.dataset.open = String(open);
     handle.setAttribute('aria-expanded', String(open));
-    bar.style.width = `${open ? naturalWidth() : Math.ceil(handle.getBoundingClientRect().width) + 1}px`;
+    bar.style.width = `${widthFor(open)}px`;
   };
   const show = (ms) => {
     clearTimeout(flash);
@@ -220,7 +255,7 @@ function mountPageBar(root, options, bus, programs, queries) {
     'the chapter is showing its saved answers; 5.9 MB of WebAssembly arrives when you press Run');
   // "off" on its own says nothing about what is off. The word anchors what the
   // pill is for, which is most of what makes a two-inch control discoverable.
-  count.textContent = 'engine off';
+  count.textContent = 'Engine off';
   render();
 
   // How long this engine has been the engine. Kept rather than announced once,
@@ -231,7 +266,7 @@ function mountPageBar(root, options, bus, programs, queries) {
   bus.on((event) => {
     if (event.kind === 'started') {
       live = true;
-      restart.textContent = 'restart engine';
+      label(restart, 'restart', 'Restart engine');
       restart.title = 'throw this engine away and load your cells into a fresh one';
       age = `engine started ${event.at}`;
     } else if (event.kind === 'restarted') {
@@ -244,7 +279,7 @@ function mountPageBar(root, options, bus, programs, queries) {
     bar.classList.add('live');
     // On or off, not a count. A count is only readable with the pill open, and by
     // then the words beside it say the same thing at greater length.
-    count.textContent = 'engine on';
+    count.textContent = 'Engine on';
     // Starting and restarting are the two moments the words are worth reading,
     // and both are things the reader just caused. Consulting one more cell is not.
     if (event.kind === 'started' || event.kind === 'restarted') show(6000);
@@ -257,13 +292,14 @@ function mountPageBar(root, options, bus, programs, queries) {
   if (spoilers.length) {
     const peek = document.createElement('button');
     peek.dataset.act = 'peek-all';
-    peek.textContent = 'hide saved answers';
+    peek.innerHTML = '<span class="icon"></span><span class="label"></span>';
+    label(peek, 'hide', 'Hide saved answers');
     peek.title = 'put every saved answer in this chapter out of sight, to work through it cold';
     let away = false;
     peek.addEventListener('click', () => {
       away = !away;
       for (const q of spoilers) q.setHidden(away);
-      peek.textContent = away ? 'show saved answers' : 'hide saved answers';
+      label(peek, away ? 'show' : 'hide', away ? 'Show saved answers' : 'Hide saved answers');
     });
     bar.querySelector('.controls').insertBefore(peek, restart);
   }
@@ -594,7 +630,9 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     hidden = value && !mine;
     out.classList.toggle('answers-hidden', hidden);
     const toggle = out.querySelector('[data-act="peek"]');
-    if (toggle) toggle.textContent = hidden ? 'show' : 'hide';
+    // Same word and same icon as the whole-chapter control in the page pill: one
+    // vocabulary, learned once.
+    if (toggle) label(toggle, hidden ? 'show' : 'hide', hidden ? 'show' : 'hide');
     const note = out.querySelector('.peek-note');
     if (note) note.textContent = hidden ? ' · hidden' : '';
   };
@@ -612,6 +650,7 @@ function mountQuery(cell, options, bus, { above = [], below = [] } = {}) {
     const toggle = document.createElement('button');
     toggle.className = 'peek';
     toggle.dataset.act = 'peek';
+    toggle.innerHTML = '<span class="icon"></span><span class="label"></span>';
     toggle.title = 'the chapter’s answers stay here either way; this only puts them out of sight';
     toggle.addEventListener('click', () => setHidden(!hidden));
     from.append(note, toggle);

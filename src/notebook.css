@@ -134,8 +134,12 @@ button.primary:hover { background: #98380f; }
    visible while they are hidden, so the reader can always see that they exist. */
 .out.answers-hidden .line:not(.from) { display: none; }
 .line.from button.peek {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  vertical-align: -.15em;
   margin-left: .6rem;
-  padding: .13rem .55rem;
+  padding: .16rem .55rem .16rem .45rem;
   border-radius: 999px;
   font: 600 .68rem/1.4 system-ui, sans-serif;
   letter-spacing: .06em;
@@ -173,6 +177,9 @@ button.primary:hover { background: #98380f; }
   max-width: calc(100vw - 2rem);
   overflow: hidden;
   white-space: nowrap;
+  /* The pill's own inset. Without it the buttons run into its edge, which reads
+     as a mistake at rest and as a squeeze while it is opening. */
+  padding: .3rem;
   border: 1px solid var(--rule);
   border-radius: 999px;
   background: var(--paper);
@@ -188,7 +195,7 @@ button.primary:hover { background: #98380f; }
   align-items: center;
   gap: .45rem;
   min-width: 0;
-  padding: 0 .1rem 0 1rem;
+  padding: 0 .45rem 0 .85rem;
   /* HIDDEN, not merely transparent. An opacity of 0 leaves a button clickable, and
      these were landing on top of the lozenge while the pill was closed — swallowing
      every click on the one control the page has. Invisible things must not be
@@ -226,7 +233,7 @@ button.primary:hover { background: #98380f; }
   align-items: center;
   gap: .45rem;
   flex: 0 0 auto;
-  padding: .48rem .8rem;
+  padding: .42rem .75rem;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -248,12 +255,29 @@ button.primary:hover { background: #98380f; }
 .engine-bar.live .handle .dot { background: var(--ok); }
 
 .engine-bar .controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
   flex: 0 0 auto;
-  padding: .4rem .85rem;
+  padding: .4rem .8rem .4rem .65rem;
   border-radius: 999px;
   border-color: transparent;
   background: var(--code-bg);
 }
+/* Line icons, inherited colour, sized in ems so they follow the label rather than
+   the page. Decoration for the eye and a second reading for everyone else — the
+   words are always there too. */
+.engine-bar .icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  opacity: .75;
+}
+.engine-bar svg,
+.line.from .icon svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+.line.from .icon { display: inline-flex; opacity: .8; }
 .engine-bar .controls button:hover:not(:disabled) { background: #ebe5d5; }
 
 @media (prefers-reduced-motion: reduce) {
