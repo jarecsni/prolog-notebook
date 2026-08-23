@@ -21,7 +21,6 @@ import { download } from './export.js';
 
 let serial = 0;
 let panels = 0;
-let booted = false;
 
 /** Absolute, never relative: "3 minutes ago" is wrong the moment it is written. */
 function clock(date = new Date()) {
@@ -41,6 +40,11 @@ function createBus() {
   return {
     on: (watcher) => watchers.add(watcher),
     emit: (event) => { for (const watcher of watchers) watcher(event); },
+    // Whether THIS notebook's engine has started. Per mount rather than per
+    // module: "5.9 MB, first time only" is a claim about a particular notebook's
+    // first Run, and a second chapter embedded in the same page (v0.4) is a
+    // second notebook, not a continuation of this one.
+    booted: false,
   };
 }
 
@@ -401,7 +405,7 @@ function mountPageBar(root, options, bus, programs, queries) {
         // cells the reader has not asked for, and Run loads what it needs anyway.
         await boot(options, bus);
       } else {
-        const session = await createSession(options);
+        const session = await sessionFactory(options)(options);
         await session.restart();
         bus.emit({ kind: 'restarted', at: clock(), cells: [...session.log].length });
       }
@@ -468,15 +472,32 @@ export function offerDownload(root, produce) {
 }
 
 /** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
+/**
+ * Where the engine comes from.
+ *
+ * A SEAM, and the reason it exists is testability: mount() otherwise reaches
+ * straight for the browser's worker-backed session, so nothing on this page can
+ * be exercised without spawning a Worker and 36 MB of WebAssembly. A fake session
+ * — consults that record, queries that answer from a script — is what lets the
+ * page's own behaviour be tested at all (869enpj26).
+ *
+ * Same shape as the injectable filesystem in platform-seams.md §3, one level up:
+ * a hosted build and the VS Code web extension will each want to say where the
+ * engine lives, and it costs one option to let them.
+ */
+function sessionFactory(options) {
+  return options.createSession ?? createSession;
+}
+
 async function boot(options, bus, status) {
-  if (!booted && status) {
+  if (!bus.booted && status) {
     status.textContent = 'starting SWI-Prolog (5.9 MB, first time only)…';
     status.className = 'status busy';
   }
-  const wasBooted = booted;
+  const wasBooted = bus.booted;
   if (!wasBooted) bus.emit({ kind: 'booting', at: clock() });
-  const session = await createSession(options);
-  booted = true;
+  const session = await sessionFactory(options)(options);
+  bus.booted = true;
   if (!wasBooted) bus.emit({ kind: 'started', at: clock() });
   return session;
 }
@@ -979,7 +1000,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     write(`?- ${goal}.`, 'echo');
     setRunning(true);
     try {
-      if (!booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
+      if (!bus.booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
       session = await boot(options, bus);
       const ok = await loadPrograms(session);
       // Recorded whatever happened, and recorded AFTER the consults: these answers

@@ -69,6 +69,14 @@ It is what makes a platform credible rather than predatory, and relicensing late
 goodwill that produced the authors. The hosted service is the paid part; the file format is
 never the hostage.
 
+**7. The engine is injectable, like the filesystem.**
+`mount()` takes an optional `createSession`, so a page can be given something other than the
+browser's worker-backed engine. Built for the DOM tests ([869enpj26](https://app.clickup.com/t/869enpj26)) —
+the page had to be exercisable without spawning a Worker and 36 MB of WebAssembly — and it is
+the same seam a hosted `--check`, a VS Code web extension and the book's engine pool
+([869enpbb2](https://app.clickup.com/t/869enpbb2)) each need. One parameter, and it made the
+one untested file testable.
+
 ## Formats and what runs where
 
 | edition | runs Prolog | notes |
