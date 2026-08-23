@@ -322,10 +322,15 @@ button.primary:hover { background: #98380f; }
   border-color: transparent;
   background: var(--code-bg);
 }
-/* The reader's copy is the point of export, so the button that hands it over is
-   the one primary action in the page controls. */
-.page-controls .panel [data-act="download"] { background: var(--accent); color: #fff; }
-.page-controls .panel [data-act="download"]:hover:not(:disabled) { background: #98380f; }
+/* THREE PEERS, ONE WEIGHT. Download was filled with the accent, on the argument
+   that the reader's copy is the point of export. That held while the panel was a
+   row of units; as three rows it reads as though the other two were lesser
+   versions of it — and hiding the answers or restarting the engine is what a
+   reader reaches for far more often.
+
+   The accent belongs to Run and Consult, which are the actions the CHAPTER is
+   about. A control in the corner shouting at the same volume is a tool insisting
+   on itself, which is the thing this panel was shaped to avoid. */
 /* Line icons, inherited colour, sized in ems so they follow the label rather than
    the page. Decoration for the eye and a second reading for everyone else — the
    words are always there too. */
