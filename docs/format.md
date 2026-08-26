@@ -60,7 +60,7 @@ rerun: manual
 | -------- | -------------------------------------------------------------------- |
 | `format` | required. `prolog-notebook/1`. A newer major is refused, not guessed. |
 | `kicker` | the `.kicker` line above the title, used when this notebook is built **alone**. No markdown spelling exists for it. |
-| `rerun`  | notebook-wide default for query cells, `manual` (default) or `auto`.  |
+| `rerun`  | notebook-wide default for query cells, `manual` (default) or `auto` (§5). A cell that states its own wins; an unrecognised value here is an error, not a silent default. |
 
 Unknown keys are preserved verbatim and ignored.
 
@@ -189,10 +189,61 @@ is_son(X)
   omits it, matching what a reader types at a toplevel prompt. Two goals in a cell is an
   error — the output block keys one solution sequence to one cell.
 - A goal may span lines; the lines are joined with a space.
-- `rerun="manual"` (default, or the front-matter default) marks the output stale and offers
-  *Run again*. `rerun="auto"` re-runs when a dependency changes. A cell with an unanswered
-  prediction attached is forced to manual whatever it declares — reactivity spoils
-  prediction, and prediction is the teaching device. Details on [869eddzgq].
+- `rerun` says **who decides when these answers are refreshed**. Two values, and an
+  unrecognised one is an error for the same reason `hold`'s is — a `rerun="atuo"` that
+  quietly fell back to manual leaves a demonstration cell showing answers from a program the
+  reader has since edited, which is the exact failure the attribute prevents wearing the face
+  of the fix.
+
+  | value | what happens when the program above changes |
+  |---|---|
+  | `manual` | default. The answers are **marked** stale; the reader presses Run |
+  | `auto` | the cell re-runs itself, and says in its first line that nobody pressed anything |
+
+  `manual` is the default because prediction is the teaching device and reactivity spoils it.
+  `auto` is right for the demonstration case — reorder the goals in a rule and watch the
+  solution set change — where making the reader press Run in every cell below adds friction
+  exactly where the loop should be tight.
+
+  **The trigger is a consult, never an edit.** Consult is the reader saying *this is what I
+  mean now*; a keystroke is not. Re-consulting mid-word would hand the engine half a clause
+  and the reader a syntax error for something they were still typing. Pressing Run counts,
+  because Run consults what it needs.
+
+  **It never starts work nobody asked for.** Three things are deliberately not triggers:
+
+  - **page load.** A saved answer whose `input-hash` disagrees stays *marked*, exactly as
+    manual does. A chapter is readable with nothing downloaded, and an author writing
+    `rerun="auto"` must not make every arriving reader pull 5.9 MB. Front matter is where an
+    author asks for an engine on load ([869enpbc3]), and that is their call, not this
+    attribute's side effect.
+  - **the consults an abort replays.** The engine is rebuilt into what it already was and
+    nothing the reader wrote changed, so an auto cell keeps the ordinary *engine restarted
+    since this ran* mark. A repair action must not re-run the chapter as a side effect.
+  - **the cell's own re-run**, which consults the cells above it and would otherwise be the
+    thing that starts it again.
+
+  It also re-runs only when the answers on screen are **not what the page would now produce**
+  — a consult of a cell nobody edited changes nothing, and re-running to print the same
+  answers is a page being busy at the reader — and never while the reader is walking a
+  solution sequence with `; next`.
+
+  **An automatic re-run takes the whole solution sequence**, where pressing Run takes the
+  first and waits. Two reasons, and the second is not cosmetic: the answers it replaces
+  showed the whole sequence, so anything less is a cell that got quieter on its own; and SWI's
+  query frames are a stack — a sequence left part-way holds a frame that nothing closes, and
+  the next query to open goes inside it, after which the first cannot be stepped
+  ([869epzqpc]). Running to the end is what releases it. The same 500-solution guard as *all*
+  applies, so an auto cell on a generator with no end says it stopped rather than filling the
+  page.
+
+  **A held cell is forced to manual until its wait ends.** `hold` and `rerun` are one
+  mechanism rather than two: the same flag decides whether the answers are visible and
+  whether the cell may re-run behind the reader's back. A chapter that quizzes the reader and
+  then answers itself is worse than one that never asked. Once the wait ends the cell reverts
+  to what it declared. A cell with **no** `hold` re-runs even if a prediction sits above it —
+  the author had the spelling and chose not to use it, and inferring the binding from position
+  is the rule this format refuses everywhere else. Decisions recorded on [869eddzgq].
 - `hold` **withholds this cell's saved answers from a reader who has not earned them yet**
   ([869enkdd2]). Two values, and an unrecognised one is an error — a `hold="untill-run"`
   that quietly did nothing would spoil the prediction it was written to protect, and the
@@ -501,6 +552,8 @@ false.
 [869eddzfp]: https://app.clickup.com/t/869eddzfp
 [869ectt0y]: https://app.clickup.com/t/869ectt0y
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
+[869enpbc3]: https://app.clickup.com/t/869enpbc3
+[869epzqpc]: https://app.clickup.com/t/869epzqpc
 [869edyyvm]: https://app.clickup.com/t/869edyyvm
 [869ectt20]: https://app.clickup.com/t/869ectt20
 [869ejgybm]: https://app.clickup.com/t/869ejgybm

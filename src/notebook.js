@@ -37,9 +37,20 @@ function clock(date = new Date()) {
  */
 function createBus() {
   const watchers = new Set();
+  // Auto re-runs go through here one at a time. A consult can make several cells
+  // want to refresh at once, and this notebook has ONE engine: opening four
+  // queries into it simultaneously interleaves four solution streams in a single
+  // WASM heap for no gain, since the worker answers them serially anyway.
+  let chain = Promise.resolve();
   return {
     on: (watcher) => watchers.add(watcher),
     emit: (event) => { for (const watcher of watchers) watcher(event); },
+    queue: (job) => {
+      // Both arms are the same job on purpose: a re-run that threw must not stop
+      // the next cell's from ever starting.
+      chain = chain.then(job, job);
+      return chain;
+    },
     // Whether THIS notebook's engine has started. Per mount rather than per
     // module: "5.9 MB, first time only" is a claim about a particular notebook's
     // first Run, and a second chapter embedded in the same page (v0.4) is a
@@ -593,7 +604,14 @@ function mountProgram(cell, options, bus) {
     return say(`✓ consulted ${loaded.at}`, 'ok', 'the engine is holding exactly this text');
   };
 
-  const consult = async (session) => {
+  /**
+   * @param {object} session
+   * @param {'consult'|'run'|'auto'} cause who asked for this — see the `consulted`
+   *   event below. It is threaded rather than inferred because the difference
+   *   between "the reader said this is what I mean now" and "the page reloaded
+   *   its own state" is invisible from in here.
+   */
+  const consult = async (session, cause = 'consult') => {
     const text = source.value;
     const r = await session.consult(text, name);
     // A warning here usually means this cell has just destroyed another
@@ -608,7 +626,9 @@ function mountProgram(cell, options, bus) {
       : null;
     refresh();
     // Any answer below this cell was produced against whatever it held before.
-    bus.emit({ kind: 'consulted', name, at: clock() });
+    // The cause travels with it: a cell that re-runs itself on a consult must not
+    // then react to the consults its own re-run performed (format §5).
+    bus.emit({ kind: 'consulted', name, at: clock(), cause });
     return r;
   };
 
@@ -689,8 +709,8 @@ function mountProgram(cell, options, bus) {
      * Cheap enough to do on every Run: the second Run of a chapter consults
      * nothing at all, and an edited cell invalidates itself and nothing else.
      */
-    ensure: async (session) =>
-      (session.log.isCurrent(name, source.value) ? { ok: true } : consult(session)),
+    ensure: async (session, cause = 'run') =>
+      (session.log.isCurrent(name, source.value) ? { ok: true } : consult(session, cause)),
     /** What this cell defines, used only to explain an error, never to run one. */
     defines: () => definedPredicates(source.value),
   };
@@ -737,6 +757,13 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   // someone who has decided they want it is theatre, not teaching.
   const hold = cell.dataset.hold ?? null;
   let held = hold !== null && published.out !== '';
+  // Who decides when these answers are refreshed (format §5). `manual` is the
+  // default and is the whole of the behaviour this file had until now.
+  const auto = cell.dataset.rerun === 'auto';
+  // The renderer's verdict on the answers this cell was PUBLISHED with: their
+  // input-hash did not match the program above them, so the file itself shipped
+  // stale. Read once, because a run replaces the answers it is a claim about.
+  const savedStale = cell.dataset.stale === 'saved';
   // Latched, unlike everything else here, because it is the one change that
   // leaves no trace in the text: a rebuilt engine looks exactly like the old one.
   let engineChanged = false;
@@ -914,9 +941,9 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
    * it is called. So there is no dependency graph to compute, and at ~3.5 ms a
    * cell there is nothing to gain by computing one.
    */
-  const loadPrograms = async (session) => {
+  const loadPrograms = async (session, cause = 'run') => {
     for (const program of above) {
-      const r = await program.ensure(session);
+      const r = await program.ensure(session, cause);
       // Running a query against a chapter that failed to load would answer a
       // question the reader did not ask.
       if (!r.ok) return { ok: false, name: program.name, error: r.error };
@@ -973,7 +1000,18 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     }
   };
 
-  runBtn.addEventListener('click', async () => {
+  /**
+   * Run this cell's goal.
+   *
+   * The reader's own Run takes the first solution and waits, which is the whole
+   * point of `; next`. An automatic one takes the sequence to the end — see
+   * drain(), below, for why that is a correctness matter and not a preference.
+   *
+   * @param {{cause?: 'reader'|'auto'}} [options] `auto` when the page started this
+   *   rather than the reader — it changes what the output says about itself, and
+   *   it marks the consults this run performs so they cannot start it again.
+   */
+  const run = async ({ cause = 'reader' } = {}) => {
     // The chapter's saved answers are on screen until this moment. Replacing them
     // with the reader's own is fine; replacing them SILENTLY is not, so the run is
     // labelled and the way back is stated (docs/modes.md §3) — and the way back is
@@ -994,15 +1032,20 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     const goal = input.value.trim().replace(/\.$/, '');
     if (!goal) return;
     const at = clock();
+    // WHOSE ANSWERS THESE ARE is the one claim an output has always made, and an
+    // automatic re-run is the first thing on this page that produces answers
+    // nobody pressed a button for. Saying "your run" over those would be the page
+    // attributing its own work to the reader.
+    const whose = cause === 'auto' ? `re-run automatically · ${at}` : `your run · ${at}`;
     write(hadSaved
-      ? `your run · ${at} · press reset for the chapter’s saved answers`
-      : `your run · ${at}`, 'from');
+      ? `${whose} · press reset for the chapter’s saved answers`
+      : whose, 'from');
     write(`?- ${goal}.`, 'echo');
     setRunning(true);
     try {
       if (!bus.booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
       session = await boot(options, bus);
-      const ok = await loadPrograms(session);
+      const ok = await loadPrograms(session, cause === 'auto' ? 'auto' : 'run');
       // Recorded whatever happened, and recorded AFTER the consults: these answers
       // are the reader's either way, and the context is the one the goal actually
       // ran against rather than the one it was about to.
@@ -1016,22 +1059,99 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
       }
       query = session.query(goal);
       setRunning(false);
-      await step();
+      // A re-run the reader did not ask for must not leave the page in a state
+      // they did not ask for either: it takes the whole sequence, exactly as the
+      // saved answers it replaced showed the whole sequence, and finishing is
+      // what closes the query. A cell left mid-sequence would be a frame nobody
+      // will ever step, and the next cell to run would be trapped underneath it.
+      if (cause === 'auto') await drain();
+      else await step();
     } catch (e) {
       write(e.message, 'err');
       finish();
     }
-  });
+  };
+
+  runBtn.addEventListener('click', () => run());
+
+  /**
+   * Would these answers be different if the page produced them now?
+   *
+   * The whole of what `rerun="auto"` acts on. It is deliberately not "did
+   * something happen" — a Consult of a cell the reader never edited changes
+   * nothing, and re-running four cells to print the same four answers is a page
+   * being busy at the reader.
+   */
+  const outOfDate = () => {
+    // Their own run: exactly the question the tick already answers out loud.
+    if (ran) return staleReason() !== null;
+    // Never run, and nothing on screen to be wrong: the author asked for this
+    // cell to be live, and an empty box is not what the page would produce.
+    if (published.out === '') return true;
+    // Never run, showing the chapter's answers. Those were produced against the
+    // chapter's own program, so they stop being true when a cell above is not the
+    // one that was published — or when the file already shipped saying so.
+    return savedStale || above.some((p) => p.isEdited());
+  };
+
+  /**
+   * `rerun="auto"`: the answers follow the program, without the reader
+   * re-pressing Run in every cell below the one they just changed (869eddzgq).
+   *
+   * ON CONSULT, NEVER ON EDIT. Consult is the reader saying "this is what I mean
+   * now"; a keystroke is not, and a page that re-ran mid-word would be handing
+   * the engine half a clause and the reader a syntax error for something they
+   * were still typing.
+   *
+   * AND NEVER WORK NOBODY ASKED FOR. Three things are deliberately not triggers:
+   * page load, where a stale saved answer stays MARKED rather than pulling 5.9 MB
+   * down a reader's connection; the consults an abort replays, which restore the
+   * engine to what it already was and mean nothing changed; and this cell's own
+   * re-runs, which is what the cause on the event is for. Auto follows the
+   * reader's edits closely — it does not decide to work on its own.
+   */
+  if (auto) {
+    bus.on((event) => {
+      if (event.kind !== 'consulted' || event.cause === 'auto') return;
+      // Only the cells this query actually runs against. A consult below it was
+      // never part of these answers, and re-running for it would be a cell
+      // reacting to something it cannot see.
+      if (!above.some((program) => program.name === event.name)) return;
+      // A held cell is forced to manual until its wait ends (format §5). Answering
+      // a question the reader is still being asked is not a refresh, and a chapter
+      // that quizzes the reader and then answers itself is worse than one that
+      // never asked.
+      if (held) return;
+      // Mid-sequence. Re-running would yank the solution stream out from under a
+      // reader walking it with `; next` — so it stays as it is, and the tick says
+      // the program has changed since, exactly as a manual cell would.
+      if (running || query) return;
+      if (!outOfDate()) return;
+      bus.queue(() => run({ cause: 'auto' }));
+    });
+  }
 
   nextBtn.addEventListener('click', step);
 
-  allBtn.addEventListener('click', async () => {
+  /**
+   * Take every solution, and leave no query open behind.
+   *
+   * THE SECOND HALF IS NOT A DETAIL. SWI's query frames are a stack: a query
+   * opened while another is still open must be finished first, and stepping the
+   * outer one afterwards fails with "Attempt to access not innermost query". An
+   * abandoned sequence is not closed by anything — the worker forgets the id, the
+   * frame stays — so the only thing that actually releases it is running it to
+   * `done`. That is what this does, and it is why an automatic re-run uses it.
+   */
+  const drain = async () => {
     let guard = 0;
     while (query && guard++ < 500) {
       if (!(await step())) break;
     }
     if (guard >= 500) write('stopped after 500 solutions.', 'done');
-  });
+  };
+
+  allBtn.addEventListener('click', drain);
 
   stopBtn?.addEventListener('click', async () => {
     if (!session) return;

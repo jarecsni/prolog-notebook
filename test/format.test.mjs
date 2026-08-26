@@ -143,7 +143,8 @@ test('hold is parsed, kept and written back where the author put it', () => {
   assert.equal(held.hold, 'until-answered');
   assert.ok(held.output.solutions.length + held.output.terminator.length > 0);
   assert.equal(notebook.cells.find((c) => c.id === 'q-son-b-george').hold, null);
-  assert.match(serialise(notebook), /query id="q-son-a" hold="until-answered"/);
+  assert.match(serialise(notebook), /query id="q-son-a" rerun="auto" hold="until-answered"/,
+    'canonical attribute order, and the chapter’s two demonstration cells declare both');
 });
 
 test('a hold nobody can honour is an error, not a silent no-op', () => {
@@ -153,6 +154,25 @@ test('a hold nobody can honour is an error, not a silent no-op', () => {
     () => parse('```prolog query id="q-1" hold="untill-run"\nfoo\n```\n'),
     /hold="untill-run" is not until-run or until-answered/
   );
+});
+
+test('a rerun mode nobody can honour is an error, not a silent no-op', () => {
+  // Same rule as hold, with more at stake: `rerun="atuo"` falling back to manual
+  // leaves the author's demonstration cell showing answers from a program the
+  // reader has since edited — the exact failure the attribute exists to prevent,
+  // wearing the face of the fix.
+  assert.throws(
+    () => parse('```prolog query id="q-1" rerun="atuo"\nfoo\n```\n'),
+    /rerun="atuo" is not manual or auto/
+  );
+  assert.throws(
+    () => parse('---\nformat: prolog-notebook/1\nrerun: sometimes\n---\n\n# t\n'),
+    /rerun: sometimes is not manual or auto/
+  );
+  // And the two that are honoured survive a write-back untouched.
+  const source = '```prolog query id="q-1" rerun="auto"\nfoo\n```\n';
+  assert.equal(parse(source).cells[0].rerun, 'auto');
+  assert.equal(serialise(parse(source)), source);
 });
 
 test('holding until a prediction is answered needs a prediction to wait for', () => {

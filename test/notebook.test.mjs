@@ -253,3 +253,189 @@ test('the download button reports whether anything is the reader\'s yet', async 
   page.find('[data-act="download"]').click();
   assert.ok(handed, 'a file was produced');
 });
+
+// ------------------------------------------------------- rerun="auto"
+
+// A chapter that demonstrates rather than quizzes: the author wants the answers
+// to follow the program, so the reader can change a clause and see the solution
+// set change without pressing Run in every cell below (869eddzgq).
+const REACTIVE = `---
+format: prolog-notebook/1
+---
+
+# Reactive
+
+\`\`\`prolog program id="p-1"
+son(edward).
+\`\`\`
+
+\`\`\`prolog query id="q-auto" rerun="auto"
+son(X)
+\`\`\`
+
+\`\`\`text output for="q-auto"
+X = edward.
+\`\`\`
+
+\`\`\`prolog query id="q-manual"
+son(X)
+\`\`\`
+
+\`\`\`text output for="q-manual"
+X = edward.
+\`\`\`
+
+\`\`\`prolog program id="p-2"
+daughter(alice).
+\`\`\`
+`;
+
+/** The answers map is returned so a test can change what the engine will say next. */
+const reactive = (source = REACTIVE) => {
+  const answers = { 'son(X)': ['X = edward'] };
+  return { answers, page: pageFor(source, { engine: fakeEngine({ answers }) }) };
+};
+
+test('an auto cell follows the program the reader just consulted', async () => {
+  const { answers, page } = reactive();
+  assert.match(page.out('q-auto')[0], /the chapter’s saved answers/);
+
+  page.type('p-1', 'son(edward).\nson(alfred).');
+  answers['son(X)'] = ['X = edward', 'X = alfred'];
+  page.press('p-1', 'consult');
+  await page.settle();
+
+  // Answers nobody pressed a button for must say so. "your run" over these would
+  // be the page attributing its own work to the reader.
+  assert.match(page.out('q-auto')[0], /^re-run automatically · \d\d:\d\d:\d\d/);
+  assert.match(page.status('q-auto'), /^✓ ran/);
+
+  // THE WHOLE SEQUENCE, and this is not a preference. SWI's query frames are a
+  // stack: a cell left mid-sequence holds a frame that nothing closes, and the
+  // next cell to run opens INSIDE it — after which stepping the first one fails
+  // with "Attempt to access not innermost query". Two auto cells on one page make
+  // that certain rather than unlucky. Found in a browser; asserted here as what a
+  // reader sees, which is a finished answer and no `; next` still waiting.
+  assert.deepEqual(page.out('q-auto').slice(2), [
+    '1.  X = edward', '2.  X = alfred', 'no more solutions.',
+  ]);
+  assert.equal(page.cell('q-auto').querySelector('[data-act="next"]').disabled, true);
+
+  // And the cell that did not ask for it is untouched — still the chapter's.
+  assert.match(page.out('q-manual')[0], /the chapter’s saved answers/);
+});
+
+test('a consult that changes nothing re-runs nothing', async () => {
+  // Auto acts on "would these answers be different now", not on "did something
+  // happen". Re-running four cells to print the same four answers is a page being
+  // busy at the reader.
+  const { page } = reactive();
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /the chapter’s saved answers/);
+});
+
+test('an auto cell ignores a consult below it', async () => {
+  // p-2 was never part of these answers — Run loads the cells ABOVE — so reacting
+  // to it would be a cell reacting to something it cannot see.
+  const { page } = reactive();
+  page.type('p-2', 'daughter(alice).\ndaughter(zoe).');
+  page.press('p-2', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /the chapter’s saved answers/);
+});
+
+test('the page never starts an engine for an auto cell nobody asked to run', async () => {
+  // A chapter is readable with nothing downloaded. An author writing rerun="auto"
+  // must not make every arriving reader pull 5.9 MB, so a saved answer whose hash
+  // already disagrees stays MARKED — exactly as manual does — until the reader
+  // acts. The hash told the truth before first paint; that is what it is for.
+  const stale = REACTIVE.replace('```text output for="q-auto"', '```text output for="q-auto" input-hash="0000000000000000"');
+  const { page } = reactive(stale);
+  await page.settle();
+  assert.equal(page.boots(), 0);
+  assert.equal(page.engine.consulted.length, 0);
+  assert.match(page.out('q-auto').join('\n'), /the program above has changed since these were produced/);
+
+  // But once the reader does consult, the stale saved answers are what auto is
+  // for: they are refreshed without a Run in every cell.
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /^re-run automatically/);
+});
+
+test('the consults a restart replays are not the reader saying anything', async () => {
+  // Restart rebuilds the engine into what it already was. Nothing the reader
+  // wrote changed, and a repair action that re-ran the chapter as a side effect
+  // would be the page deciding to work on its own.
+  const { page } = reactive();
+  page.press('q-auto', 'run');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /^your run/);
+
+  page.find('.page-controls [data-act="restart"]').click();
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /^your run/, 'not re-run');
+  assert.equal(page.status('q-auto'), 'engine restarted since this ran');
+});
+
+test('an auto re-run does not answer the question the reader is still being asked', async () => {
+  // hold and rerun are one mechanism, not two (format §5): the same flag decides
+  // whether the answers are visible and whether the cell may re-run behind the
+  // reader's back. A chapter that quizzes the reader and then answers itself is
+  // worse than one that never asked.
+  const quiz = REACTIVE.replace(
+    '```prolog query id="q-auto" rerun="auto"',
+    '> [!predict] What does son(X) give?\n>\n> _your answer_\n\n```prolog query id="q-auto" rerun="auto" hold="until-answered"'
+  );
+  const { answers, page } = reactive(quiz);
+  assert.equal(page.hidden('q-auto'), true);
+
+  page.type('p-1', 'son(edward).\nson(alfred).');
+  answers['son(X)'] = ['X = edward', 'X = alfred'];
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.equal(page.hidden('q-auto'), true, 'still held');
+  assert.match(page.out('q-auto')[0], /held until you write your prediction above/);
+
+  // Once the wait is over the cell reverts to what it declared.
+  page.predict('two, I think');
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /^re-run automatically/);
+  assert.ok(page.out('q-auto').includes('2.  X = alfred'));
+});
+
+test('a re-run cannot start another one', async () => {
+  // THE LOOP THAT WOULD NOT STOP: a re-run consults the cells above it, and a
+  // consult is what starts a re-run. A failing cell never enters the consult log,
+  // so it is re-consulted every time — which is the case that turns a cycle into
+  // an infinite one. The cause on the event is what breaks it.
+  const answers = { 'son(X)': ['X = edward'] };
+  const page = pageFor(REACTIVE, {
+    engine: fakeEngine({ answers, fail: { 'p-1': 'line 2: Syntax error' } }),
+  });
+  page.type('p-1', 'son(edward');
+  page.press('p-1', 'consult');
+  await page.settle(20);
+
+  assert.equal(page.engine.consulted.length, 2, 'the press, and the re-run’s own load');
+  assert.match(page.out('q-auto').join('\n'), /did not load/);
+});
+
+test('an auto cell mid-sequence is left alone, and says why', async () => {
+  // Re-running would yank the solution stream out from under a reader walking it
+  // with `; next`. So it stays as it is and the tick tells the truth, which is
+  // exactly what a manual cell does — auto is not licence to interrupt.
+  const { answers, page } = reactive();
+  answers['son(X)'] = ['X = edward', 'X = alfred', 'X = george'];
+  page.press('q-auto', 'run');
+  await page.settle();
+  assert.ok(page.out('q-auto').includes('1.  X = edward'), 'one of three, sequence open');
+
+  page.type('p-1', 'son(edward).\nson(zoe).');
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /^your run/, 'their sequence survived');
+  assert.equal(page.status('q-auto'), 'program changed since this ran');
+});

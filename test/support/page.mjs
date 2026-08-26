@@ -94,7 +94,11 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
   globalThis.requestAnimationFrame = window.requestAnimationFrame.bind(window);
 
   const root = window.document.querySelector('main');
-  const cells = mount(root, { createSession: async () => engine });
+  // Counted, because "the page never starts an engine the reader did not ask
+  // for" is a promise this project makes twice — on load, and for rerun="auto"
+  // (869eddzgq) — and the only honest way to assert it is to watch the seam.
+  let boots = 0;
+  const cells = mount(root, { createSession: async () => { boots++; return engine; } });
   if (download) offerDownload(root, download);
 
   const find = (selector) => window.document.querySelector(selector);
@@ -102,6 +106,9 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
 
   return {
     notebook, dom, window, root, cells, engine, find, cell,
+
+    /** How many times the page has asked for an engine. */
+    boots: () => boots,
 
     /** A cell's visible output, one line per entry, chrome stripped. */
     out: (id) => [...cell(id).querySelectorAll('.out .line')]

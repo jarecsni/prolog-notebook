@@ -190,10 +190,11 @@ export function renderProgram(cell) {
  * survive into the generated markup for that reason.
  *
  * @param {{id: string, goal: string, output: object|null}} cell
- * @param {{stale?: boolean}} [options]
+ * @param {{stale?: boolean, rerun?: string|null}} [options]
  * @returns {string}
  */
 export function renderQuery(cell, options = {}) {
+  const { stale = false, rerun = null } = options;
   // The answers go into the page whatever `hold` says. Holding them is a property
   // of the INTERACTIVE rendering, not of the content (format §5): a book cannot
   // withhold anything, and a reader on the GitHub page or a printed chapter has
@@ -201,7 +202,15 @@ export function renderQuery(cell, options = {}) {
   // attribute and notebook.js puts them out of sight — the same chrome-not-content
   // rule the hide button already follows.
   const hold = cell.hold ? ` data-hold="${escapeHtml(cell.hold)}"` : '';
-  return `<div class="cell query" data-cell="${escapeHtml(cell.id)}"${hold}>
+  // Only `auto` is announced: manual is what a page does with no runtime at all,
+  // so saying it would be markup that changes nothing.
+  const auto = rerun === 'auto' ? ' data-rerun="auto"' : '';
+  // The staleness verdict, in a form the runtime can read. It is already IN the
+  // page as a warning line the reader sees; this is the same fact for the code,
+  // and re-deriving it there would mean hashing the whole notebook again in a
+  // module that has deliberately never seen the file.
+  const wasStale = stale ? ' data-stale="saved"' : '';
+  return `<div class="cell query" data-cell="${escapeHtml(cell.id)}"${hold}${auto}${wasStale}>
   <div class="bar">query<span class="spacer"></span><span class="status"></span>
     <button data-act="reset" disabled>reset</button>
     <button class="primary" data-act="run">Run</button>
@@ -209,7 +218,7 @@ export function renderQuery(cell, options = {}) {
     <button data-act="all" disabled>all</button>
     <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span><input value="${escapeHtml(cell.goal)}" spellcheck="false"></div>
-  <div class="out">${renderSavedOutput(cell, options)}</div>
+  <div class="out">${renderSavedOutput(cell, { stale })}</div>
 </div>`;
 }
 
@@ -288,7 +297,7 @@ export function replaySolutions(output) {
  * Render one cell.
  *
  * @param {object} cell
- * @param {{stale?: boolean}} [options] for a query cell carrying saved answers
+ * @param {{stale?: boolean, rerun?: string|null}} [options] for a query cell
  * @returns {string}
  */
 export function renderCell(cell, options = {}) {
@@ -332,7 +341,14 @@ export function renderNotebook(notebook) {
     const stale = cell.kind === 'query' && cell.output?.inputHash
       ? hashFor(notebook, cell) !== cell.output.inputHash
       : false;
-    parts.push(renderCell(cell, { stale }));
+    // `rerun` is resolved here for the same reason: the cell carries what its
+    // author wrote ON IT, and the notebook-wide default (§2) is a fact about the
+    // file the cell cannot see. The model keeps them apart so a round-trip does
+    // not write the default onto every cell.
+    const rerun = cell.kind === 'query'
+      ? cell.rerun ?? notebook.frontMatter.get('rerun') ?? 'manual'
+      : null;
+    parts.push(renderCell(cell, { stale, rerun }));
   }
   return `${parts.join('\n\n')}\n`;
 }
