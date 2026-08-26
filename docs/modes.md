@@ -119,7 +119,14 @@ which:
 | ----- | ---------- | ------------- |
 | **authored** | the saved output from the file, from a clean run at publish time | the default; what a cold page shows, engine or no engine |
 | **yours** | produced by this reader, from the program currently on screen | after they press Run — labelled, with a way back to authored |
+| **refreshed** | produced by the page itself, from the program on screen, because the author wrote `rerun="auto"` on the cell | after a consult makes the answers above it untrue — labelled *re-run automatically*, with the same way back |
 | **stale** | either kind, whose `input-hash` no longer matches the program above it | marked, never silently discarded and never silently trusted ([869eddzgq]) |
+
+**Refreshed** is the only output on the page that nobody pressed a button for, which is why it
+is a state of its own rather than a variety of *yours*. Saying *your run* over answers the page
+produced by itself would be the tool attributing its own work to the reader — a small lie in
+the one place this project has decided it will not tell one. Everything else about it is
+ordinary: it is labelled, reset puts the chapter's answers back, and it can go stale in turn.
 
 **Staleness is derived, not remembered.** A displayed answer records what it was produced
 against — the goal, and the text of every program cell above it — and the cell re-derives on

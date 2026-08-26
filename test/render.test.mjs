@@ -266,6 +266,43 @@ test('a held cell still renders its answers, and tells the runtime to hold them'
   assert.equal(/data-hold/.test(renderQuery(plain)), false);
 });
 
+test('the notebook-wide rerun default reaches the cells that did not state one', () => {
+  // The cell model keeps the two apart on purpose (format §2): what the author
+  // wrote ON the cell round-trips, and the front-matter default is a fact about
+  // the FILE that a cell cannot see. So resolving them is the renderer's job, and
+  // a round-trip never writes the default onto every cell.
+  const source = [
+    '---', 'format: prolog-notebook/1', 'rerun: auto', '---', '',
+    '```prolog query id="q-inherits"', 'foo(X)', '```', '',
+    '```prolog query id="q-opts-out" rerun="manual"', 'bar(X)', '```', '',
+  ].join('\n');
+  const html = renderNotebook(parse(source));
+  assert.match(html, /data-cell="q-inherits" data-rerun="auto"/);
+  assert.equal(/q-opts-out" data-rerun/.test(html), false, 'the cell overrides the file');
+
+  // Manual is never announced: it is what a page with no runtime does anyway, so
+  // saying it would be markup that changes nothing.
+  assert.equal(/data-rerun/.test(renderQuery({ id: 'q-1', goal: 'foo', output: null })), false);
+  assert.match(
+    renderQuery({ id: 'q-1', goal: 'foo', output: null }, { rerun: 'auto' }),
+    /data-rerun="auto"/
+  );
+});
+
+test('the staleness verdict is in the markup for the code as well as the reader', () => {
+  // The warning line is what the reader sees; the attribute is the same fact for
+  // notebook.js, which would otherwise have to hash the whole notebook again in a
+  // module that has deliberately never seen the file.
+  const stale = renderQuery(
+    { id: 'q-1', goal: 'foo', output: { solutions: [], terminator: 'true.' } },
+    { stale: true }
+  );
+  assert.match(stale, /data-stale="saved"/);
+  assert.match(stale, /the program above has changed since these were produced/);
+  const fresh = renderQuery({ id: 'q-1', goal: 'foo', output: { solutions: [], terminator: 'true.' } });
+  assert.equal(/data-stale/.test(fresh), false);
+});
+
 test('a sequence that was never exhausted says so, and does not claim to be done', () => {
   // The reader took two of six and stopped, or the author is showing the first
   // three of infinitely many. Either way nobody ever said the search finished,

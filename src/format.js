@@ -64,6 +64,13 @@ export function parse(text) {
     // A newer major is refused rather than guessed at.
     if (Number(major[1]) > 1) throw new NotebookError(`format ${format} is newer than this parser understands`, 2);
   }
+  // The notebook-wide default for query cells (§2). Checked here rather than
+  // where it is applied, because the renderer is not the only thing that applies
+  // it and an unrecognised value must not depend on who read it first.
+  const rerun = frontMatter.get('rerun');
+  if (rerun !== undefined && rerun !== 'manual' && rerun !== 'auto') {
+    throw new NotebookError(`rerun: ${rerun} is not manual or auto`, 2);
+  }
 
   const cells = [];
   const ids = new Set();
@@ -239,12 +246,29 @@ function buildQuery(info, block, lineNo) {
     kind: 'query',
     id: info.attrs.get('id') ?? null,
     goal,
-    rerun: info.attrs.get('rerun') ?? null,
+    rerun: readRerun(info.attrs.get('rerun'), lineNo),
     hold: readHold(info.attrs.get('hold'), lineNo),
     language: info.language,
     attrs: otherAttrs(info.attrs, 'query'),
     output: null,
   };
+}
+
+/**
+ * `rerun` says who decides when this cell's answers are refreshed (§5).
+ *
+ * Validated for the same reason `hold` is, and with more at stake: a
+ * `rerun="atuo"` that quietly fell back to manual would leave the author's
+ * demonstration cell showing answers from a program the reader has since edited
+ * — which is the exact failure the attribute was written to prevent, wearing the
+ * face of the fix.
+ */
+function readRerun(value, lineNo) {
+  if (value === undefined) return null;
+  if (value !== 'manual' && value !== 'auto') {
+    throw new NotebookError(`rerun="${value}" is not manual or auto`, lineNo);
+  }
+  return value;
 }
 
 /**
