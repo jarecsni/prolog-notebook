@@ -6,11 +6,29 @@
 
 let fileSerial = 0;
 
-// SWI reports "Redefined static procedure" and friends by printing to user_error
-// and then carrying on, so a consult that quietly destroyed another cell's
-// clauses still succeeds. message_hook/3 is the documented way to intercept
-// those; failing at the end lets the normal printing happen as well.
-const MESSAGE_HOOK = `
+// What we teach the engine about itself, consulted once at startup.
+//
+// TWO THINGS, and both are about telling the truth to a reader.
+//
+// 1. SWI reports "Redefined static procedure" and friends by printing to
+//    user_error and then carrying on, so a consult that quietly destroyed
+//    another cell's clauses still succeeds. message_hook/3 is the documented way
+//    to intercept those; failing at the end lets the normal printing happen too.
+//
+// 2. AN ANSWER IS RENDERED BY PROLOG, NOT BY US. Formatting each binding in a
+//    separate round trip loses the one thing a Prolog answer is mostly about —
+//    which variables are the SAME variable. `app([1,2], Tail, L)` really does
+//    print `L = [1, 2|Tail]` at a toplevel, and we printed
+//    `L = [1,2|_20306],  Tail = _20428`: two differently-numbered variables
+//    where there is one, with the reader's own name for it thrown away
+//    (869erjw27). For a chapter about partial lists that is the opposite of the
+//    lesson.
+//
+// The rule the toplevel follows, and this reproduces: a variable is NAMED by the
+// last binding that mentions it, and that binding is then omitted — so `X = Y`
+// prints as `X = Y`, and an unbound `Tail` disappears from the list of bindings
+// and reappears inside `L`. Anything still unnamed becomes _A, _B, … as SWI does.
+const HOOK = String.raw`
 :- dynamic '$nb_message'/2.
 user:message_hook(_Term, Kind, Lines) :-
     memberchk(Kind, [warning, error]),
@@ -19,6 +37,68 @@ user:message_hook(_Term, Kind, Lines) :-
           _, S = ''),
     assertz('$nb_message'(Kind, S)),
     fail.
+
+% One solution: the text a toplevel would print, and the bindings by name.
+% The goal arrives as a STRING BOUND TO A VARIABLE, never interpolated into this
+% query, so a goal containing quotes or brackets needs no escaping anywhere.
+'$nb_answer'(GoalText, Text, Names, Values) :-
+    read_term_from_atom(GoalText, Goal, [variable_names(Bindings)]),
+    call(Goal),
+    '$nb_render'(Bindings, Text),
+    findall(N, member(N=_, Bindings), Names),
+    findall(V, member(_=V, Bindings), Values).
+
+'$nb_render'(Bindings, Text) :-
+    '$nb_names'(Bindings, Bindings, Named),
+    exclude('$nb_named_itself'(Named), Bindings, Shown),
+    (   Shown == []
+    ->  Text = true
+    ;   '$nb_anonymous'(Shown, Named, All),
+        maplist('$nb_pair'(All), Shown, Parts),
+        % An ATOM, not a string: swipl-wasm hands an atom to JavaScript as a
+        % plain string and a Prolog string as a wrapper object, and one
+        % representation crossing the boundary is one fewer thing to unwrap.
+        atomic_list_concat(Parts, ',  ', Text)
+    ).
+
+% Each unbound variable takes the LAST name bound to it.
+'$nb_names'([], _, []).
+'$nb_names'([Name=Value|T], All, Named) :-
+    (   var(Value),
+        '$nb_last_name'(All, Value, Name)
+    ->  Named = [Name=Value|Rest]
+    ;   Named = Rest
+    ),
+    '$nb_names'(T, All, Rest).
+
+'$nb_last_name'(All, Var, Name) :-
+    findall(N, (member(N=V, All), V == Var), Names),
+    last(Names, Name).
+
+% A binding that only says "this variable is called what it is called".
+'$nb_named_itself'(Named, Name=Value) :-
+    var(Value),
+    member(N=V, Named),
+    V == Value,
+    N == Name.
+
+'$nb_anonymous'(Shown, Named, All) :-
+    term_variables(Shown, Vars),
+    exclude('$nb_has_name'(Named), Vars, Unnamed),
+    findall(A, ( between(0'A, 0'Z, C), char_code(Ch, C), atom_concat('_', Ch, A) ), Alphabet),
+    '$nb_zip'(Unnamed, Alphabet, Extra),
+    append(Named, Extra, All).
+
+'$nb_has_name'(Named, Var) :- member(_=V, Named), V == Var.
+
+'$nb_zip'([], _, []).
+'$nb_zip'([V|Vs], [N|Ns], [N=V|T]) :- '$nb_zip'(Vs, Ns, T).
+
+'$nb_pair'(Names, Name=Value, Part) :-
+    with_output_to(string(S),
+        write_term(Value, [ quoted(true), portray(true), numbervars(true),
+                            spacing(next_argument), variable_names(Names) ])),
+    format(atom(Part), '~w = ~w', [Name, S]).
 `;
 
 export class PrologSession {
@@ -31,7 +111,7 @@ export class PrologSession {
     const session = new PrologSession(module);
     // No `$` in the path: SWI expands $var in file names like a shell does, so
     // /$nb-hook.pl resolves to nothing and the consult fails silently.
-    module.FS.writeFile('/nb-hook.pl', MESSAGE_HOOK);
+    module.FS.writeFile('/nb-hook.pl', HOOK);
     module.prolog.query("user:consult('/nb-hook.pl')").once();
     return session;
   }
@@ -77,10 +157,16 @@ export class PrologSession {
    * @returns {PrologQuery}
    */
   query(goal) {
-    // Cells consult into `user`, but prolog.query/1 runs with `system` as the
-    // context module, so an unqualified goal resolves against the wrong one.
+    // The goal is BOUND, not interpolated: `'$nb_answer'` reads it in the `user`
+    // module (where cells consult) and renders each solution there, so operators,
+    // quoting and shared variables are SWI's own work rather than ours. It also
+    // means a goal containing quotes or brackets needs no escaping at any point.
     const cleaned = goal.trim().replace(/\.$/, '');
-    return new PrologQuery(this.module.prolog.query(`user:( ${cleaned} )`), this);
+    const handle = this.module.prolog.query(
+      "user:'$nb_answer'(G, Text, Names, Values)",
+      { G: cleaned }
+    );
+    return new PrologQuery(handle, this);
   }
 
   /**
@@ -195,10 +281,11 @@ export class PrologQuery {
     const out = { done: !!r.done };
     if (r.value) {
       this.count += 1;
-      out.solution = bindingsOf(r.value);
-      // Safe while the outer query is still open — verified by stepping a
-      // three-solution query with a term_string call between every step.
-      if (this.session) out.text = this.session.formatSolution(out.solution);
+      // `Text` is what a toplevel would print for this solution, rendered inside
+      // Prolog (see HOOK). `Names`/`Values` are the same answer as data, for a
+      // caller that wants the bindings rather than the line.
+      out.text = r.value.Text;
+      out.solution = zipBindings(r.value.Names, r.value.Values);
     }
     if (r.done) this.exhausted = true;
     return out;
@@ -233,7 +320,13 @@ export class PrologQuery {
  * Only that one frame is removed. Any other context is the reader's own code.
  */
 export function readableError(message) {
-  return String(message ?? '').replace(/^wasm:wasm_call_string\/\d+:\s*/, '');
+  return String(message ?? '')
+    .replace(/^wasm:wasm_call_string\/\d+:\s*/, '')
+    // Our own wrapper, which the reader did not write and cannot act on. It is
+    // the same plumbing argument as the frame above: `'$nb_answer'/4: Unknown
+    // procedure: son_a/1` names a predicate of ours in the middle of a teaching
+    // page.
+    .replace(/^'\$nb_answer'\/\d+:\s*/, '');
 }
 
 /**
@@ -268,6 +361,20 @@ export function readableInCell(message, name) {
 }
 
 /** Strip the engine's bookkeeping keys from a solution. */
+/**
+ * The query's own variable names, against their values.
+ *
+ * Two parallel lists rather than a list of `Name=Value` terms, because a term
+ * would have to be taken apart on this side and the lists arrive as arrays
+ * already. Order is the order the variables appear in the goal, which is the
+ * order a toplevel reports them in.
+ */
+export function zipBindings(names = [], values = []) {
+  const out = {};
+  names.forEach((name, i) => { out[name] = values[i]; });
+  return out;
+}
+
 export function bindingsOf(value) {
   const out = {};
   for (const [k, v] of Object.entries(value)) {

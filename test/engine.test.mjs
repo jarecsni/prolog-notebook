@@ -86,17 +86,21 @@ test('stepping yields one solution at a time', async () => {
 // compound arrive under the key named by the functor, not under `args`, so they
 // were silently dropped. The chapter never noticed because it only ever binds
 // atoms.
+//
+// The spacing changed in 869erjw27 — `foo(1, 2)`, not `foo(1,2)` — because these
+// answers are now written by SWI's own writer with the toplevel's options rather
+// than assembled here. What a real `swipl` prints is the specification.
 
 test('compound terms keep their arguments', async () => {
-  assert.equal((await session.query('X = foo(1,2)').next()).text, 'X = foo(1,2)');
-  assert.equal((await session.query('X = point(1,2,3)').next()).text, 'X = point(1,2,3)');
+  assert.equal((await session.query('X = foo(1,2)').next()).text, 'X = foo(1, 2)');
+  assert.equal((await session.query('X = point(1,2,3)').next()).text, 'X = point(1, 2, 3)');
   assert.equal((await session.query('X = f(g(h))').next()).text, 'X = f(g(h))');
 });
 
 test('operators print as operators, not as functors', async () => {
   assert.equal((await session.query('X = a-b').next()).text, 'X = a-b');
   assert.equal((await session.query('X = 1+2').next()).text, 'X = 1+2');
-  assert.equal((await session.query('X = [a-1,b-2]').next()).text, 'X = [a-1,b-2]');
+  assert.equal((await session.query('X = [a-1,b-2]').next()).text, 'X = [a-1, b-2]');
 });
 
 test('atoms needing quotes get them, strings stay strings', async () => {
@@ -107,8 +111,8 @@ test('atoms needing quotes get them, strings stay strings', async () => {
 test('a single argument that is itself a list is not mistaken for two', async () => {
   // The engine wraps a compound's argument list in one extra array, so the
   // unwrapping has to distinguish f([1,2]) from f(1,2).
-  assert.equal((await session.query('X = f([1,2])').next()).text, 'X = f([1,2])');
-  assert.equal((await session.query('X = f([1,2],[3])').next()).text, 'X = f([1,2],[3])');
+  assert.equal((await session.query('X = f([1,2])').next()).text, 'X = f([1, 2])');
+  assert.equal((await session.query('X = f([1,2],[3])').next()).text, 'X = f([1, 2], [3])');
 });
 
 test('the engine-free renderer keeps arguments too, in functional notation', async () => {
@@ -200,6 +204,69 @@ test('the wasm frame is still stripped underneath', () => {
     readableInCell('wasm:wasm_call_string/3: Unknown procedure: is_son/1', 'p-family'),
     'Unknown procedure: is_son/1',
   );
+});
+
+// ------------------------------------------- an answer is what a toplevel prints
+
+// EVERY EXPECTATION HERE WAS MEASURED against `swipl 9.2.9` on a developer's
+// machine, by typing the goal at a real toplevel and copying what came back.
+// That is the specification: a reader who types the same goal into swipl must
+// see what our page and our files show them, or they conclude something false
+// about Prolog rather than about us (869erjw27).
+test('a shared variable is one variable, with the reader\'s own name for it', async () => {
+  await session.consult('app([], L, L).\napp([H|T], L, [H|R]) :- app(T, L, R).', 'cell-app');
+
+  // real swipl:  L = [1, 2|Tail].
+  // before this: L = [1,2|_20306],  Tail = _20428
+  // — two differently-numbered variables where there is one, and the reader's
+  // name for the hole thrown away. For a chapter about partial lists, the
+  // opposite of the lesson.
+  assert.equal((await session.query('app([1,2], Tail, L)').next()).text, 'L = [1, 2|Tail]');
+
+  // The naming rule, which is the toplevel's: a variable takes the LAST name
+  // bound to it, and that binding is then not printed on its own.
+  assert.equal((await session.query('X = Y').next()).text, 'X = Y');
+  assert.equal((await session.query('X = f(Y,Y)').next()).text, 'X = f(Y, Y)');
+
+  // A variable nobody named becomes _A, and stays the same _A everywhere.
+  assert.equal((await session.query('X = [a|T], T = [b|_]').next()).text,
+    'X = [a, b|_A],  T = [b|_A]');
+});
+
+test('a goal is bound, not spliced, so quotes in it need no escaping', async () => {
+  // The goal used to be interpolated into `user:( ... )`. It is now handed to
+  // Prolog as data, which is both safer and the only way the renderer can know
+  // the reader's variable names.
+  assert.equal((await session.query("X = 'hello world'").next()).text, "X = 'hello world'");
+  assert.equal((await session.query('X = "a string"').next()).text, 'X = "a string"');
+  assert.equal((await session.query("X = 'it''s'").next()).text, "X = 'it\\'s'");
+});
+
+test('a saved answer is complete, where a toplevel would trail off', async () => {
+  // THE ONE DELIBERATE DEPARTURE. A real toplevel prints
+  //     L = [1, 2, 3, 4, 5, 6, 7, 8, 9|...]
+  // because max_depth(10) is in its answer_write_options. That is a courtesy to
+  // a terminal; in a notebook the answer is SAVED, and a chapter whose answers
+  // trail off into "..." is a chapter with the answer missing.
+  const text = (await session.query('numlist(1,15,L)').next()).text;
+  assert.equal(text, 'L = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]');
+});
+
+test('the bindings are still there for a caller that wants data, not a line', async () => {
+  // The text is for a reader. `solution` is for code — the CLI, a test, a future
+  // grader — and it is keyed by the query's own variable names.
+  const r = await session.query('X = 1, Y = two').next();
+  assert.deepEqual(r.solution, { X: 1, Y: 'two' });
+  assert.equal(r.text, 'X = 1,  Y = two');
+});
+
+test('our own wrapper never appears in an error the reader has to read', async () => {
+  // The renderer runs inside a predicate of ours, so SWI blames that predicate.
+  // `'$nb_answer'/4: Unknown procedure: nosuch/1` names plumbing the reader did
+  // not write and cannot act on — the same argument that already strips the wasm
+  // frame.
+  const r = await session.query('nosuch(X)').next();
+  assert.equal(r.error, 'Unknown procedure: nosuch/1');
 });
 
 test('the engine version is pinned exactly, not floated', async () => {
