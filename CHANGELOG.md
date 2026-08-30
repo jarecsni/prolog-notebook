@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.5.0] — 2026-08-30
+
+**The CLI can show a notebook.** Until now the only way to see one running was to clone this
+repository, start a dev server, symlink your file into `notebooks/` and pass `?src=`. A
+notebook tool whose notebooks could only be read from its own source tree was not finished.
+
+### Added
+
+- **`prolog-notebook view <file>`** — serves the chapter and opens it, cells live. It serves
+  exactly what `build` writes, from memory, streaming the runtime and the engine out of the
+  installed package: no temp directory, nothing to clean up, and no chance of the page you look
+  at differing from the page you would publish. `--port` (8777 by default, and it says so when
+  it has to take another), `--no-open`.
+
+- **`prolog-notebook build <file> --out <dir>`** — a plain static directory you can host, zip
+  or send:
+
+      index.html  app.js  notebook.css  lib/*.js  swipl/swipl-bundle.js
+
+  No bundler. The runtime is already plain ES modules with relative imports, so the build is a
+  prerender and a copy.
+
+  **What the page does not contain** is the half worth stating. No markdown library — the prose
+  is HTML by the time it is written, which is why `page.js` and `notebook.js` are separate
+  files, and a test now enforces that neither the parser nor the renderer reaches a reader. And
+  no engine on the path to *reading*: the 6.2 MB sits in the directory untouched until somebody
+  presses Run.
+
+### Changed
+
+- `editsOf()` moved from `page.js` to `notebook.js`. A built page needs it and must not import
+  the renderer — and so 137 kB of markdown parser — to get it.
+- `viewer/` is now what it always should have been: the shell for working on the renderer
+  itself. Everyone else uses `view`.
+
 ## [0.4.3] — 2026-08-30
 
 ### Added
