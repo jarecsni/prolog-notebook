@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.4] — 2026-08-31
+
+### Changed
+
+- **`prolog-notebook <command> --help` answers about that command only.** It printed the whole
+  card — all five commands — which makes the reader find their command again in a page they did
+  not ask for. What works anywhere is still listed, because it is as true of the command they
+  asked about as of any other, and the note about a stopped search now travels with `--limit`
+  rather than sitting under everything.
+
+  It works wherever the command is named: `view --help`, `--help view`, and
+  `view chapter.prolog.md -h` all ask the same question, as do the `run` and `exec` aliases.
+  Name no command, or one that does not exist, and the whole card comes back as before.
+
+- **The help, the per-command help and the misplaced-option message are derived from one
+  table.** They were three lists kept by hand, which is how the help came to advertise
+  `--check-update` under no command while three of the four commands refused it.
+
 ## [0.6.3] — 2026-08-30
 
 `prolog-notebook build lists.prolog.md --check-update` answered *unknown option* — on a flag the

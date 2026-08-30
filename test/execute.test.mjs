@@ -526,3 +526,41 @@ test('--check-update is answered wherever it is typed, and with nobody to ask', 
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('a command asked for help answers about itself, and nothing else', async () => {
+  // The Captain, shown all five commands for `build --help`: "not really. If I
+  // run prolog-notebook cmd --help I want only help on that cmd" (869erqra0).
+  // Printing everything makes the reader find their command again in a page they
+  // did not ask for.
+  const { stdout } = await run('node', [CLI, 'build', '--help']);
+  assert.match(stdout, /prolog-notebook build <file\.prolog\.md>/);
+  assert.match(stdout, /--out <dir>/);
+  for (const other of ['view <file', 'execute <file', 'clear <file', 'upgrade  ']) {
+    assert.doesNotMatch(stdout, new RegExp(other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  // What works anywhere stays: it is as true of this command as of any other.
+  assert.match(stdout, /Anywhere\n {2}--check-update/);
+  // And the note about a stopped search belongs to --limit, so it travels with
+  // execute and appears nowhere else.
+  assert.doesNotMatch(stdout, /never exhausted/);
+  assert.match((await run('node', [CLI, 'execute', '--help'])).stdout, /never exhausted/);
+
+  // Wherever the command is named, and whatever it is named — a help flag that
+  // only works in one position is its own small annoyance.
+  const first = (out) => out.split('\n')[0];
+  const view = first((await run('node', [CLI, 'view', '--help'])).stdout);
+  for (const argv of [['--help', 'view'], ['view', 'chapter.prolog.md', '-h']]) {
+    assert.equal(first((await run('node', [CLI, ...argv])).stdout), view);
+  }
+  // `run` and `exec` are undocumented aliases, and asking either about itself
+  // must not answer about a command that does not exist.
+  const execute = first((await run('node', [CLI, 'execute', '--help'])).stdout);
+  assert.equal(first((await run('node', [CLI, 'run', '--help'])).stdout), execute);
+  assert.equal(first((await run('node', [CLI, 'exec', '-h'])).stdout), execute);
+
+  // No command named, or one nobody has: the whole card, as before.
+  for (const argv of [['--help'], ['nonsense', '--help'], []]) {
+    assert.match((await run('node', [CLI, ...argv])).stdout,
+      /^prolog-notebook — Jupyter-style notebooks for Prolog/);
+  }
+});

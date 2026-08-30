@@ -38,57 +38,112 @@ for (const stream of [process.stdout, process.stderr]) {
 const require = createRequire(import.meta.url);
 
 /**
- * EACH OPTION UNDER THE COMMAND THAT TAKES IT (869erqra0).
+ * THE COMMANDS, AND WHAT EACH ONE TAKES — one table, three readers (869erqra0).
  *
- * They were listed in one flat `Options` block with no owner, which reads as a
- * promise that every one of them works everywhere — so `build --check-update`
- * was a reasonable thing to type and `unknown option` was a strange thing to be
- * told. Only three of them are actually the tool's rather than a command's, and
- * now only those three are listed as such.
+ * The whole help, a single command's help, and the message a misplaced option
+ * gets are all derived from here. They were three lists kept by hand, which is
+ * how the help came to advertise flags that no command accepted.
+ *
+ * Options belong to COMMANDS, not to the tool. Listing them in one flat block
+ * reads as a promise that every one works everywhere, and only three of them do.
  */
-const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
+const COMMANDS = {
+  view: {
+    usage: 'prolog-notebook view <file.prolog.md>',
+    blurb: 'read it in a browser, cells and all',
+    options: [
+      ['--port <n>', 'what it listens on (default 8777)'],
+      ['--no-open', 'print the URL instead of opening a browser'],
+    ],
+  },
+  build: {
+    usage: 'prolog-notebook build <file.prolog.md>',
+    blurb: 'write a page you can host or send',
+    options: [['--out <dir>', 'where it writes (default: <file>-site)']],
+  },
+  execute: {
+    usage: 'prolog-notebook execute <file.prolog.md>...',
+    blurb: 'run every query, write the answers in',
+    options: [
+      ['--limit <n>', `solutions to take from one query before stopping (default ${DEFAULT_LIMIT})`],
+      ['--stdout', 'print the result instead of writing the file'],
+      ['--quiet', 'report only failures'],
+    ],
+    // Belongs to --limit, so it goes wherever --limit goes and nowhere else.
+    note: 'A query that stops at the limit is written without a terminator, which is the\n'
+      + "format's way of saying the search was never exhausted. Nothing is invented.\n",
+  },
+  clear: {
+    usage: 'prolog-notebook clear <file.prolog.md>...',
+    blurb: 'take the answers back out',
+    options: [
+      ['--stdout', 'print the result instead of writing the file'],
+      ['--quiet', 'report only failures'],
+    ],
+  },
+  upgrade: {
+    usage: 'prolog-notebook upgrade',
+    blurb: 'fetch the latest version',
+    options: [],
+  },
+};
 
-  prolog-notebook view <file.prolog.md>       read it in a browser, cells and all
-    --port <n>      what it listens on (default 8777)
-    --no-open       print the URL instead of opening a browser
+/** `exec` and `run` reach `execute` and are deliberately undocumented (869erp0jd). */
+const ALIASES = { exec: 'execute', run: 'execute' };
 
-  prolog-notebook build <file.prolog.md>      write a page you can host or send
-    --out <dir>     where it writes (default: <file>-site)
+/** The command this argument names, aliases resolved, or null. */
+const commandNamed = (arg) => (COMMANDS[arg] ? arg : ALIASES[arg] ?? null);
 
-  prolog-notebook execute <file.prolog.md>... run every query, write the answers in
-    --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
-    --stdout        print the result instead of writing the file
-    --quiet         report only failures
-
-  prolog-notebook clear <file.prolog.md>...   take the answers back out
-    --stdout        print the result instead of writing the file
-    --quiet         report only failures
-
-  prolog-notebook upgrade                     fetch the latest version
-
-Anywhere
+const ANYWHERE = `Anywhere
   --check-update  ask npm whether a newer one exists, and say so either way
   --version       version, engine and copyright
   -h, --help      this
-
-A query that stops at the limit is written without a terminator, which is the
-format's way of saying the search was never exhausted. Nothing is invented.
 `;
+
+/** One command, laid out exactly as it is laid out in the full help. */
+function commandHelp(name) {
+  const { usage, blurb, options } = COMMANDS[name];
+  return [`  ${usage.padEnd(44)}${blurb}`]
+    .concat(options.map(([flag, what]) => `    ${flag.padEnd(16)}${what}`))
+    .join('\n');
+}
+
+const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
+
+${Object.keys(COMMANDS).map(commandHelp).join('\n\n')}
+
+${ANYWHERE}
+${COMMANDS.execute.note}`;
+
+/**
+ * JUST THE COMMAND ASKED ABOUT (869erqra0).
+ *
+ * The Captain, on being shown all five for `build --help`: "not really. If I run
+ * prolog-notebook cmd --help I want only help on that cmd." Printing everything
+ * makes the reader find their command again in a page they did not ask for.
+ *
+ * What works anywhere stays, because it is true of the command they asked about
+ * as much as of any other.
+ */
+function helpFor(name) {
+  const { note } = COMMANDS[name];
+  return `${commandHelp(name)}\n\n${ANYWHERE}${note ? `\n${note}` : ''}`;
+}
 
 /**
  * Which command each option belongs to, so a misplaced one can say where it lives.
  *
+ * Derived, so a flag added to a command above cannot be forgotten here.
  * `unknown option "--limit"` is true and unhelpful when the flag is real and two
- * lines further up the same help. This costs a lookup table and saves a re-read.
+ * lines further up the same help.
  */
-const BELONGS_TO = {
-  '--limit': 'execute',
-  '--stdout': 'execute and clear',
-  '--quiet': 'execute and clear',
-  '--out': 'build',
-  '--port': 'view',
-  '--no-open': 'view',
-};
+const BELONGS_TO = {};
+for (const [name, { options }] of Object.entries(COMMANDS)) {
+  for (const [flag] of options) {
+    const bare = flag.split(' ')[0];
+    BELONGS_TO[bare] = BELONGS_TO[bare] ? `${BELONGS_TO[bare]} and ${name}` : name;
+  }
+}
 
 function unknownOption(arg, command) {
   const home = BELONGS_TO[arg];
@@ -237,7 +292,11 @@ const NPM_LINE = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 async function main(argv) {
   const args = argv.slice(2);
   if (!args.length || args.includes('-h') || args.includes('--help')) {
-    process.stdout.write(USAGE);
+    // Whichever command they named, wherever they named it: `view --help`,
+    // `--help view` and `view chapter.prolog.md -h` all ask the same question.
+    // A help flag that is positional is its own small annoyance.
+    const named = args.map((arg) => commandNamed(arg)).find(Boolean);
+    process.stdout.write(named ? helpFor(named) : USAGE);
     return 0;
   }
   if (args.includes('--version') || args.includes('-V')) {

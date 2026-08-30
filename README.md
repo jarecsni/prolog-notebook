@@ -149,7 +149,7 @@ Three work anywhere, because they are about the tool rather than about a noteboo
 |---|---|
 | `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
 | `--check-update` | ask npm whether a newer one exists, and say so either way — forced, whatever the daily check thinks, and answered even down a pipe |
-| `-h`, `--help` | the same list, from the command itself |
+| `-h`, `--help` | help for the command you named, or all of them if you named none |
 
 ```sh
 prolog-notebook upgrade      # fetch the latest
