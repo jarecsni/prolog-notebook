@@ -69,9 +69,16 @@ export function fileStore(path = cachePath()) {
 /**
  * Ask the registry which version is `latest`.
  *
- * The abbreviated document rather than the full packument: the full one carries
- * every version ever published and can be megabytes, for a question with a
- * one-line answer.
+ * `/{name}/latest` rather than the packument: the packument carries every version
+ * ever published and can be megabytes, for a question with a one-line answer.
+ * This endpoint answers in about 2 kB.
+ *
+ * PLAIN JSON, AND NOT THE ABBREVIATED TYPE. `application/vnd.npm.install-v1+json`
+ * is defined for the packument, and this endpoint is entitled to refuse it — some
+ * of npm's edges serve it anyway and others answer 406, which is why the first
+ * version of this shipped a notifier that reported "could not reach the registry"
+ * to some people and worked for others. Measured both ways, from one machine,
+ * minutes apart.
  *
  * @returns {Promise<string|null>} null for anything that goes wrong
  */
@@ -87,7 +94,7 @@ export async function latestFromRegistry({
   try {
     const base = String(registry).replace(/\/+$/, '');
     const response = await fetchImpl(`${base}/${name}/latest`, {
-      headers: { accept: 'application/vnd.npm.install-v1+json' },
+      headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(timeout),
     });
     if (!response.ok) return null;

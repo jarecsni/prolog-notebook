@@ -320,6 +320,13 @@ test('a run says so when a newer version exists, on stderr', async () => {
   const asked = [];
   const server = createServer((req, res) => {
     asked.push(req.url);
+    // A stub that accepts anything cannot catch a header the real registry
+    // refuses — which is how 0.4.0 shipped asking for a media type npm answers
+    // 406 to. This one is as fussy as the registry is.
+    if (/install-v1/.test(req.headers.accept ?? '')) {
+      res.writeHead(406).end();
+      return;
+    }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ version: '99.0.0' }));
   });
