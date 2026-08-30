@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.1] — 2026-08-30
+
+### Changed
+
+- **The update notice says what you have**, not just what exists:
+
+      You have the latest version of Prolog Notebook, 0.4.1.
+      You have Prolog Notebook 0.4.0. The latest is 0.4.1.
+      Update with: npm i -g prolog-notebook
+
+  *Prolog Notebook 0.4.1 is the latest* states a fact about the world and leaves the reader to
+  work out that it is also a fact about them — which is the whole question they asked.
+
 ## [0.4.0] — 2026-08-30
 
 ### Added
