@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pageFor, fakeEngine } from './support/page.mjs';
 import { InProcessSession, ConsultLog } from '../src/session.js';
+import { banner } from '../src/version.js';
 import { WorkerSession } from '../src/browser.js';
 
 // The page's own behaviour, in a DOM that is not a browser (869enpj26).
@@ -520,4 +521,32 @@ test('an auto cell mid-sequence is left alone, and says why', async () => {
   await page.settle();
   assert.match(page.out('q-auto')[0], /^your run/, 'their sequence survived');
   assert.equal(page.status('q-auto'), 'program changed since this ran');
+});
+
+// ------------------------------------------------------------- the colophon
+
+test('the panel says what this is, in the command\'s own words', async () => {
+  // One release cannot be described two ways: the page and `prolog-notebook
+  // --version` print the same line, from src/version.js.
+  const page = chapter();
+  assert.equal(page.panel().about, banner());
+  assert.match(page.panel().about, /^Prolog Notebook v\d+\.\d+\.\d+ - Copyright \(C\) /);
+
+  // The engine's own version is not knowable until it has started — it lives
+  // inside the WebAssembly — so the line is empty rather than guessed at, and the
+  // CSS hides an empty one rather than leaving a gap.
+  assert.equal(page.panel().engineVersion, '');
+});
+
+test('the engine names itself once it is running', async () => {
+  const engine = fakeEngine({ answers: ANSWERS });
+  // The real sessions answer this by asking SWI for current_prolog_flag(version).
+  engine.query = ((inner) => (goal) => (goal.includes('current_prolog_flag')
+    ? { async next() { return { done: true, solution: {}, text: '' }; }, async all() { return { solutions: [{ V: 100113 }] }; }, async close() {} }
+    : inner(goal)))(engine.query);
+
+  const page = pageFor(CHAPTER, { engine });
+  page.press('q-son-a', 'run');
+  await page.settle();
+  assert.equal(page.panel().engineVersion, 'Powered by SWI-Prolog 10.1.13');
 });

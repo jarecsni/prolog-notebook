@@ -220,9 +220,10 @@ test('a closed pipe is the shell being used correctly, not an error', async () =
 });
 
 test('the notice in the command is the notice in the LICENSE', async () => {
-  // The year and the holder live in two files because a command should not read a
-  // file it does not need. This is what keeps them from drifting apart.
-  const cli = await readFile(new URL('../bin/prolog-notebook.mjs', import.meta.url), 'utf8');
+  // The year and the holder live in src/version.js because a PAGE cannot read
+  // LICENSE — there is no filesystem behind a module script and no build step to
+  // inline one. This is what keeps the two from drifting apart.
+  const cli = await readFile(new URL('../src/version.js', import.meta.url), 'utf8');
   const licence = await readFile(new URL('../LICENSE', import.meta.url), 'utf8');
   // The (C) is capitalised in the banner and lower case in the licence, which is
   // a house-style difference. The year and the holder are the facts, and those
@@ -232,7 +233,11 @@ test('the notice in the command is the notice in the LICENSE', async () => {
 });
 
 test('the version of the package is the version it reports', async () => {
+  // Two files to touch at release — package.json and src/version.js — and this is
+  // the thing that fails loudly when only one of them was.
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const { VERSION } = await import('../src/version.js');
+  assert.equal(VERSION, pkg.version);
   const { stdout } = await run('node', [CLI, '--version']);
   assert.match(stdout, new RegExp(`^Prolog Notebook v${pkg.version.replace(/\./g, '\\.')} `, 'm'));
 });
