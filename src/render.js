@@ -100,7 +100,7 @@ export function renderContainer(cell, ordinal = 1) {
       return `<div class="aside">\n${renderProse(joinHeadAndBody(cell))}\n</div>`;
 
     case 'predict':
-      return renderPredict(cell);
+      return renderPredict(cell, ordinal);
 
     case 'bullets':
       return `<div class="bullets">\n${cell.title ? `<h2>${renderInline(cell.title)}</h2>\n` : ''}${renderProse(cell.body)}\n</div>`;
@@ -165,6 +165,24 @@ function splitReveal(body) {
 }
 
 /**
+ * EVERY BUTTON SHIPS DISABLED, AND THE RUNTIME TURNS IT ON (869erqq1u).
+ *
+ * A page whose JavaScript never arrives is a page where none of these can work —
+ * opened from disk, where browsers refuse ES modules; behind a CSP that blocks
+ * the script; on a connection that dropped it. What that page must not do is look
+ * exactly like a working one. Consult and Run used to ship enabled, so the two
+ * controls a reader reaches for first were full colour and did nothing, and a
+ * screenshot of the failure was indistinguishable from success.
+ *
+ * mount() enables them, which makes "this button works" and "something is here to
+ * work it" the same fact rather than two that can disagree. It also closes a real
+ * race on a slow page: they were clickable before anything was wired to them.
+ *
+ * `; next`, `all` and `stop` were already disabled for the ordinary reason — there
+ * is no query open yet — and now the whole bar tells one story.
+ */
+
+/**
  * A program cell: the Prolog, and a button that loads it.
  *
  * `data-cell` carries the notebook's own id through to the DOM, and it is not
@@ -180,7 +198,7 @@ export function renderProgram(cell) {
   return `<div class="cell program" data-cell="${escapeHtml(cell.id)}">
   <div class="bar">program<span class="spacer"></span><span class="status"></span>
     <button data-act="reset" disabled>reset</button>
-    <button class="primary" data-act="consult">Consult</button></div>
+    <button class="primary" data-act="consult" disabled>Consult</button></div>
   <textarea id="src-${escapeHtml(cell.id)}" spellcheck="false">${escapeHtml(cell.source)}</textarea>
 </div>`;
 }
@@ -217,7 +235,7 @@ export function renderQuery(cell, options = {}) {
   return `<div class="cell query" data-cell="${escapeHtml(cell.id)}"${hold}${auto}${wasStale}>
   <div class="bar">query<span class="spacer"></span><span class="status"></span>
     <button data-act="reset" disabled>reset</button>
-    <button class="primary" data-act="run">Run</button>
+    <button class="primary" data-act="run" disabled>Run</button>
     <button data-act="next" disabled>; next</button>
     <button data-act="all" disabled>all</button>
     <button data-act="stop" disabled>stop</button></div>

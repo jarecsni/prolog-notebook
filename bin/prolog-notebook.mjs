@@ -416,7 +416,13 @@ async function page(command, args) {
       else copyFileSync(entry.copy, target);
     }
     process.stderr.write(`${out}: ${built.size} files\n`);
-    process.stderr.write(`Open ${join(out, 'index.html')} over HTTP, or host the directory.\n`);
+    // SAID HERE BECAUSE THIS IS WHERE IT IS ACTED ON. The obvious next move is to
+    // double-click index.html, and that is the one thing that cannot work:
+    // browsers refuse ES modules over file:// and the engine cannot be fetched
+    // there either (869erqq1u). The page says so too, but by then somebody is
+    // already looking at a chapter whose buttons do nothing.
+    process.stderr.write(`Host ${out} over HTTP — opening ${join(out, 'index.html')} from disk`
+      + ' will not run.\n');
     return 0;
   }
 

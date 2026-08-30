@@ -140,7 +140,7 @@ test('a program cell carries the classes the stylesheet targets', () => {
   const html = renderProgram(program);
   assert.match(html, /^<div class="cell program" data-cell="p-family">/);
   assert.match(html, /<div class="bar">program<span class="spacer"><\/span><span class="status"><\/span>/);
-  assert.match(html, /<button class="primary" data-act="consult">Consult<\/button>/);
+  assert.match(html, /<button class="primary" data-act="consult" disabled>Consult<\/button>/);
   // The way back from an edit. Disabled until there is an edit to undo.
   assert.match(html, /<button data-act="reset" disabled>reset<\/button>/);
   assert.match(html, /<textarea id="src-p-family" spellcheck="false">male\(albert\)\./);
@@ -360,4 +360,44 @@ test('a notebook renders kicker first, then every cell in document order', () =>
 test('a notebook with no kicker starts with its first cell', () => {
   const plain = parse('# Title\n\ntext\n');
   assert.match(renderNotebook(plain), /^<h1>Title<\/h1>/);
+});
+
+// ------------------------------------ a page with no runtime looks like one
+
+test('every prediction in a chapter gets its own id', () => {
+  // They were all `predict-1`: the ordinal is counted in renderNotebook and
+  // threaded through renderCell, and was then dropped on the last hop into
+  // renderPredict, which took its default every time (869erqq23). The old
+  // assertion checked the SHAPE of the id on a single prediction, which is true
+  // of three identical ones — so what is asserted here is uniqueness.
+  const three = parse(`---
+format: prolog-notebook/1
+---
+
+# Three questions
+
+> [!predict] First
+> a
+
+> [!predict] Second
+> b
+
+> [!predict] Third
+> c
+`);
+  const ids = [...renderNotebook(three).matchAll(/id="(predict-[^"]+)"/g)].map((m) => m[1]);
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids).size, 3, `duplicated: ${ids.join(', ')}`);
+});
+
+test('the buttons that need a runtime ship disabled', () => {
+  // A page whose JavaScript never arrived — opened from disk, blocked by a CSP,
+  // dropped by a flaky connection — must not look exactly like a working one.
+  // Run and Consult shipped enabled, so the two controls a reader reaches for
+  // first were full colour and did nothing (869erqq1u). mount() turns them on,
+  // which makes "this button works" and "something is here to work it" one fact.
+  assert.match(renderProgram({ id: 'p-1', source: 'a.' }),
+    /<button class="primary" data-act="consult" disabled>Consult<\/button>/);
+  assert.match(renderQuery({ id: 'q-1', goal: 'a', output: null }),
+    /<button class="primary" data-act="run" disabled>Run<\/button>/);
 });

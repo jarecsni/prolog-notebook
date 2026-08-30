@@ -34,3 +34,17 @@ test('every element the panel hides is inside that guard', () => {
   // without it.
   assert.doesNotMatch(CSS, /\.badge\.stateful\s*\{[^}]*display:/);
 });
+
+test('the page that cannot run says so without needing script to say it', () => {
+  // The warning explains a page whose JavaScript did not load, so nothing about
+  // showing it may depend on JavaScript (869erqq1u). mount() removes the element
+  // on a page that boots; the delay is what stops a working page flashing it.
+  assert.match(CSS, /#boot-warning\s*\{[^}]*animation:\s*boot-warning[^}]*\}/,
+    'it reveals itself with an animation, not with a timer');
+  assert.match(CSS, /#boot-warning\s*\{[^}]*position:\s*fixed/,
+    'and out of the flow, so a page that boots does not jolt when it is removed');
+  // A delay of zero would flash it on every load; a very long one would leave
+  // somebody staring at a dead button wondering.
+  const delay = /animation:\s*boot-warning\s+[\d.]+m?s\s+[a-z-]+\s+([\d.]+)s/.exec(CSS);
+  assert.ok(delay && Number(delay[1]) >= 0.5 && Number(delay[1]) <= 3, `delay was ${delay?.[1]}`);
+});
