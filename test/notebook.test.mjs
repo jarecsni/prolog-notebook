@@ -5,6 +5,8 @@ import { pageFor, fakeEngine } from './support/page.mjs';
 import { InProcessSession, ConsultLog } from '../src/session.js';
 import { colophon } from '../src/version.js';
 import { WorkerSession } from '../src/browser.js';
+import { editsOf } from '../src/notebook.js';
+import { clearedSource, exportSource } from '../src/export.js';
 
 // The page's own behaviour, in a DOM that is not a browser (869enpj26).
 //
@@ -643,4 +645,134 @@ test('the engine names itself once it is running', async () => {
   // Composed rather than spelled out: a test that restates the version is one
   // more file to remember at release, and it caught nothing that this does not.
   assert.equal(page.panel().about, `${colophon().running} · SWI-Prolog 10.1.13`);
+});
+
+// ------------------------------------- clearing the answers, and putting back
+
+test('the outputs row counts the chapter, and empties it on request', async () => {
+  const page = chapter();
+  // THE FACT THE READER DOES NOT HAVE: how much of this chapter is answers. The
+  // row above says whether they are on screen; this one says how many there are.
+  assert.equal(page.panel().outputs, '4 outputs in this chapter');
+  assert.equal(page.panel().outputsButton, 'Clear all outputs');
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  for (const id of ['q-is-son', 'q-son-a', 'q-son-b', 'q-son-b-george']) {
+    assert.deepEqual(page.out(id), [], `${id} is empty`);
+  }
+  assert.equal(page.panel().outputs, '4 outputs cleared');
+  // The verb flips only once there is nothing left to clear — the same rule the
+  // hide/show button follows one row above, so it is one vocabulary and not two.
+  assert.equal(page.panel().outputsButton, 'Restore outputs');
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.equal(page.panel().outputs, '4 outputs in this chapter');
+  assert.ok(page.out('q-is-son').includes('1.  X = edward'), 'the chapter is back');
+});
+
+test('a page emptied on screen downloads as the same bytes the CLI would write', async () => {
+  // THE PROPERTY THAT MAKES THIS ONE FEATURE RATHER THAN TWO. `clear` at the
+  // terminal and clear in the panel go through the same erasure — `output: null`
+  // — so a chapter emptied either way is the same file, and neither of them is
+  // quietly reformatting the author's markdown on the way past.
+  const page = chapter();
+  const asIs = exportSource(page.notebook, editsOf(page.cells));
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.equal(exportSource(page.notebook, editsOf(page.cells)),
+    clearedSource(page.notebook).text);
+
+  // And back, exactly: restore is the inverse of clear, down to the bytes.
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.equal(exportSource(page.notebook, editsOf(page.cells)), asIs);
+});
+
+test('clearing is an edit, so the reader is offered the version they made', async () => {
+  const page = chapter({
+    download: () => ({ filename: 'ch.prolog.md', text: 'mine' }),
+    published: () => ({ filename: 'ch.prolog.md', text: 'published' }),
+  });
+  assert.equal(page.panel().notebook, 'As published');
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  // A chapter with the answers taken out is not the chapter as published, and a
+  // download row still saying so would hand them a file full of the answers they
+  // had just removed.
+  assert.deepEqual(page.panel().choices, ['Your version', 'As published']);
+  assert.equal(page.panel().notebook, 'Your version');
+});
+
+test('one cell can be brought back out of a page-wide clear', async () => {
+  const page = chapter();
+  page.pressPage('clear-all');
+  await page.settle(1);
+  // A reset button left grey over an emptied cell would say the answers are gone
+  // for good, which is the opposite of what the control is for.
+  assert.equal(page.cell('q-is-son').querySelector('[data-act="reset"]').disabled, false);
+
+  page.press('q-is-son', 'reset');
+  await page.settle(1);
+  assert.ok(page.out('q-is-son').includes('1.  X = edward'));
+  assert.equal(page.panel().outputs, '3 outputs cleared', 'and the row heard about it');
+  assert.equal(page.panel().outputsButton, 'Clear all outputs', 'there is something to clear again');
+});
+
+test('clear takes the reader\'s own answers too, and Run brings them back', async () => {
+  // "Clear all output" that leaves some output on the page has not done what it
+  // says. Losing a run is no worse than what reset has always done to one, and
+  // the way to have it again is the button that produced it.
+  const page = chapter();
+  page.press('q-son-b', 'run');
+  await page.settle();
+  assert.match(page.out('q-son-b')[0], /^your run/);
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.deepEqual(page.out('q-son-b'), []);
+
+  page.press('q-son-b', 'run');
+  await page.settle();
+  // The chapter's answers were never destroyed, only taken off the page — so the
+  // note that says how to get them back is still the truth.
+  assert.match(page.out('q-son-b')[0], /your run .* press reset for the chapter’s saved answers/);
+});
+
+test('a cleared cell stays cleared when the program under it changes', async () => {
+  // `rerun="auto"` exists so answers do not go stale under a reader who edited
+  // the program. A cell with no answers has none that can — and refilling it
+  // would be the page overruling the reader who emptied it, behind their back,
+  // because they pressed Consult somewhere else entirely.
+  const { answers, page } = reactive();
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.deepEqual(page.out('q-auto'), []);
+
+  page.type('p-1', 'son(edward).\nson(alfred).');
+  answers['son(X)'] = ['X = edward', 'X = alfred'];
+  page.press('p-1', 'consult');
+  await page.settle();
+
+  assert.deepEqual(page.out('q-auto'), [], 'still the reader\'s empty page');
+  // With the engine RUNNING — their Consult started it — so the cell stayed
+  // empty because it decided to, not because there was nothing to run it with.
+  assert.equal(page.boots(), 1);
+});
+
+test('a held cell that is cleared does not claim to be waiting for anything', async () => {
+  // "held until you write your prediction above" over an empty box is a wait with
+  // nothing left to wait for: the answers it was holding back are gone.
+  const page = chapter();
+  assert.match(page.out('q-son-a')[0], /held until/);
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.deepEqual(page.out('q-son-a'), []);
+  assert.equal(page.hidden('q-son-a'), false, 'nothing left to hide');
+  assert.equal(page.panel().answers, 'No saved answers on screen');
+  assert.equal(page.panel().answersDisabled, true);
 });

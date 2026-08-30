@@ -198,6 +198,14 @@ const ICONS = {
   download: '<path d="M12 3.6v10.6"/><path d="m7.6 10.2 4.4 4.4 4.4-4.4"/><path d="M4.6 19.4h14.8"/>',
   hide: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/><path d="M4 4l16 16"/>',
   show: '<path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/>',
+  // An eraser rubbing something out, NOT a bin. What clear does is undone by the
+  // button beside it, and a lid-and-body icon promises a finality this control
+  // does not have.
+  erase: '<path d="m7 21-4.3-4.3a2.4 2.4 0 0 1 0-3.4l9.6-9.6a2.4 2.4 0 0 1 3.4 0l5.6 5.6a2.4 2.4 0 0 1 0 3.4L13 21"/><path d="M21.4 21H7"/><path d="m5 11 9 9"/>',
+  // The undo hook, deliberately not the engine's circular arrow two rows below:
+  // two glyphs that near-match in one small card is how a reader presses the
+  // wrong one.
+  restore: '<path d="M3.2 7.4v6.2h6.2"/><path d="M20.8 17.2a9 9 0 0 0-9-9 9 9 0 0 0-6.4 2.6L3.2 13.6"/>',
 };
 
 function icon(name) {
@@ -226,6 +234,13 @@ function mountPageBar(root, options, bus, programs, queries) {
     + `<span class="dot"></span><span class="count"></span><span class="chev">${icon('chevron')}</span></button>`
     + `<div class="panel" id="${panelId}">`
     + '<div class="unit answers"><span class="state answers-state"></span></div>'
+    // THE SAME ANSWERS, THE OTHER QUESTION. The row above is about the screen —
+    // put them out of sight, work the chapter cold, they are still the chapter's.
+    // This one is about the FILE: an output cleared here is gone from the page
+    // and from a download of it, which is why its verb is undone by restore and
+    // not by show. Two rows because they are two questions, adjacent because a
+    // reader comparing them is exactly what tells them apart.
+    + '<div class="unit outputs"><span class="state outputs-state"></span></div>'
     + '<div class="unit"><span class="state engine-state"></span>'
     + `<button data-act="restart"><span class="icon">${icon('power')}</span>`
     + '<span class="label">Start engine</span></button></div>'
@@ -346,8 +361,14 @@ function mountPageBar(root, options, bus, programs, queries) {
   let age = null;
 
   bus.on((event) => {
-    // A cell's own hide control moved something this panel is reporting on.
-    if (event.kind === 'answers') return refreshAnswers();
+    // A cell's own hide or reset control moved something this panel is reporting
+    // on — both rows, since a cell restored on its own leaves one fewer cleared
+    // and one more showing.
+    if (event.kind === 'answers') {
+      refreshAnswers();
+      refreshOutputs();
+      return;
+    }
     if (event.kind === 'booting') {
       // Lit from wherever the engine was asked for — a Run halfway up the chapter
       // starts it just as this button does, and the light should not care which.
@@ -438,6 +459,73 @@ function mountPageBar(root, options, bus, programs, queries) {
       refreshAnswers();
     });
     refreshAnswers();
+  }
+
+  /**
+   * Take the answers out of the chapter, and put them back (869erp9ap).
+   *
+   * The page's half of `prolog-notebook clear`. An author emptying a chapter has
+   * the command; a reader who wants the file without the answers — to work
+   * through it later, to hand it to somebody, to keep a copy that gives nothing
+   * away — had to edit markdown by hand, which is the same "that's tedious" that
+   * put the command in the CLI.
+   *
+   * WHAT MAKES IT SAFE TO OFFER is that it is reversible in the page's existing
+   * vocabulary. Clear is a third way AWAY from the chapter, beside running and
+   * editing, and reset is still the one way back: per cell for one of them, and
+   * restore here for all at once.
+   */
+  const outputsUnit = bar.querySelector('.unit.outputs');
+  const outputsState = bar.querySelector('.outputs-state');
+  let refreshOutputs = () => {};
+  // Nothing published to clear, and nothing a restore could give back. The row
+  // goes, exactly as the one above it does — an unrun chapter is the CLI's
+  // business, and a control whose only possible effect is on the reader's own
+  // run is a control offering to undo the thing they just asked for.
+  if (!spoilers.length) {
+    outputsUnit.remove();
+  } else {
+    const wipe = document.createElement('button');
+    wipe.dataset.act = 'clear-all';
+    wipe.innerHTML = '<span class="icon"></span><span class="label"></span>';
+    outputsUnit.appendChild(wipe);
+
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+    refreshOutputs = () => {
+      const gone = queries.filter((q) => q.isCleared());
+      const left = queries.filter((q) => q.hasOutput());
+      // Restore only once there is nothing left to clear, which is the rule the
+      // hide/show button already follows: in a half-cleared page the useful move
+      // is to finish, and one vocabulary is cheaper to learn than two.
+      const back = left.length === 0 && gone.length > 0;
+      // A cleared cell that never had saved answers has nothing of the chapter's
+      // to give back, so a page of only those leaves restore with no work.
+      const restorable = gone.filter((q) => q.hasSaved).length;
+      wipe.disabled = back ? restorable === 0 : left.length === 0;
+      // COUNTED FROM THE FILE while nothing is cleared, because that is the fact
+      // the reader does not have: how much of this chapter is answers. After
+      // that it counts what they did, which is the fact they want confirmed.
+      outputsState.textContent = gone.length === 0
+        ? `${plural(spoilers.length, 'output')} in this chapter`
+        : `${plural(gone.length, 'output')} cleared`;
+      label(wipe, back ? 'restore' : 'erase',
+        back ? 'Restore outputs' : 'Clear all outputs');
+      wipe.title = back
+        ? 'put the chapter’s own answers back into every cell you cleared'
+        : 'empty every output on this page, your own runs included — a download'
+          + ' taken then carries none of them, and restore puts the chapter’s back';
+      render();
+    };
+
+    wipe.addEventListener('click', () => {
+      const left = queries.filter((q) => q.hasOutput());
+      if (left.length) for (const q of left) q.clear();
+      else for (const q of queries) if (q.isCleared()) q.restore();
+      refreshOutputs();
+      refreshAnswers();
+    });
+    refreshOutputs();
   }
 
   restart.title = 'download SWI-Prolog and have it ready, so your first Run is not the slow one';
@@ -823,6 +911,14 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   // to the chapter.
   let mine = false;
   let hidden = false;
+  // Emptied on purpose, by the page's own control (869erp9ap). A THIRD state
+  // rather than a kind of hiding: hidden answers are still the chapter's and
+  // still go into a download, and cleared ones are gone from both. What the two
+  // have in common is only that the box looks empty.
+  //
+  // It is a way AWAY from the chapter, like a run and like an edit, so the way
+  // back is the one that has always existed — reset.
+  let cleared = false;
   // The author's own spoiler mark (format §5). It is a starting state rather than
   // a lock: the reader can always press show, because withholding the answer from
   // someone who has decided they want it is theatre, not teaching.
@@ -878,7 +974,11 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
 
   const refresh = () => {
     if (resetBtn) {
-      const changed = mine || input.value !== published.goal;
+      // Cleared counts, and it is the reason this cell can be brought back one at
+      // a time out of a page-wide clear. A reset button left grey over an emptied
+      // cell would say the answers are gone for good, which is the opposite of
+      // what this control is for.
+      const changed = mine || cleared || input.value !== published.goal;
       cell.dataset.edited = String(changed);
       resetBtn.disabled = !changed;
       resetBtn.title = changed
@@ -1088,9 +1188,13 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     // with the reader's own is fine; replacing them SILENTLY is not, so the run is
     // labelled and the way back is stated (docs/modes.md §3) — and the way back is
     // now a button on this cell rather than a page reload.
-    const hadSaved = !mine && out.querySelector('.line.from') !== null;
+    // ASKED OF THE CHAPTER, not of the screen. A cleared cell has nothing on
+    // screen to have come from the chapter, but the chapter's answers are still
+    // one press of reset away — so the note that says so is still owed.
+    const hadSaved = !mine && published.out !== '';
     out.innerHTML = '';
     mine = true;
+    cleared = false;
     // This cell has just stopped showing the chapter's answers, which changes what
     // the page's control is counting. setHidden only speaks up when the hidden
     // flag itself moves, so a cell that was already visible would leave the count
@@ -1205,6 +1309,12 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
       // that quizzes the reader and then answers itself is worse than one that
       // never asked.
       if (held) return;
+      // AND A CLEARED CELL STAYS CLEARED. Auto exists so that answers do not go
+      // stale under a reader who changed the program; a cell with no answers has
+      // none that can. Refilling it would be the page overruling the reader who
+      // emptied it, and doing so behind their back — they pressed Consult
+      // somewhere else entirely.
+      if (cleared) return;
       if (running || query) return;
       if (!outOfDate()) return;
       bus.queue(() => {
@@ -1277,18 +1387,59 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
    * disagreed in fact — the same argument that makes a program cell's reset
    * un-consult.
    */
-  resetBtn?.addEventListener('click', () => {
+  const restore = ({ goal = true } = {}) => {
     query?.close();
-    input.value = published.goal;
+    if (goal) input.value = published.goal;
     out.innerHTML = published.out;
     mine = false;
+    cleared = false;
     ran = null;
     engineChanged = false;
     decorateSaved();
     // Back in the set the page's control acts on, for the same reason.
     bus.emit({ kind: 'answers' });
     finish();
-  });
+  };
+
+  resetBtn?.addEventListener('click', () => restore());
+
+  /**
+   * Take the answers out — the chapter's included.
+   *
+   * The reader's half of `prolog-notebook clear`, and the same claim: there are
+   * no answers here. Not a stronger kind of hiding — a download taken now
+   * carries no output block for this cell, which is the whole difference and the
+   * reason it is undone by reset rather than by show.
+   *
+   * The reader's own run goes with it, because "clear all output" that leaves
+   * some output on the page has not done what it says. That is no worse than
+   * what reset has always done to a run, and Run reproduces it.
+   */
+  const clear = () => {
+    if (!mine && published.out === '') return false;
+    // An open sequence in a cell showing nothing is a frame held in the reader's
+    // name against a cell they have emptied — the same argument that makes reset
+    // close one.
+    query?.close();
+    out.innerHTML = '';
+    mine = false;
+    cleared = true;
+    ran = null;
+    engineChanged = false;
+    produced = [];
+    failed = null;
+    exhausted = false;
+    count = 0;
+    // Nothing to hide, and nothing to be held back from: the box is empty, and a
+    // cell that still said "held until you run it" would be describing a wait
+    // that no longer has anything to wait for.
+    hidden = false;
+    held = false;
+    out.classList.remove('answers-hidden');
+    bus.emit({ kind: 'answers' });
+    finish();
+    return true;
+  };
 
   input.addEventListener('input', refresh);
 
@@ -1343,11 +1494,23 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
      * control acts on what is on screen, and after a run the chapter's answers
      * are behind reset rather than in front of the reader.
      */
-    showsChapter: () => !mine && published.out !== '',
+    showsChapter: () => !mine && !cleared && published.out !== '',
     setHidden,
     isHidden: () => hidden,
-    isEdited: () => mine || input.value !== published.goal,
+    isEdited: () => mine || cleared || input.value !== published.goal,
     goal: () => input.value,
+    /** Is there an output on screen at all — the chapter's or the reader's? */
+    hasOutput: () => !cleared && (mine || published.out !== ''),
+    isCleared: () => cleared,
+    clear,
+    /**
+     * Put the chapter's answers back, and nothing else.
+     *
+     * The exact inverse of clear, which is what lets the page offer the pair as
+     * one control: an edited goal is not an answer and was not what clear took
+     * away, so restoring one must not quietly discard the other.
+     */
+    restore: () => restore({ goal: false }),
     /**
      * This cell's answers for an export, in the format's own spelling (§6).
      *
@@ -1358,6 +1521,10 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
      * has actually produced.
      */
     output: () => {
+      // `null` is the one that ERASES, and it is the same null the CLI's clear
+      // writes (src/export.js): a chapter emptied on the page and one emptied at
+      // the terminal produce the same bytes, because they take the same path.
+      if (cleared) return null;
       if (!mine) return undefined;
       // Stopping and finishing look the same from outside — both leave no open
       // query — so `exhausted` is the only thing that distinguishes them.
