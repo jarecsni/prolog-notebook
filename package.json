@@ -4,6 +4,9 @@
   "description": "Jupyter-style notebooks for Prolog. Runs in the browser, installs nothing.",
   "type": "module",
   "main": "./src/node.js",
+  "bin": {
+    "prolog-notebook": "./bin/prolog-notebook.mjs"
+  },
   "exports": {
     ".": "./src/node.js",
     "./browser": "./src/browser.js",
@@ -13,9 +16,12 @@
     "./page": "./src/page.js",
     "./render": "./src/render.js",
     "./session": "./src/session.js",
-    "./worker": "./src/worker.js"
+    "./worker": "./src/worker.js",
+    "./run": "./src/run.js",
+    "./export": "./src/export.js"
   },
   "files": [
+    "bin",
     "src",
     "README.md",
     "LICENSE",
