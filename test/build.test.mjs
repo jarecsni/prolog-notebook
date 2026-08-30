@@ -183,3 +183,17 @@ test('a machine with no opener keeps serving instead of dying', async () => {
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.ok(child, 'and the process is still here to assert it');
 });
+
+test('view and build ask about updates too, not only run', async () => {
+  // The offer went into the run path first and stayed there, so `view` — the
+  // command somebody is most likely to leave running for an afternoon — was the
+  // one that never looked. This asserts every command that does real work goes
+  // through the same door.
+  const cli = await import('node:fs').then((fs) => fs.readFileSync(
+    new URL('../bin/prolog-notebook.mjs', import.meta.url), 'utf8'));
+  const calls = [...cli.matchAll(/await upgradeFirst\(/g)];
+  assert.equal(calls.length, 2, 'once for run, once for view and build together');
+  // And before anything is served or written: the offer is worthless afterwards.
+  assert.ok(cli.indexOf('await upgradeFirst()') < cli.indexOf('const server = await serve('));
+  assert.ok(cli.indexOf('await upgradeFirst()') < cli.indexOf("if (command === 'build')"));
+});

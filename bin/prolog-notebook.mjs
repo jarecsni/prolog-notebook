@@ -140,6 +140,38 @@ function canAsk() {
   return Boolean(process.stdin.isTTY && process.stderr.isTTY);
 }
 
+/**
+ * The offer, BEFORE the command does anything — which is the only place it can
+ * change the outcome. Afterwards the files are written, the server is up, and a
+ * newer version has nothing left to do.
+ *
+ * Every command that does real work goes through here: `run`, `view` and
+ * `build`. It went in the run path first and stayed there, so `view` — the
+ * command somebody is most likely to leave running — was the one that never
+ * looked.
+ *
+ * It costs a network round trip once a day, not once a run: the rest of the day
+ * is a file read.
+ *
+ * @returns {Promise<number|null>} an exit code when the command has been handed
+ *   to a newer version, null to carry on here.
+ */
+async function upgradeFirst({ quiet = false, asked = false } = {}) {
+  if (!canAsk() || (quiet && !asked)) return null;
+  const ahead = await updateNotice({ version: VERSION, force: asked })
+    .catch(() => ({ message: null, newer: null }));
+  if (ahead.message) process.stderr.write(`${ahead.message}\n`);
+  if (!ahead.newer || !(await confirm('Update and continue on the new version?'))) return null;
+  if ((await upgrade(ahead.newer)) !== 0) {
+    process.stderr.write('Carrying on with the version you have.\n');
+    return null;
+  }
+  process.stderr.write('Continuing on the new version.\n');
+  // The path has not changed — npm replaced what is behind it — so this is the
+  // same command, running the bytes that have just arrived.
+  return relaunch(process.argv);
+}
+
 async function offerUpgrade(newer) {
   if (!canAsk()) {
     // Nobody to ask, so say what to type instead. `prolog-notebook upgrade`
@@ -219,30 +251,9 @@ async function main(argv) {
   }
   if (!options.quiet) process.stderr.write(`${RUNAWAY_WARNING}\n`);
 
-  // BEFORE THE WORK, when there is somebody to ask — because the point of asking
-  // is to run the NEW version, and that is only possible while there is still
-  // something to run. Afterwards the files are written and the answer comes too
-  // late to change them.
-  //
-  // It costs a network round trip once a day, not once a run: the rest of the day
-  // is a file read. Measured at 25-120 ms against npm, against a run that spends
-  // seconds in Prolog.
-  if (canAsk() && !options.quiet) {
-    const ahead = await updateNotice({ version: VERSION, force: asked })
-      .catch(() => ({ message: null, newer: null }));
-    if (ahead.message) process.stderr.write(`${ahead.message}\n`);
-    if (ahead.newer && await confirm('Update and continue on the new version?')) {
-      if ((await upgrade(ahead.newer)) === 0) {
-        process.stderr.write('Continuing on the new version.\n');
-        // The path has not changed — npm replaced what is behind it — so this is
-        // the same command, running the bytes that have just arrived.
-        return relaunch(process.argv);
-      }
-      process.stderr.write('Carrying on with the version you have.\n');
-    }
-    // Asked and answered: the check below has nothing left to say.
-    checked = true;
-  }
+  const jump = await upgradeFirst({ quiet: options.quiet, asked });
+  if (jump !== null) return jump;
+  checked = canAsk() && (!options.quiet || asked);
 
   // STARTED NOW, READ AT THE END. The registry is somebody else's machine on
   // somebody else's network, and none of that should stand between the reader
@@ -310,6 +321,12 @@ async function page(command, args) {
     process.stderr.write(`${command} takes exactly one notebook\n`);
     return 2;
   }
+
+  // The same offer the run path makes, and for the same reason: a server about to
+  // start, or a directory about to be written, is work that a newer version
+  // should be doing.
+  const jump = await upgradeFirst();
+  if (jump !== null) return jump;
 
   const file = files[0];
   let built;
