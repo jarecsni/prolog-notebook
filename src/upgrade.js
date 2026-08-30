@@ -67,7 +67,7 @@ export async function globalRoot(exec = run) {
 /**
  * Ask a yes/no question, defaulting to yes.
  *
- * ON STDERR, always: `run --stdout` is a notebook going down a pipe, and a
+ * ON STDERR, always: `execute --stdout` is a notebook going down a pipe, and a
  * question in the middle of it would corrupt the file it is writing.
  *
  * @returns {Promise<boolean>}

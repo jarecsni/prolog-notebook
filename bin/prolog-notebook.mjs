@@ -23,7 +23,7 @@ import { openInBrowser, serve } from '../src/serve.js';
 // commands most likely to be typed at a broken install are --help and --version.
 const engine = () => import('../src/node.js');
 
-// `prolog-notebook run --stdout file | head` closes the pipe while we are still
+// `prolog-notebook execute --stdout file | head` closes the pipe while we are still
 // writing to it. That is the reader using the shell correctly, not an error, and
 // a command that answers it with an unhandled EPIPE and a stack trace is
 // complaining about being used properly.
@@ -39,10 +39,10 @@ const require = createRequire(import.meta.url);
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
-  prolog-notebook view <file.prolog.md>    read it in a browser, cells and all
-  prolog-notebook build <file.prolog.md>   write a page you can host or send
-  prolog-notebook run <file.prolog.md>...   run every cell, write the answers back
-  prolog-notebook upgrade                  fetch the latest version
+  prolog-notebook view <file.prolog.md>       read it in a browser, cells and all
+  prolog-notebook build <file.prolog.md>      write a page you can host or send
+  prolog-notebook execute <file.prolog.md>... run every query, write the answers in
+  prolog-notebook upgrade                     fetch the latest version
 
 Options
   --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
@@ -146,7 +146,7 @@ function canAsk() {
  * newer version has nothing left to do.
  *
  * Every command that does real work goes through here: `run`, `view` and
- * `build`. It went in the run path first and stayed there, so `view` — the
+ * `build`. It went in the execute path first and stayed there, so `view` — the
  * command somebody is most likely to leave running — was the one that never
  * looked.
  *
@@ -218,7 +218,11 @@ async function main(argv) {
     if (message) process.stderr.write(`${message}\n`);
     return newer ? upgrade(newer) : 0;
   }
-  if (command !== 'run') {
+  // `execute` and `exec` are aliases and stay undocumented: one name is the name.
+  // `run` because it is published in every release since 0.3.0 and breaking it
+  // silently would be rude; `exec` because seven characters is a lot to type in
+  // a loop (869erp0jd).
+  if (!['execute', 'exec', 'run'].includes(command)) {
     process.stderr.write(`unknown command "${command}"\n\n${USAGE}`);
     return 2;
   }
@@ -246,7 +250,7 @@ async function main(argv) {
   }
 
   if (!files.length) {
-    process.stderr.write('run needs at least one file\n');
+    process.stderr.write('execute needs at least one file\n');
     return 2;
   }
   if (!options.quiet) process.stderr.write(`${RUNAWAY_WARNING}\n`);
@@ -282,7 +286,7 @@ async function main(argv) {
     status = Math.max(status, await runFile(file, session, options));
   }
 
-  // stderr, always: `run --stdout` is a notebook going down a pipe, and a version
+  // stderr, always: `execute --stdout` is a notebook going down a pipe, and a version
   // notice in the middle of it would corrupt the file it is printing.
   const { message, newer } = await update;
   if (message) process.stderr.write(`${message}\n`);
@@ -322,7 +326,7 @@ async function page(command, args) {
     return 2;
   }
 
-  // The same offer the run path makes, and for the same reason: a server about to
+  // The same offer the execute path makes, and for the same reason: a server about to
   // start, or a directory about to be written, is work that a newer version
   // should be doing.
   const jump = await upgradeFirst();

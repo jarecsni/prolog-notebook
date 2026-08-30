@@ -185,7 +185,7 @@ test('a machine with no opener keeps serving instead of dying', async () => {
 });
 
 test('view and build ask about updates too, not only run', async () => {
-  // The offer went into the run path first and stayed there, so `view` — the
+  // The offer went into the execute path first and stayed there, so `view` — the
   // command somebody is most likely to leave running for an afternoon — was the
   // one that never looked. This asserts every command that does real work goes
   // through the same door.

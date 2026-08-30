@@ -67,7 +67,7 @@ test('the question defaults to yes, and anything starting with n is no', async (
 });
 
 test('the question is asked on stderr, where it cannot corrupt a notebook', async () => {
-  // `run --stdout` writes a notebook to stdout. A prompt in the middle of it
+  // `execute --stdout` writes a notebook to stdout. A prompt in the middle of it
   // would be part of the file.
   const input = new PassThrough();
   const output = new PassThrough();
