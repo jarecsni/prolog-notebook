@@ -478,11 +478,18 @@ function mountPageBar(root, options, bus, programs, queries) {
   const outputsUnit = bar.querySelector('.unit.outputs');
   const outputsState = bar.querySelector('.outputs-state');
   let refreshOutputs = () => {};
-  // Nothing published to clear, and nothing a restore could give back. The row
-  // goes, exactly as the one above it does — an unrun chapter is the CLI's
-  // business, and a control whose only possible effect is on the reader's own
-  // run is a control offering to undo the thing they just asked for.
-  if (!spoilers.length) {
+  // ANY QUERY CELL AT ALL, not just a chapter that shipped answers.
+  //
+  // This used to go when the FILE had none, on the argument that an unrun
+  // chapter is the CLI's business. That argument was wrong the moment a reader
+  // pressed Run: a chapter published without answers — which is most of them
+  // while an author is still writing — gave them no way to clear the answers
+  // they had just produced, and a panel with the row missing reads as a control
+  // that has broken rather than one that had nothing to do (869erqw08).
+  //
+  // The row above stays keyed to the FILE, and correctly: hiding is for the
+  // chapter's saved answers, and a reader's own run is not a spoiler.
+  if (!queries.length) {
     outputsUnit.remove();
   } else {
     const wipe = document.createElement('button');
@@ -503,12 +510,14 @@ function mountPageBar(root, options, bus, programs, queries) {
       // to give back, so a page of only those leaves restore with no work.
       const restorable = gone.filter((q) => q.hasSaved).length;
       wipe.disabled = back ? restorable === 0 : left.length === 0;
-      // COUNTED FROM THE FILE while nothing is cleared, because that is the fact
-      // the reader does not have: how much of this chapter is answers. After
-      // that it counts what they did, which is the fact they want confirmed.
-      outputsState.textContent = gone.length === 0
-        ? `${plural(spoilers.length, 'output')} in this chapter`
-        : `${plural(gone.length, 'output')} cleared`;
+      // COUNTED FROM THE PAGE, which is the only count that stays true for both
+      // kinds of chapter: one published with its answers in it, and one still
+      // being written where every output on screen is the reader's own.
+      outputsState.textContent = gone.length > 0
+        ? `${plural(gone.length, 'output')} cleared`
+        : left.length > 0
+          ? `${plural(left.length, 'output')} on this page`
+          : 'No outputs yet';
       label(wipe, back ? 'restore' : 'erase',
         back ? 'Restore outputs' : 'Clear all outputs');
       wipe.title = back
@@ -667,12 +676,22 @@ async function boot(options, bus, status) {
   bus.booted = true;
   if (!wasBooted) {
     bus.emit({ kind: 'started', at: clock() });
-    // Asked for, not waited for. The light going green is the answer to "did it
-    // start", and holding that back for a round trip about a version number
-    // would be the page reporting the less interesting fact first.
-    prologVersion(session)
-      .then((version) => version && bus.emit({ kind: 'engine-version', version }))
-      .catch(() => {});
+    // AWAITED, AND THAT IS A CORRECTNESS MATTER RATHER THAN A PREFERENCE.
+    //
+    // This was fired and forgotten, on the argument that the light going green
+    // answers "did it start" and a version number should not hold it back. But
+    // asking for the version IS A QUERY, and one engine allows ONE OPEN QUERY
+    // (869epzqpc). Firing it alongside the reader's own Run put two opens into
+    // the worker's queue, and whichever arrived second nested inside the first —
+    // so the cell that started the engine got `Attempt to access not innermost
+    // query` while the panel cheerfully displayed the version that had won the
+    // race (869erqvzu).
+    //
+    // The light still goes green first: the event above is emitted before this
+    // waits. What it now costs is one flag lookup on the first boot only, and
+    // what it buys is that no cell query can ever be in flight beside it.
+    const version = await prologVersion(session).catch(() => null);
+    if (version) bus.emit({ kind: 'engine-version', version });
   }
   return session;
 }
@@ -1227,6 +1246,20 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
       : whose, 'from');
     write(`?- ${goal}.`, 'echo');
     setRunning(true);
+    // THE ENGINE IS CLAIMED HERE, BEFORE THE CONSULTS — not after the query is
+    // opened, which is where this used to be (869erqvzu).
+    //
+    // Loading the cells above emits `consulted`, and that is exactly what an
+    // auto cell waits for. Its re-run is queued and runs on the next turn, while
+    // this run is still somewhere inside its awaits — so it looked at a page
+    // where nobody was stepping, saw a free engine, and opened its own query
+    // underneath the one this cell was about to open. The reader, who had
+    // pressed Run on one cell and touched nothing else, got `Attempt to access
+    // not innermost query`.
+    //
+    // A cell is using the engine from the moment it starts, not from the moment
+    // it succeeds. finish() lets go, on every path out of here.
+    bus.stepping.add(cell);
     try {
       if (!bus.booted) write('starting SWI-Prolog (5.9 MB, first time only)…', 'done');
       session = await boot(options, bus);
@@ -1243,7 +1276,6 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
         return;
       }
       query = session.query(goal);
-      bus.stepping.add(cell);
       // A sequence ends when another one starts — one engine, one open query
       // (869epzqpc). The reader hears it here, in the cell it happened to, with
       // the solutions they did take still under it and Run still lit. Silence was

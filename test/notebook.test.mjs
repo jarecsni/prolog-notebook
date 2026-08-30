@@ -653,7 +653,7 @@ test('the outputs row counts the chapter, and empties it on request', async () =
   const page = chapter();
   // THE FACT THE READER DOES NOT HAVE: how much of this chapter is answers. The
   // row above says whether they are on screen; this one says how many there are.
-  assert.equal(page.panel().outputs, '4 outputs in this chapter');
+  assert.equal(page.panel().outputs, '4 outputs on this page');
   assert.equal(page.panel().outputsButton, 'Clear all outputs');
 
   page.pressPage('clear-all');
@@ -668,7 +668,7 @@ test('the outputs row counts the chapter, and empties it on request', async () =
 
   page.pressPage('clear-all');
   await page.settle(1);
-  assert.equal(page.panel().outputs, '4 outputs in this chapter');
+  assert.equal(page.panel().outputs, '4 outputs on this page');
   assert.ok(page.out('q-is-son').includes('1.  X = edward'), 'the chapter is back');
 });
 
@@ -792,4 +792,69 @@ test('mounting is what makes Run and Consult live', async () => {
   const { renderQuery } = await import('../src/render.js');
   const cold = new JSDOM(`<body>${renderQuery({ id: 'q', goal: 'a', output: null })}</body>`);
   assert.equal(cold.window.document.querySelector('[data-act="run"]').disabled, true);
+});
+
+test('a chapter with no saved answers can still clear the ones you made', async () => {
+  // THE REPORT. A chapter published without answers — which is most of them
+  // while an author is still writing — had the outputs row removed entirely, so
+  // a reader who ran cells had no way to clear what they had produced, and a
+  // panel with the row missing reads as a control that has broken (869erqw08).
+  const { page } = reactive(REACTIVE.replace(/```text output[\s\S]*?```\n\n/g, ''));
+  assert.equal(page.panel().outputs, 'No outputs yet');
+  assert.equal(page.panel().outputsDisabled, true, 'and it says so rather than pretending');
+  // The row above stays keyed to the FILE, and correctly: hiding is for the
+  // chapter's saved answers, and a reader's own run is not a spoiler.
+  assert.equal(page.panel().answers, null, 'nothing of the chapter\'s to put away');
+
+  page.press('q-auto', 'run');
+  await page.settle();
+  assert.equal(page.panel().outputs, '1 output on this page');
+  assert.equal(page.panel().outputsDisabled, false);
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.deepEqual(page.out('q-auto'), []);
+  assert.equal(page.panel().outputs, '1 output cleared');
+  // Nothing of the chapter's to restore — it never had any — so the button says
+  // so by going quiet rather than by offering to put back nothing.
+  assert.equal(page.panel().outputsButton, 'Restore outputs');
+  assert.equal(page.panel().outputsDisabled, true);
+});
+
+test('the version probe cannot race the run that started the engine', async () => {
+  // THE REGRESSION, reported from a real chapter: pressing Run on a fresh page
+  // answered `Attempt to access not innermost query` while the panel displayed
+  // the version perfectly well (869erqvzu). Asking for the version IS A QUERY,
+  // and one engine allows one open query — so firing it beside the reader's own
+  // Run put two opens into the worker's queue, and whichever arrived second
+  // nested inside the first.
+  //
+  // Held open here on purpose: the probe cannot finish until this test lets it,
+  // and the reader's query must not have been opened before then.
+  const page = chapter();
+  const opened = [];
+  let release;
+  const probe = new Promise((resolve) => { release = resolve; });
+  const real = page.engine.query.bind(page.engine);
+  page.engine.query = (goal) => {
+    if (/current_prolog_flag/.test(goal)) {
+      return {
+        async all() { await probe; return { solutions: [], truncated: false }; },
+        async next() { await probe; return { done: true }; },
+        async close() {},
+      };
+    }
+    opened.push(goal);
+    return real(goal);
+  };
+
+  page.press('q-son-b', 'run');
+  await page.settle();
+  assert.deepEqual(opened, [], 'the run has not opened a query beside the probe');
+
+  release();
+  await page.settle();
+  assert.deepEqual(opened, ['son_b(X)'], 'and goes ahead once the engine is free');
+  assert.match(page.out('q-son-b')[0], /^your run/);
+  assert.doesNotMatch(page.out('q-son-b').join('\n'), /innermost/);
 });
