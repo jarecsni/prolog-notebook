@@ -328,7 +328,8 @@ test('a run says so when a newer version exists, on stderr', async () => {
 
   try {
     const file = await temp('lists.prolog.md', NOTEBOOK);
-    const { stdout, stderr } = await run('node', [CLI, 'run', '--stdout', '--quiet', file], {
+    // No --quiet here: that suppresses the check entirely, which is its own test.
+    const { stdout, stderr } = await run('node', [CLI, 'run', '--stdout', file], {
       env: {
         PROLOG_NOTEBOOK_REGISTRY: registry,
         NO_UPDATE_NOTIFIER: '',
@@ -341,6 +342,32 @@ test('a run says so when a newer version exists, on stderr', async () => {
     assert.match(stderr, /npm i -g prolog-notebook/);
     assert.doesNotMatch(stdout, /newer Prolog Notebook/, 'the notebook is not to be corrupted');
     assert.match(stdout, /```text output for=/, 'and it is still a notebook');
+
+    // --quiet means "report only failures", and news about a newer version is not
+    // one. The request is not even made: starting it to discard the answer would
+    // be a command going to the network for nothing.
+    const before = asked.length;
+    const quiet = await run('node', [CLI, 'run', '--stdout', '--quiet', file], {
+      env: {
+        PROLOG_NOTEBOOK_REGISTRY: registry,
+        NO_UPDATE_NOTIFIER: '',
+        CI: '',
+        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+      },
+    });
+    assert.equal(asked.length, before, 'the registry was not asked');
+    assert.doesNotMatch(quiet.stderr, /newer Prolog Notebook/);
+
+    // Unless it was asked for outright, which --quiet does not override.
+    const forced = await run('node', [CLI, 'run', '--stdout', '--quiet', '--check-update', file], {
+      env: {
+        PROLOG_NOTEBOOK_REGISTRY: registry,
+        NO_UPDATE_NOTIFIER: '',
+        CI: '',
+        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+      },
+    });
+    assert.match(forced.stderr, /newer Prolog Notebook is available/);
   } finally {
     server.close();
   }

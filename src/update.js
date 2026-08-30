@@ -13,8 +13,12 @@
 // - It never runs in CI, and honours NO_UPDATE_NOTIFIER. `--check` will run this
 //   command on every push one day; a build that fails because a registry was slow
 //   is worse than no notice at all.
-// - Everything that can go wrong is silent: no network, no cache directory, a
-//   registry that answers with nonsense. None of it is the reader's problem.
+// - A registry it cannot reach is said ONCE A DAY, not on every command. Silence
+//   there would be indistinguishable from "you are up to date", which is the one
+//   thing a broken check must not look like — but a proxy that blocks npm should
+//   not put a line of red in front of somebody on every run either.
+// - Everything else that can go wrong is silent: no cache directory, a registry
+//   that answers with nonsense. None of it is the reader's problem.
 //
 // The clock, the cache and "what is the latest version" are all arguments, so
 // everything above is tested without touching the wire; the fetch itself is the
@@ -139,9 +143,13 @@ export async function updateNotice({
   const remembered = store.read();
   const fresh = !force && remembered && now - remembered.checked < ttl;
   const newest = fresh ? remembered.latest : await latest();
-  if (!fresh && newest) store.write({ checked: now, latest: newest });
+  // A failed attempt is remembered too, so an offline machine asks once a day and
+  // says so once a day, rather than asking — and complaining — on every command.
+  if (!fresh) store.write({ checked: now, latest: newest ?? null });
 
-  if (!newest) return force ? 'Could not reach the npm registry.' : null;
+  if (!newest) {
+    return fresh && !force ? null : 'Could not reach the npm registry to check for updates.';
+  }
   if (isNewer(newest, version)) {
     return `A newer Prolog Notebook is available: ${version} → ${newest}\n`
       + 'Update with: npm i -g prolog-notebook';

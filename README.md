@@ -99,9 +99,11 @@ forgery. And if a program cell fails to load, nothing is written at all: every a
 was produced against a chapter that does not exist.
 
 When it does real work it asks npm, at most once a day, whether there is a newer version, and
-says nothing unless there is. Never for `--help` or `--version`, never when `CI` or
-`NO_UPDATE_NOTIFIER` is set, never blocking the run, and silent about its own failures. Ask it
-outright with `--check-update` and it answers either way.
+says nothing unless there is. Never for `--help` or `--version`, never under `--quiet`, never
+when `CI` or `NO_UPDATE_NOTIFIER` is set, and never blocking the run. A registry it cannot
+reach is reported once a day rather than on every command — silence there would be
+indistinguishable from *you are up to date*. Ask outright with `--check-update` and it answers
+either way.
 
 It has no defence against a non-terminating goal yet — the engine runs in this process, so
 `loop :- loop.` hangs the command. Say the word `--limit` all you like; a runaway *consult* is

@@ -83,26 +83,50 @@ test('never in CI, and never when told not to', async () => {
   );
 });
 
-test('everything that can go wrong goes wrong quietly', async () => {
-  // No network, a registry answering nonsense, a cache it cannot write: none of
-  // it is the reader's problem, and none of it stops the command.
-  assert.equal(await updateNotice({
-    version: '0.3.1', store: memory(), latest: async () => null, env: {},
-  }), null);
-
-  const unwritable = { read: () => null, write: () => { throw new Error('read-only'); } };
-  await assert.rejects(async () => unwritable.write({}), /read-only/, 'the store really does throw');
+test('everything else that can go wrong goes wrong quietly', async () => {
+  // A registry answering nonsense, and a cache that cannot be written: neither is
+  // the reader's problem, and neither stops the command. (Not reaching the
+  // registry at all IS said — once a day — see the test below.)
   assert.equal(await updateNotice({
     version: '0.3.1',
-    store: { read: () => null, write: () => {} },
+    store: memory(),
     latest: async () => 'not-a-version',
     env: {},
   }), null);
 
+  // A read-only home means the check happens every time instead of once a day.
+  // That is a slower notifier, not a failure, and nothing may escape from it.
+  const unwritable = { read: () => null, write: () => { throw new Error('read-only'); } };
+  assert.throws(() => unwritable.write({}), /read-only/, 'the store really does throw');
+
   // Asked explicitly, silence would look like a bug, so this one says what happened.
   assert.equal(await updateNotice({
     version: '0.3.1', force: true, store: memory(), latest: async () => null, env: {},
-  }), 'Could not reach the npm registry.');
+  }), 'Could not reach the npm registry to check for updates.');
+});
+
+test('a registry it cannot reach is said once a day, not on every command', async () => {
+  // Silence here would be indistinguishable from "you are up to date", which is
+  // the one thing a broken check must not look like. But a blocked proxy must not
+  // put a line in front of somebody on every single run either — so the failed
+  // attempt is remembered exactly like a successful one.
+  const store = memory();
+  let asked = 0;
+  const offline = async () => { asked++; return null; };
+  const now = 5_000_000;
+
+  assert.match(await updateNotice({ version: '0.3.1', store, latest: offline, now, env: {} }),
+    /Could not reach the npm registry/);
+  assert.deepEqual(store.state, { checked: now, latest: null });
+
+  assert.equal(
+    await updateNotice({ version: '0.3.1', store, latest: never, now: now + 1000, env: {} }),
+    null,
+    'said once; not again for the rest of the day',
+  );
+
+  await updateNotice({ version: '0.3.1', store, latest: offline, now: now + DAY, env: {} });
+  assert.equal(asked, 2, 'and tried again when the day turned over');
 });
 
 test('a prerelease is not an upgrade', () => {

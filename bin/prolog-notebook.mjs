@@ -149,7 +149,13 @@ async function main(argv) {
   // somebody else's network, and none of that should stand between the reader
   // and their answers — so the question is asked while the work happens and the
   // answer is collected once it is done.
-  const update = updateNotice({ version: VERSION, force: asked }).catch(() => null);
+  //
+  // Not asked at all under --quiet, unless it was asked for outright: --quiet
+  // means "report only failures", and news about a newer version is not one. Not
+  // starting the request is better than starting it and discarding the answer.
+  const update = options.quiet && !asked
+    ? Promise.resolve(null)
+    : updateNotice({ version: VERSION, force: asked }).catch(() => null);
 
   // One engine for the whole invocation, restarted between files. A notebook is
   // a world of its own — one cell is one virtual file, and two chapters may
