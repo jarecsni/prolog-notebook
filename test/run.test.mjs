@@ -10,6 +10,7 @@ import { parse, serialise } from '../src/format.js';
 import { renderNotebook } from '../src/render.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook } from '../src/run.js';
+import { buildLine, currentBuild, bakedFrom } from '../src/build-info.js';
 import { createSession } from '../src/node.js';
 
 // The headless runner (869ectt38) and the write-back (869ectt3e), which are one
@@ -204,8 +205,9 @@ test('--version says which Prolog will produce your answers', async () => {
 
   assert.match(lines[0], /^Prolog Notebook v\d+\.\d+\.\d+ - Copyright \(C\) \d{4} .+, MIT License\.$/);
   assert.match(lines[1], /^Powered by SWI-Prolog \d+\.\d+\.\d+, swipl-wasm \d+\.\d+\.\d+$/);
+  assert.match(lines[2], /^(Build|Working copy) [0-9a-f]{7,}/);
   // A banner that runs into the next shell prompt reads as an error message.
-  assert.deepEqual(lines.slice(2), ['', '']);
+  assert.deepEqual(lines.slice(3), ['', '']);
 
   const short = await run('node', [CLI, '-V']);
   assert.equal(short.stdout, stdout);
@@ -233,4 +235,50 @@ test('the version of the package is the version it reports', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const { stdout } = await run('node', [CLI, '--version']);
   assert.match(stdout, new RegExp(`^Prolog Notebook v${pkg.version.replace(/\./g, '\\.')} `, 'm'));
+});
+
+// -------------------------------------------------------- which copy is this
+
+test('a published build and a working copy make different claims', () => {
+  // They are not the same program, and the difference is the whole reason this
+  // line exists: a bug report against a linked checkout with uncommitted edits
+  // means something else entirely from one against a published build.
+  assert.equal(
+    buildLine({ commit: 'ccf8e5b', committed: '2026-08-30', packaged: '2026-08-30' }),
+    'Build ccf8e5b, committed 2026-08-30, packaged 2026-08-30'
+  );
+  assert.equal(
+    buildLine({ commit: 'ccf8e5b', committed: '2026-08-30' }),
+    'Working copy ccf8e5b, committed 2026-08-30'
+  );
+  // A bare SHA over a dirty tree names a program nobody has.
+  assert.equal(
+    buildLine({ commit: 'ccf8e5b', committed: '2026-08-30', modified: true }),
+    'Working copy ccf8e5b (modified), committed 2026-08-30'
+  );
+  // Nothing known: no line at all. One that says "unknown" three times is worse.
+  assert.equal(buildLine(null), null);
+  assert.equal(buildLine({}), null);
+
+  assert.match(bakedFrom({ commit: 'a', committed: 'b' }, new Date('2026-08-30T14:00:00Z')).packaged,
+    /^2026-08-30$/);
+});
+
+test('run from this repo, the banner says working copy', async () => {
+  const { stdout } = await run('node', [CLI, '--version']);
+  const line = stdout.split('\n')[2];
+  assert.match(line, /^Working copy [0-9a-f]{7,}(?: \(modified\))?, committed \d{4}-\d\d-\d\d$/);
+  assert.deepEqual(Object.keys(currentBuild()).sort(), ['commit', 'committed', 'modified']);
+});
+
+test('the release stamps the commit in, and does it before publishing', async () => {
+  // The provenance line is only in a published package because a workflow step
+  // puts it there — npm decides the tarball's contents BEFORE it would run a
+  // prepack hook, so there is no hook that can do this. Deleting the step would
+  // silently ship builds that cannot say which commit they are.
+  const workflow = await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+  const stamp = workflow.indexOf('scripts/build-info.mjs');
+  const publish = workflow.indexOf('run: npm publish');
+  assert.ok(stamp > 0, 'the release must stamp the commit into the package');
+  assert.ok(stamp < publish, 'and must do it before publishing');
 });

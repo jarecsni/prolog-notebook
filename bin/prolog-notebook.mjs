@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
+import { buildLine, currentBuild } from '../src/build-info.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 
@@ -93,6 +94,9 @@ async function version() {
     // find out why nothing works needs the reason, not a formula.
     lines.push(`SWI-Prolog could not be started: ${e.message}`);
   }
+  // Omitted rather than guessed at when there is neither a baked file nor a git
+  // repository — a line that says "unknown" three times is worse than no line.
+  lines.push(buildLine(currentBuild()));
   // The blank line is deliberate: this is a banner, and a banner that runs into
   // the next shell prompt reads as an error message.
   return `${lines.join('\n')}\n\n`;
