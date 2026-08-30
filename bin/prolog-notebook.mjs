@@ -335,11 +335,15 @@ async function page(command, args) {
   }
 
   const server = await serve(built, { port: options.port });
-  process.stderr.write(`${basename(file)} at ${server.url}\n`);
+  // THE URL IS THIS COMMAND'S OUTPUT. `view` writes no notebook and no data to
+  // stdout, so there is nothing for it to corrupt — and a URL on stderr is a URL
+  // a wrapper does not see, which is how somebody came to type localhost by hand
+  // and land on another server entirely (869ernmvh).
+  process.stdout.write(`${server.url}\n`);
   if (server.port !== options.port) {
-    process.stderr.write(`(${options.port} was taken)\n`);
+    process.stderr.write(`${options.port} was already answering — using ${server.port} instead.\n`);
   }
-  process.stderr.write('Ctrl-C to stop.\n');
+  process.stderr.write(`${basename(file)} is at ${server.url} — Ctrl-C to stop.\n`);
   if (options.open) openInBrowser(server.url);
   // Deliberately never resolves: the server is the command.
   return new Promise(() => {});

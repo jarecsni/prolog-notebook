@@ -23,6 +23,20 @@ export const RUNTIME = [
   'clauses.js', 'export.js', 'format.js', 'version.js',
 ];
 
+/**
+ * The notebook's own prompt, `?-`, as a tab icon.
+ *
+ * A data: URI rather than a file, because the alternative is a favicon.ico 404 on
+ * every single load and this audience opens the console (869ernmxe). An SVG so it
+ * scales to whatever size the tab wants.
+ */
+const FAVICON = encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+  + '<rect width="32" height="32" rx="7" fill="#faf7f0"/>'
+  + '<text x="16" y="23" font-family="ui-monospace,Menlo,monospace" font-size="19"'
+  + ' font-weight="600" fill="#8a3b1e" text-anchor="middle">?-</text></svg>',
+);
+
 /** The one engine file: the bundle carries its own data. */
 export const ENGINE = 'swipl-bundle.js';
 
@@ -80,6 +94,7 @@ function page(notebook) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(titleOf(notebook))}</title>
+<link rel="icon" href="data:image/svg+xml,${FAVICON}">
 <link rel="stylesheet" href="notebook.css">
 </head>
 <body>

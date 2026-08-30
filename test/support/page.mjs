@@ -188,6 +188,13 @@ export function pageFor(source, { engine = fakeEngine(), download, published } =
       field.dispatchEvent(new window.Event('input', { bubbles: true }));
     },
 
+    /** Type into the prediction box without leaving it. */
+    type_predict: (text) => {
+      const box = find('.predict textarea');
+      box.value = text;
+      box.dispatchEvent(new window.Event('input', { bubbles: true }));
+    },
+
     /** Write a prediction and leave the box, which is what releases a hold. */
     predict: (text) => {
       const box = find('.predict textarea');

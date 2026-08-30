@@ -11,6 +11,7 @@
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -35,6 +36,15 @@ export function contentType(name) {
  * @returns {Promise<{url: string, port: number, close: () => Promise<void>}>}
  */
 export async function serve(files, { port = 8777, host = '127.0.0.1' } = {}) {
+  // ASK WHETHER ANYBODY IS THERE, on both stacks, before binding to one of them.
+  //
+  // An IPv6 wildcard listener — `python3 -m http.server --bind ::` — does not
+  // collide with an IPv4 loopback bind, so EADDRINUSE never fires and the bind
+  // succeeds. `localhost` then resolves to ::1 first, and the reader gets the
+  // other server's directory listing while this one sits unreachable on
+  // 127.0.0.1 with nothing anywhere saying why (869ernmvh). Found by somebody
+  // authoring their first chapter, which is exactly where it would be found.
+  if (port !== 0 && await occupied(port)) port = 0;
   const server = createServer((request, response) => {
     // Only GET, and only the names this process generated: the path never
     // reaches the filesystem, so there is nothing for a `..` to escape into.
@@ -104,4 +114,28 @@ export function openInBrowser(url, { spawnImpl = spawn, platform = process.platf
   child.on('error', () => {});
   child.unref?.();
   return child;
+}
+
+/**
+ * Is something already answering on this port, on either stack?
+ *
+ * A connect, not a bind: the question is "will the reader reach somebody else
+ * here", and a bind can succeed while the answer is yes.
+ */
+export async function occupied(port, { hosts = ['127.0.0.1', '::1'], timeout = 300 } = {}) {
+  const answers = await Promise.all(hosts.map((host) => reachable(host, port, timeout)));
+  return answers.some(Boolean);
+}
+
+function reachable(host, port, timeout) {
+  return new Promise((resolve) => {
+    const socket = connect({ host, port, timeout });
+    const done = (answer) => {
+      socket.destroy();
+      resolve(answer);
+    };
+    socket.once('connect', () => done(true));
+    socket.once('error', () => done(false));
+    socket.once('timeout', () => done(false));
+  });
 }

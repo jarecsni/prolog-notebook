@@ -25,6 +25,14 @@ let serial = 0;
 let panels = 0;
 
 /** Absolute, never relative: "3 minutes ago" is wrong the moment it is written. */
+/**
+ * How long a reader may stop typing before a prediction counts as written.
+ *
+ * Long enough that a first keystroke does not reveal the answers, short enough
+ * that somebody who has finished sees the consequence of finishing.
+ */
+const PREDICTION_PAUSE = 1200;
+
 function clock(date = new Date()) {
   return date.toLocaleTimeString(undefined, { hour12: false });
 }
@@ -1294,11 +1302,31 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
 
   if (held) {
     hidden = true;
-    // `change` rather than `input`: it fires when they leave the box, so the
-    // answers do not appear under a reader who is still mid-sentence. An empty
-    // box is not a prediction, so it does not end the wait.
-    prediction?.addEventListener('change', () => {
+    /**
+     * AS THEY WRITE, not when they leave the box.
+     *
+     * This listened on `change` alone, which fires on blur — so a reader who
+     * typed their prediction and looked up saw nothing happen, and the link
+     * between "I wrote something" and "the answers appeared" was broken by a
+     * pause with no cause (869ernmzh). The original reasoning was about the
+     * FIRST KEYSTROKE and it over-corrected: they have committed as soon as they
+     * have written something.
+     *
+     * Debounced, so one character does not reveal the chapter and a reader who is
+     * still typing is not interrupted. `change` stays as well, so leaving the box
+     * is immediate. An empty box is still not a prediction.
+     */
+    const release = () => {
       if (held && prediction.value.trim() !== '') setHidden(false);
+    };
+    let pause = null;
+    prediction?.addEventListener('input', () => {
+      clearTimeout(pause);
+      pause = setTimeout(release, PREDICTION_PAUSE);
+    });
+    prediction?.addEventListener('change', () => {
+      clearTimeout(pause);
+      release();
     });
   }
 
