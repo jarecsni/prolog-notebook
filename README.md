@@ -109,9 +109,24 @@ reach is reported once a day rather than on every command — silence there woul
 indistinguishable from *you are up to date*. Ask outright with `--check-update` and it answers
 either way.
 
-When it finds something newer **and you are at a terminal**, it offers to fetch it, so the
-answer is a keystroke rather than an npm incantation. Down a pipe or in a script it prints
-`Update with: prolog-notebook upgrade` instead — a question nobody can answer is a hang.
+When it finds something newer **and you are at a terminal**, it offers to fetch it *before*
+doing the work — and if you say yes it upgrades, then runs your command on the new version.
+One command, no re-run:
+
+```
+$ prolog-notebook run ch04.prolog.md
+You have Prolog Notebook 0.4.0. The latest is 0.4.2.
+Update and continue on the new version? [Y/n] y
+Updating with npm i -g prolog-notebook@0.4.2
+You now have Prolog Notebook 0.4.2.
+Continuing on the new version.
+  ✓ p-family
+  ✓ q-is-son — 6 solutions
+```
+
+That costs a network round trip once a day rather than once a run, because the answer is
+cached. Down a pipe or in a script there is nobody to ask, so it prints `Update with:
+prolog-notebook upgrade` after the work instead — a question nobody can answer is a hang.
 
 `upgrade` replaces this copy only when it can prove how it was installed. A global `npm i -g`
 it will do; a dependency of somebody's project it will not touch, and a source checkout is

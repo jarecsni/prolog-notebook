@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { confirm, describeInstall, globalRoot, install, upgradePlan } from '../src/upgrade.js';
+import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 
 // Updating itself is mostly a question of knowing how it was installed, and the
 // wrong answer breaks somebody's project while trying to help. So the global case
@@ -94,4 +94,38 @@ test('npm failing is reported rather than claimed as success', async () => {
     return child;
   };
   assert.equal(await install(['i', '-g', 'x'], broken), false);
+});
+
+test('it can run the same command again, on whatever is behind that path now', async () => {
+  // THE CLAIM THIS FEATURE RESTS ON: after npm replaces the package, the bin the
+  // reader typed still points at the same file, so running that path again runs
+  // the new bytes. A real child process here, not a stub — stdio inherited, exit
+  // code proxied, and the marker set that stops the new one checking again.
+  // With `node -e`, argv is [execPath, ...extras] — the script is not in it.
+  const script = 'process.exit(Number(process.argv[1]));';
+  const code = await relaunch([process.execPath, '-e', script, '7']);
+  assert.equal(code, 7, "the child's exit code is the one we leave with");
+});
+
+test('the relaunched process is told not to check again', async () => {
+  // Without this a failed or partial upgrade re-execs for ever.
+  let seen = null;
+  await relaunch(['node', 'x'], (cmd, args, opts) => {
+    seen = { cmd, args, marker: opts.env.PROLOG_NOTEBOOK_UPGRADED, stdio: opts.stdio };
+    const child = new PassThrough();
+    setImmediate(() => child.emit('close', 0));
+    return child;
+  });
+  assert.deepEqual([seen.cmd, seen.args], ['node', ['x']]);
+  assert.equal(seen.marker, '1');
+  assert.equal(seen.stdio, 'inherit', 'it should look like one process, not two');
+});
+
+test('a spawn that fails leaves a non-zero code rather than pretending', async () => {
+  const broken = () => {
+    const child = new PassThrough();
+    setImmediate(() => child.emit('error', new Error('no such file')));
+    return child;
+  };
+  assert.equal(await relaunch(['nope'], broken), 1);
 });

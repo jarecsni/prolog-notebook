@@ -150,7 +150,11 @@ export async function updateNotice({
   env = process.env,
 } = {}) {
   const quiet = { message: null, newer: null };
-  if (!force && (env.CI || env.NO_UPDATE_NOTIFIER)) return quiet;
+  // UPGRADED is the loop guard: the process that replaced itself re-runs this
+  // command on the new version, and that one must not go round again. A failed
+  // or partial upgrade would otherwise re-exec for ever.
+  if (!force && (env.CI || env.NO_UPDATE_NOTIFIER || env.PROLOG_NOTEBOOK_UPGRADED)) return quiet;
+  if (env.PROLOG_NOTEBOOK_UPGRADED) return quiet;
 
   const remembered = store.read();
   const fresh = !force && remembered && now - remembered.checked < ttl;

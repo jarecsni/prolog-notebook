@@ -11,7 +11,7 @@ import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
 import { banner, VERSION } from '../src/version.js';
 import { updateNotice } from '../src/update.js';
-import { confirm, describeInstall, globalRoot, install, upgradePlan } from '../src/upgrade.js';
+import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 
@@ -123,8 +123,18 @@ async function upgrade(version) {
  * so the notice is simply printed there. Both streams are checked because the
  * question goes to stderr and the answer comes from stdin.
  */
+/**
+ * Is there somebody at the other end?
+ *
+ * Both streams, because the question goes to stderr and the answer comes back on
+ * stdin. A pipe, a script and CI are all places where a question is a hang.
+ */
+function canAsk() {
+  return Boolean(process.stdin.isTTY && process.stderr.isTTY);
+}
+
 async function offerUpgrade(newer) {
-  if (!process.stdin.isTTY || !process.stderr.isTTY) {
+  if (!canAsk()) {
     // Nobody to ask, so say what to type instead. `prolog-notebook upgrade`
     // rather than the npm line: it knows how this copy was installed, and the
     // npm line is wrong for a project dependency.
@@ -174,6 +184,8 @@ async function main(argv) {
   }
 
   const options = { limit: DEFAULT_LIMIT, stdout: false, quiet: false };
+  // Whether the offer has already been made, before the work started.
+  let checked = false;
   const files = [];
   while (args.length) {
     const arg = args.shift();
@@ -199,6 +211,31 @@ async function main(argv) {
   }
   if (!options.quiet) process.stderr.write(`${RUNAWAY_WARNING}\n`);
 
+  // BEFORE THE WORK, when there is somebody to ask — because the point of asking
+  // is to run the NEW version, and that is only possible while there is still
+  // something to run. Afterwards the files are written and the answer comes too
+  // late to change them.
+  //
+  // It costs a network round trip once a day, not once a run: the rest of the day
+  // is a file read. Measured at 25-120 ms against npm, against a run that spends
+  // seconds in Prolog.
+  if (canAsk() && !options.quiet) {
+    const ahead = await updateNotice({ version: VERSION, force: asked })
+      .catch(() => ({ message: null, newer: null }));
+    if (ahead.message) process.stderr.write(`${ahead.message}\n`);
+    if (ahead.newer && await confirm('Update and continue on the new version?')) {
+      if ((await upgrade(ahead.newer)) === 0) {
+        process.stderr.write('Continuing on the new version.\n');
+        // The path has not changed — npm replaced what is behind it — so this is
+        // the same command, running the bytes that have just arrived.
+        return relaunch(process.argv);
+      }
+      process.stderr.write('Carrying on with the version you have.\n');
+    }
+    // Asked and answered: the check below has nothing left to say.
+    checked = true;
+  }
+
   // STARTED NOW, READ AT THE END. The registry is somebody else's machine on
   // somebody else's network, and none of that should stand between the reader
   // and their answers — so the question is asked while the work happens and the
@@ -207,7 +244,9 @@ async function main(argv) {
   // Not asked at all under --quiet, unless it was asked for outright: --quiet
   // means "report only failures", and news about a newer version is not one. Not
   // starting the request is better than starting it and discarding the answer.
-  const update = options.quiet && !asked
+  // The other half: nobody to ask, so the question is asked ALONGSIDE the work
+  // and reported at the end. A terminal has had its offer already.
+  const update = checked || (options.quiet && !asked)
     ? Promise.resolve({ message: null, newer: null })
     : updateNotice({ version: VERSION, force: asked }).catch(() => ({ message: null, newer: null }));
 

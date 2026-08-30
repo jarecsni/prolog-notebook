@@ -98,3 +98,31 @@ export function install(argv, spawnImpl = spawn) {
     child.on('close', (code) => resolve(code === 0));
   });
 }
+
+/**
+ * Run this same command again, on the version that has just replaced us.
+ *
+ * THE PATH DOES NOT CHANGE, which is what makes this work: npm replaces the
+ * contents of the package directory, and the bin the reader typed still points
+ * at the same file. So the script to run is the one we are already running — its
+ * bytes are simply new.
+ *
+ * A child rather than a true exec, because Node has no execve: stdio is
+ * inherited so it looks like one process, and the child's exit code becomes
+ * ours. The marker in the environment stops the new process checking for updates
+ * again, which is what would otherwise turn a failed upgrade into a loop.
+ *
+ * @param {string[]} argv the original process.argv
+ * @param {Function} [spawnImpl]
+ * @returns {Promise<number>} the exit code to leave with
+ */
+export function relaunch(argv, spawnImpl = spawn) {
+  return new Promise((resolve) => {
+    const child = spawnImpl(argv[0], argv.slice(1), {
+      stdio: 'inherit',
+      env: { ...process.env, PROLOG_NOTEBOOK_UPGRADED: '1' },
+    });
+    child.on('error', () => resolve(1));
+    child.on('close', (code) => resolve(code ?? 0));
+  });
+}

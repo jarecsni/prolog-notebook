@@ -76,7 +76,9 @@ test('--check-update asks anyway, and answers either way', async () => {
 test('never in CI, and never when told not to', async () => {
   // `--check` will run this command on every push one day. A build that fails, or
   // even pauses, because a registry was slow is worse than no notice at all.
-  for (const env of [{ CI: 'true' }, { NO_UPDATE_NOTIFIER: '1' }]) {
+  // PROLOG_NOTEBOOK_UPGRADED is the loop guard: the process that replaced itself
+  // re-runs the command on the new version, and that one must not go round again.
+  for (const env of [{ CI: 'true' }, { NO_UPDATE_NOTIFIER: '1' }, { PROLOG_NOTEBOOK_UPGRADED: '1' }]) {
     assert.deepEqual(
       await updateNotice({ version: '0.1.0', store: memory(), latest: never, env }),
       { message: null, newer: null },
