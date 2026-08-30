@@ -2,9 +2,9 @@
 
 **Jupyter-style notebooks for Prolog. Runs in the browser, installs nothing.**
 
-> ⚠️ **v0.1.0 — early.** The execution core works and is tested. The renderer that turns a
-> notebook *file* into a page is not written yet; today you mark cells up in HTML by hand.
-> See [Status](#status).
+> **v0.5 — usable, and moving.** A chapter is a markdown file; the CLI runs it, serves it and
+> publishes it. Writing one is [the author's handbook](docs/authoring.md). See
+> [Status](#status) for what is not built yet.
 
 ## The idea
 
@@ -40,19 +40,35 @@ So a query cell gives you the first solution, and then you step.
 
 ## Try it
 
-```sh
-npm i -g prolog-notebook
-prolog-notebook view notebooks/ch04-cut.prolog.md
-```
+A whole chapter, from nothing, in four commands:
 
-That is a chapter — the `once/1` placement puzzle, a real worked section rather than a widget
-demo. It opens in your browser with the cells live: press Run, then `; next`. Nothing is
-installed but the command, and the chapter is readable before the engine arrives.
+````sh
+npm i -g prolog-notebook
+
+cat > splitting.prolog.md <<'EOF'
+# Splitting a list
+
+`append/3` is usually introduced as the predicate that joins two lists. That is the
+least interesting thing it does — run it backwards and it takes a list apart, every
+way it can be split, one solution at a time.
+
+```prolog query
+append(Front, Back, [hello, there, world])
+```
+EOF
+
+prolog-notebook execute splitting.prolog.md   # SWI fills the answers in
+prolog-notebook view splitting.prolog.md      # read it, cells live
+````
+
+`execute` runs the chapter and writes the solutions back into the markdown — you never
+hand-write an answer. `view` opens it in your browser: press Run, then `; next`, and watch the
+four splits arrive one at a time. Nothing is installed but the command.
 
 To send it to somebody, or host it:
 
 ```sh
-prolog-notebook build ch04-cut.prolog.md --out site/
+prolog-notebook build splitting.prolog.md --out site/
 ```
 
 A plain directory: prerendered HTML with the saved answers in it, the runtime beside it, and
@@ -98,7 +114,7 @@ author's *guess* at what SWI prints, published as though it ran. So write the fi
 output blocks and let the engine fill them in:
 
 ```sh
-prolog-notebook execute notebooks/ch04-cut.prolog.md
+prolog-notebook execute chapter.prolog.md
 ```
 
 It consults every program cell, runs every query below it, and writes the solution sequences
@@ -109,8 +125,8 @@ chapter changes nothing.
 And back out again, for a workbook edition or a diff you can read:
 
 ```sh
-prolog-notebook clear ch04-cut.prolog.md
-ch04-cut.prolog.md: 4 answers removed
+prolog-notebook clear chapter.prolog.md
+chapter.prolog.md: 4 answers removed
 ```
 
 `clear` empties every output block and touches nothing else; `execute` fills them in again from
@@ -121,6 +137,9 @@ the engine. A chapter with no answers is a valid chapter — one that has not be
 | `--limit <n>` | solutions to take from one query before stopping. Default 100. |
 | `--stdout` | print the result instead of writing the file |
 | `--quiet` | report only failures |
+| `--out <dir>` | where `build` writes. Default `<file>-site` |
+| `--port <n>` | what `view` listens on. Default 8777, and it takes another if that one is busy |
+| `--no-open` | `view` prints the URL instead of opening a browser |
 | `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
 | `--check-update` | ask npm whether a newer one exists, and say so either way |
 
@@ -167,6 +186,20 @@ It has no defence against a non-terminating goal yet — the engine runs in this
 `loop :- loop.` hangs the command. Say the word `--limit` all you like; a runaway *consult* is
 not a solution count. Fixing it properly means a worker thread, and it is the prerequisite for
 putting this in CI.
+
+## Write one
+
+**[The author's handbook](docs/authoring.md)** — the loop, a chapter from scratch, what `hold`
+and `rerun` do to a reader, why you never hand-write an answer, publishing, and the things that
+will otherwise cost you an afternoon.
+
+| | |
+|---|---|
+| [docs/authoring.md](docs/authoring.md) | writing and publishing a chapter |
+| [docs/format.md](docs/format.md) | the `.prolog.md` format, normatively |
+| [docs/modes.md](docs/modes.md) | Read, Explore, Own — what a reader may change, and what may never be confused with what |
+| [docs/binding.md](docs/binding.md) | chapters into books; why a notebook never states its own position |
+| [docs/platform-seams.md](docs/platform-seams.md) | what is environment-specific, and where |
 
 ## Use it
 
@@ -278,14 +311,16 @@ Working and tested:
 - program cells and query cells with `Run` / `; next` / `all` / `stop`, per-cell reset, and a
   page that says what the engine is holding
 - `hold` and `rerun="auto"` — the author decides what a reader may see and when it refreshes
-- **the CLI**: `run` executes a chapter headlessly and writes its answers back, `view` opens it
-  in a browser, `build` writes a page you can host or send
-- download your own copy of a chapter, answers and all
-- 186 passing tests
+- **the CLI**: `execute` runs a chapter headlessly and writes its answers back, `clear` takes
+  them out again, `view` opens it in a browser, `build` writes a page you can host or send,
+  and it updates itself
+- **page controls**: hide the saved answers to work a chapter cold, clear them out and restore
+  them, and download your own copy — yours or the chapter as published
+- 253 passing tests
 
 Not built yet:
 
-- `--check` — run a chapter in CI and fail the build when its answers have drifted. Needs a
+- `check` — run a chapter in CI and fail the build when its answers have drifted. Needs a
   timeout first: a test suite that can hang forever is not a test suite.
 - custom elements (`<prolog-program>`, `<prolog-query>`) so notebooks drop into any static site
 - a VS Code notebook controller — VS Code supplies the UI, this supplies the kernel, still no Python
