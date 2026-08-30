@@ -15,6 +15,7 @@
 // contain — generated text, or a path to copy — so that `build` can write it,
 // `view` can serve it, and a test can read it, without any of the three
 // disagreeing about what a page is.
+import { parse } from './format.js';
 import { renderNotebook } from './render.js';
 
 /** The runtime a page needs. Copied side by side, so their relative imports hold. */
@@ -65,6 +66,82 @@ export function buildFiles(notebook, source, options = {}) {
   for (const module of RUNTIME) files.set(`lib/${module}`, { copy: new URL(module, src) });
   files.set(`swipl/${ENGINE}`, { copy: new URL(ENGINE, engine) });
   return files;
+}
+
+/**
+ * The page, rebuilt whenever the notebook has changed underneath it (869erpuhk).
+ *
+ * `view` used to build once and serve that forever, so an author who edited their
+ * chapter and reloaded was shown the version the server had started with. A
+ * reload is the gesture for "show me what I just did"; answering it with the old
+ * page teaches an author to doubt their own edit.
+ *
+ * COMPARED BY BYTES, not by mtime. The point of a rebuild here is to be right
+ * rather than quick — an editor that writes through a rename, a `git checkout`, a
+ * clock that went backwards, two saves inside one millisecond, all of them are
+ * changes and none of them reliably move an mtime the way one would hope. Reading
+ * a chapter is microseconds and reparsing one is milliseconds, on a file the
+ * author has open anyway.
+ *
+ * A BROKEN FILE KEEPS THE LAST GOOD PAGE AND SAYS SO. Silently serving the
+ * previous version would be the same bug this exists to fix, so the page carries
+ * the parser's own message. Blanking it instead would throw away a chapter over a
+ * half-typed fence — an author saves mid-thought, and the useful thing on screen
+ * is the last version that worked, labelled.
+ *
+ * @param {() => string} read the notebook's bytes, now
+ * @param {{onError?: (e: Error) => void}} [options] and everything buildFiles takes
+ * @returns {() => Map<string, {text: string}|{copy: URL}>}
+ */
+export function livePages(read, { onError = () => {}, ...options } = {}) {
+  let last = null;
+  let failing = null;
+  return () => {
+    let source = null;
+    try {
+      source = read();
+      if (last && last.source === source) return last.files;
+      const files = buildFiles(parse(source), source, options);
+      last = { source, files };
+      failing = null;
+      return files;
+    } catch (e) {
+      // Nothing good to fall back to: this is the first build, and the caller —
+      // the command — is the one that should report it and stop.
+      if (!last) throw e;
+      // Once per broken version, not once per request. A page fetches a dozen
+      // files, and a terminal repeating the same syntax error a dozen times is
+      // worse at communicating it than saying it once.
+      if (failing !== source) onError(e);
+      failing = source;
+      return withNotice(last.files, e.message);
+    }
+  };
+}
+
+/**
+ * The last good page, wearing the reason it is not the current one.
+ *
+ * A copy, so the good build is never mutated and recovering is simply serving it
+ * again.
+ */
+function withNotice(files, message) {
+  const index = files.get('index.html');
+  if (index?.text === undefined) return files;
+  const copy = new Map(files);
+  copy.set('index.html', { text: index.text.replace('<body>', `<body>\n${notice(message)}`) });
+  return copy;
+}
+
+/**
+ * Inline styles, deliberately: this belongs to no chapter and must never depend
+ * on a stylesheet the broken file might itself have been changing.
+ */
+function notice(message) {
+  return '<div role="alert" style="position:sticky;top:0;z-index:99;padding:.7rem 1rem;'
+    + 'background:#7a2618;color:#fff;font:500 .8rem/1.5 ui-monospace,Menlo,monospace">'
+    + '<strong>This notebook does not currently parse.</strong> Showing the last version that'
+    + ` did.<br>${escapeHtml(message)}</div>`;
 }
 
 /**

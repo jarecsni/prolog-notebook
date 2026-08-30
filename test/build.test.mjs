@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from '../src/format.js';
-import { buildFiles, ENGINE, RUNTIME } from '../src/build.js';
+import { buildFiles, ENGINE, RUNTIME, livePages } from '../src/build.js';
 import { contentType, openInBrowser, serve } from '../src/serve.js';
 
 // A chapter to a page that stands on its own (869ermwfv), and the server that
@@ -196,4 +196,76 @@ test('view and build ask about updates too, not only run', async () => {
   // And before anything is served or written: the offer is worthless afterwards.
   assert.ok(cli.indexOf('await upgradeFirst()') < cli.indexOf('const server = await serve('));
   assert.ok(cli.indexOf('await upgradeFirst()') < cli.indexOf("if (command === 'build')"));
+});
+
+// --------------------------------- the page follows the file it came from
+
+test('a reload shows the chapter as it is now, not as it was at start-up', async () => {
+  // THE BUG, end to end. `view` built once and served that map for the life of
+  // the process, so an author who edited their chapter and reloaded was shown
+  // the version the server had started with — and concluded their edit had not
+  // taken. A reload is the gesture for "show me what I just did".
+  let source = CHAPTER;
+  const server = await serve(livePages(() => source, { filename: 'ch.prolog.md' }), { port: 0 });
+  try {
+    assert.match(await (await fetch(server.url)).text(), /Where does the fence go/);
+
+    source = CHAPTER.replace('# Where does the fence go?', '# Something else entirely');
+    const again = await (await fetch(server.url)).text();
+    assert.match(again, /Something else entirely/);
+    assert.doesNotMatch(again, /Where does the fence go/);
+
+    // And the copy the reader can take with them is the edited chapter, not the
+    // bytes the server was started with — app.js carries the source for download.
+    assert.match(await (await fetch(new URL('/app.js', server.url))).text(),
+      /Something else entirely/);
+  } finally {
+    await server.close();
+  }
+});
+
+test('an unchanged file is not rebuilt on every request', () => {
+  // Compared by BYTES rather than mtime — an editor writing through a rename, a
+  // git checkout and two saves in one millisecond are all changes that an mtime
+  // reports unreliably. Cheap enough to do properly: the file is already open in
+  // the author's editor.
+  let reads = 0;
+  const pages = livePages(() => { reads++; return CHAPTER; }, { filename: 'ch.prolog.md' });
+  const first = pages();
+  assert.equal(pages(), first, 'the same map, so nothing was parsed or rendered again');
+  assert.equal(reads, 2, 'but the file was read both times — that is what makes it current');
+});
+
+test('a broken chapter keeps the last good page and says why', () => {
+  // Silently serving the previous version is the same bug this exists to fix. And
+  // blanking the page would throw a chapter away over a half-typed fence: an
+  // author saves mid-thought, and the useful thing on screen is the last version
+  // that worked, labelled as such.
+  const said = [];
+  let source = CHAPTER;
+  const pages = livePages(() => source, { filename: 'ch.prolog.md', onError: (e) => said.push(e.message) });
+  const good = pages().get('index.html').text;
+
+  source = '---\nformat: prolog-notebook/99\n---\n\n# Nope\n';
+  const broken = pages().get('index.html').text;
+  assert.match(broken, /This notebook does not currently parse/);
+  assert.match(broken, /Where does the fence go/, 'the chapter is still there to read');
+  assert.equal(said.length, 1);
+
+  // Once per broken version, not once per request: a page fetches a dozen files,
+  // and a terminal saying the same thing twelve times says it worse.
+  pages();
+  pages();
+  assert.equal(said.length, 1);
+
+  // The good build was never touched, so recovering is just serving it again.
+  source = CHAPTER;
+  assert.equal(pages().get('index.html').text, good);
+});
+
+test('a chapter that never parsed at all is the command\'s problem, not the page\'s', () => {
+  // There is nothing to fall back to, and `view` must exit with the parser's own
+  // line numbers rather than starting a server that serves an apology.
+  const pages = livePages(() => '---\nformat: prolog-notebook/99\n---\n', { filename: 'x.prolog.md' });
+  assert.throws(() => pages(), /prolog-notebook/);
 });

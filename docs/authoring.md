@@ -31,6 +31,11 @@ Write prose and cells in your editor → `execute` to fill in the answers → `v
 a reader will → `build` when it is ready. `clear` is there when you want the chapter back
 without its answers.
 
+**Leave `view` running while you write.** Every reload serves the file as it is at that
+moment, so editing and refreshing is the loop — no restart, and nothing to remember. If the
+chapter stops parsing you keep the last version that did, with the parser's message across the
+top of it, and fixing the file puts it back.
+
 You never hand-write an answer. See §5.
 
 ## 2. Your first chapter

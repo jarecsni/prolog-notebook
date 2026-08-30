@@ -31,11 +31,24 @@ export function contentType(name) {
 /**
  * Serve a built page.
  *
- * @param {Map<string, {text: string}|{copy: URL}>} files what build produced
+ * THE REQUEST IS WHAT READS THE FILE, when a producer is given rather than a map
+ * (869erpuhk). The first version of this held the map it was handed for the life
+ * of the process, so `view` served the notebook as it had been at start-up and a
+ * reload — the universal gesture for "show me what I just did" — confirmed the
+ * old version. An author doubts their edit before they doubt the tool.
+ *
+ * Asked per request rather than pushed by a watcher, because that is what makes
+ * the guarantee unconditional: there is no window in which the page and the file
+ * disagree, and nothing to have missed a change. A watcher (869edp5c8) can only
+ * ever save the reader a keystroke on top of this.
+ *
+ * @param {Map<string, {text: string}|{copy: URL}>|(() => Map)} pages what build
+ *   produced, or something that produces it — called once per request
  * @param {{port?: number, host?: string}} [options]
  * @returns {Promise<{url: string, port: number, close: () => Promise<void>}>}
  */
-export async function serve(files, { port = 8777, host = '127.0.0.1' } = {}) {
+export async function serve(pages, { port = 8777, host = '127.0.0.1' } = {}) {
+  const files = typeof pages === 'function' ? pages : () => pages;
   // ASK WHETHER ANYBODY IS THERE, on both stacks, before binding to one of them.
   //
   // An IPv6 wildcard listener — `python3 -m http.server --bind ::` — does not
@@ -49,7 +62,7 @@ export async function serve(files, { port = 8777, host = '127.0.0.1' } = {}) {
     // Only GET, and only the names this process generated: the path never
     // reaches the filesystem, so there is nothing for a `..` to escape into.
     const name = decodeURIComponent(new URL(request.url, 'http://x').pathname).replace(/^\//, '');
-    const entry = files.get(name === '' ? 'index.html' : name);
+    const entry = files().get(name === '' ? 'index.html' : name);
     if (request.method !== 'GET' || !entry) {
       response.writeHead(404, { 'content-type': 'text/plain' }).end('not found\n');
       return;
