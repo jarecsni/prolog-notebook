@@ -57,7 +57,7 @@
   },
   "dependencies": {
     "markdown-it": "^15.0.0",
-    "swipl-wasm": "^8.0.4"
+    "swipl-wasm": "8.0.7"
   },
   "publishConfig": {
     "access": "public"

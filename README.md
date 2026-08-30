@@ -183,6 +183,12 @@ Both were found by driving a real browser, not by reading documentation.
 `consult/1` loads into `user`. Unqualified goals raise `Unknown procedure: system:foo/1`
 *even though the consult reported success*. Goals are wrapped as `user:( Goal )`.
 
+**The engine version is not the package version, and it must not float.**
+`swipl-wasm@8.0.4` ships SWI-Prolog 10.1.10; `8.0.7` ships 10.1.13. Two installs of the same
+release, ten minutes apart, ran different Prologs. Since a notebook's saved answers are only
+true of the engine that produced them — and SWI's answer spelling changes between releases —
+the dependency is pinned exactly, and moving it is a commit with the chapters re-run in it.
+
 **The last solution arrives with `done`.** `next()` can return `{done: true, value: {...}}` —
 a final binding and the end of the search in a single step. Treating `done` as "stop, no more
 answers" silently drops the last solution, which is the kind of bug you don't notice until a
