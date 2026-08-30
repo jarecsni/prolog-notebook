@@ -3,12 +3,31 @@
 // terminal. Everything it does lives in src/run.js and src/export.js, so a VS
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
+import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
+import { prologVersion } from '../src/engine.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
-import { createSession } from '../src/node.js';
+
+// The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
+// 5.9 MB of WebAssembly at module scope, so a static import here would mean that
+// `--help` on a broken install fails before it can print anything — and the two
+// commands most likely to be typed at a broken install are --help and --version.
+const engine = () => import('../src/node.js');
+
+const require = createRequire(import.meta.url);
+const PACKAGE = require('../package.json');
+
+/**
+ * The copyright notice.
+ *
+ * Written here rather than read from LICENSE at runtime — a command should not
+ * depend on a file it does not need — but a test asserts the two agree, so the
+ * year cannot quietly drift out of step with the licence it refers to.
+ */
+const COPYRIGHT = 'Copyright (c) 2026 Johnny Jarecsni';
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
@@ -18,6 +37,7 @@ Options
   --limit <n>   solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
   --stdout      print the result instead of writing the file
   --quiet       report only failures
+  --version     version, engine and copyright
   -h, --help    this
 
 A query that stops at the limit is written without a terminator, which is the
@@ -31,10 +51,43 @@ format's way of saying the search was never exhausted. Nothing is invented.
  */
 const RUNAWAY_WARNING = 'note: a non-terminating goal will hang this command; it has no timeout yet (869ejgyax)';
 
+/**
+ * Who this is, and — the part that is not on anyone's disk — which Prolog it
+ * will run your chapters with.
+ *
+ * THE ENGINE LINE EARNS ITS 59 MILLISECONDS. swipl-wasm's own version says
+ * nothing about SWI's: 8.0.4 ships 10.1.10. A notebook's saved answers are only
+ * true of the engine that produced them, so this is the one fact here that a
+ * reader could not have looked up.
+ *
+ * An engine that will not load is REPORTED, not fatal. "I cannot start Prolog"
+ * is exactly what someone running --version to diagnose a broken install needs
+ * to be told, and exiting non-zero would hide it behind a shell error.
+ */
+async function version() {
+  const lines = [`${PACKAGE.name} ${PACKAGE.version}`];
+  try {
+    const { createSession } = await engine();
+    const swipl = await prologVersion(await createSession());
+    lines.push(swipl
+      ? `SWI-Prolog ${swipl} (swipl-wasm ${require('swipl-wasm/package.json').version})`
+      : 'SWI-Prolog: started, but would not say which version it is');
+  } catch (e) {
+    lines.push(`SWI-Prolog: could not load (${e.message})`);
+  }
+  lines.push(`${COPYRIGHT}. ${PACKAGE.license} licence.`);
+  lines.push(String(PACKAGE.homepage ?? '').replace(/#readme$/, ''));
+  return `${lines.filter(Boolean).join('\n')}\n`;
+}
+
 async function main(argv) {
   const args = argv.slice(2);
   if (!args.length || args.includes('-h') || args.includes('--help')) {
     process.stdout.write(USAGE);
+    return 0;
+  }
+  if (args.includes('--version') || args.includes('-V')) {
+    process.stdout.write(await version());
     return 0;
   }
 
@@ -73,6 +126,7 @@ async function main(argv) {
   // a world of its own — one cell is one virtual file, and two chapters may
   // define the same predicate — so carrying clauses across would let a file pass
   // because of what the file before it happened to load.
+  const { createSession } = await engine();
   const session = await createSession();
   let status = 0;
 

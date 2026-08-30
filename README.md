@@ -90,6 +90,7 @@ chapter changes nothing.
 | `--limit <n>` | solutions to take from one query before stopping. Default 100. |
 | `--stdout` | print the result instead of writing the file |
 | `--quiet` | report only failures |
+| `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
 
 Two things it will not do. A query stopped at the limit is written **without** a terminator,
 which is the format's way of saying the search was never exhausted — `false.` there would be a

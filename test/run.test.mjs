@@ -191,3 +191,37 @@ test('--stdout leaves the file alone, and --limit is checked', async () => {
   assert.equal(bad.code, 2);
   assert.match(bad.stderr, /positive whole number/);
 });
+
+// --------------------------------------------------------------- --version
+
+test('--version says which Prolog will produce your answers', async () => {
+  // THE ENGINE LINE IS THE POINT. swipl-wasm 8.0.4 ships SWI-Prolog 10.1.10 and
+  // the two numbers are unrelated, so this is the one fact here that nobody could
+  // have looked up — and a chapter's saved answers are only true of the engine
+  // that produced them.
+  const { stdout } = await run('node', [CLI, '--version']);
+  const lines = stdout.trim().split('\n');
+
+  assert.match(lines[0], /^prolog-notebook \d+\.\d+\.\d+$/);
+  assert.match(lines[1], /^SWI-Prolog \d+\.\d+\.\d+ \(swipl-wasm \d+\.\d+\.\d+\)$/);
+  assert.match(lines[2], /^Copyright \(c\) \d{4} .+\. MIT licence\.$/);
+  assert.match(lines[3], /^https:\/\/github\.com\//);
+
+  const short = await run('node', [CLI, '-V']);
+  assert.equal(short.stdout, stdout);
+});
+
+test('the notice in the command is the notice in the LICENSE', async () => {
+  // The year and the holder live in two files because a command should not read a
+  // file it does not need. This is what keeps them from drifting apart.
+  const cli = await readFile(new URL('../bin/prolog-notebook.mjs', import.meta.url), 'utf8');
+  const licence = await readFile(new URL('../LICENSE', import.meta.url), 'utf8');
+  const notice = /Copyright \(c\) \d{4} [^\n'`]+/;
+  assert.equal(cli.match(notice)[0].trim(), licence.match(notice)[0].trim());
+});
+
+test('the version of the package is the version it reports', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const { stdout } = await run('node', [CLI, '--version']);
+  assert.match(stdout, new RegExp(`^prolog-notebook ${pkg.version.replace(/\./g, '\\.')}$`, 'm'));
+});
