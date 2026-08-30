@@ -120,6 +120,12 @@ export function fakeEngine({ answers = {}, fail = {} } = {}) {
  */
 export function pageFor(source, { engine = fakeEngine(), download, published } = {}) {
   const notebook = parse(source);
+  // NO STYLESHEET, and that is a stated limit rather than an omission. jsdom
+  // resolves `hidden` ABOVE an author `display` rule; a browser does the
+  // opposite, which is how the version picker came to sit beside the phrase it
+  // replaces while every attribute said it was hidden. Loading the CSS here
+  // would make that bug PASS while looking like proof — so visibility is
+  // asserted as intent (`.hidden`) here, and as fact in a browser.
   const dom = new JSDOM(`<!doctype html><html><body><main>${renderNotebook(notebook)}</main></body></html>`, {
     pretendToBeVisual: true,
   });
@@ -153,6 +159,13 @@ export function pageFor(source, { engine = fakeEngine(), download, published } =
 
     /** How many times the page has asked for an engine. */
     boots: () => boots,
+
+    /** What the page INTENDS to show. Whether the cascade agrees is a browser's
+     * question — see the note above. */
+    shows: (selector) => {
+      const el = window.document.querySelector(selector);
+      return Boolean(el) && !el.hidden;
+    },
 
     /** A cell's visible output, one line per entry, chrome stripped. */
     out: (id) => [...cell(id).querySelectorAll('.out .line')]

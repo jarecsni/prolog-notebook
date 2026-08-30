@@ -310,10 +310,21 @@ test('the version to download becomes a choice, once there is one to make', asyn
   assert.equal(page.panel().notebook, 'As published');
   assert.equal(page.panel().choices, null);
 
+  // ONE OF THEM, NEVER BOTH — as far as this file can see. The picker once sat
+  // beside the phrase it replaces, visibly, while every attribute said it was
+  // hidden: `hidden` is a UA rule and any author `display` rule outranks it.
+  // jsdom resolves that the other way round, so no assertion here could have
+  // caught it. The stylesheet is guarded in css.test.mjs instead, and the truth
+  // is checked in a browser.
+  assert.equal(page.shows('.page-controls .picker'), false);
+  assert.equal(page.shows('.page-controls .only'), true);
+
   page.type('p-family', 'male(albert).');
   await page.settle(1);
   assert.deepEqual(page.panel().choices, ['Your version', 'As published']);
   assert.equal(page.panel().notebook, 'Your version', 'what is on screen is the default');
+  assert.equal(page.shows('.page-controls .picker'), true);
+  assert.equal(page.shows('.page-controls .only'), false, 'the phrase gives way to the choice');
 
   page.window.URL.createObjectURL = (blob) => { handed.push(blob); return 'blob:x'; };
   page.window.URL.revokeObjectURL = () => {};

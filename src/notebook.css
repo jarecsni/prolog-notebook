@@ -242,6 +242,14 @@ button.primary:hover { background: #98380f; }
 /* The unit is a grouping, not a box: its two children join the card's own grid so
    that every state phrase and every button line up down the card. */
 .page-controls .unit { display: contents; }
+/* HIDDEN MEANS HIDDEN. The `hidden` attribute is only a UA rule — `[hidden] {
+   display: none }` — so ANY display declaration of ours outranks it and the
+   element stays on screen. That is how the version picker came to sit next to
+   the phrase it replaces, both visible at once, and it is the same principle
+   already written into the panel's own fade: invisible things must not be
+   touchable, and something told to hide must actually go. */
+.page-controls [hidden] { display: none !important; }
+
 /* The one row whose state is a CHOICE. A native select, because it works on a
    touch screen and from a keyboard without anything being written here — but
    stripped of its chrome, so a card of quiet phrases does not suddenly grow a
