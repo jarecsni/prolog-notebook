@@ -473,31 +473,59 @@ function mountPageBar(root, options, bus, programs, queries) {
  * @param {Element|Document} root
  * @param {() => {filename: string, text: string}} produce
  */
-export function offerDownload(root, produce) {
+export function offerDownload(root, produce, published = null) {
   const scope = root && root.querySelector ? root : document;
   const bar = scope.querySelector('.page-controls') ?? document.querySelector('.page-controls');
   if (!bar) return;
 
   const unit = document.createElement('div');
   unit.className = 'unit notebook';
-  unit.innerHTML = '<span class="state notebook-state"></span>'
+  // THE STATE IS THE CHOICE, once there is one to make.
+  //
+  // Every other row in this card says what is true and offers the verb that
+  // changes it. This row is the one place where the reader's version and the
+  // chapter's both exist at once, and what the button should hand them is
+  // genuinely a question — so the phrase that was reporting which of the two is
+  // on screen becomes the control that picks between them. One statement, one
+  // button, and no second download to be taken by mistake.
+  //
+  // A PHRASE UNTIL THERE ARE TWO. Before the reader has run or edited anything
+  // their version IS the chapter, and a menu with one item is a control
+  // pretending to offer something.
+  unit.innerHTML = '<span class="state notebook-state"><span class="only"></span>'
+    + '<span class="picker" hidden><select aria-label="which version to download">'
+    + '<option value="mine">Your version</option>'
+    + '<option value="published">As published</option>'
+    + `</select>${icon('chevron')}</span></span>`
     + `<button data-act="download"><span class="icon">${icon('download')}</span>`
     + '<span class="label">Download .prolog.md</span></button>';
   bar.querySelector('.panel').prepend(unit);
 
-  const state = unit.querySelector('.notebook-state');
+  const only = unit.querySelector('.only');
+  const picker = unit.querySelector('.picker');
+  const select = unit.querySelector('select');
+
   const say = () => {
     const edited = [...scope.querySelectorAll('.cell')].some((cell) => cell.dataset.edited === 'true');
-    state.textContent = edited ? 'Your version' : 'As published';
-    state.title = edited
-      ? 'this notebook has your edits or your answers in it; the download carries them'
-      : 'nothing here differs from the chapter yet; the download is the chapter itself';
+    // Offered only when both exist AND someone can produce the published copy.
+    const choose = edited && Boolean(published);
+    picker.hidden = !choose;
+    only.hidden = choose;
+    only.textContent = edited ? 'Your version' : 'As published';
+    // Not reset when the reader edits again: they chose, and a control that
+    // silently returns to its default hands them a file they did not pick.
+    if (!choose) select.value = 'mine';
+    unit.querySelector('button').title = choose && select.value === 'published'
+      ? 'the chapter exactly as published, without your edits — they stay on the page'
+      : 'this notebook as it now stands, with your edits and your answers in it';
   };
 
   unit.querySelector('button').addEventListener('click', () => {
-    const { filename, text } = produce();
+    const from = !picker.hidden && select.value === 'published' ? published : produce;
+    const { filename, text } = from();
     download(filename, text);
   });
+  select.addEventListener('change', say);
 
   // Anything a reader does that could change the answer is a click or a
   // keystroke, and both bubble. Cheaper than a subscription, and it cannot go
@@ -507,20 +535,6 @@ export function offerDownload(root, produce) {
   say();
 }
 
-/** Boot the engine, reporting the first (slow, 5.9 MB) load through `status`. */
-/**
- * Where the engine comes from.
- *
- * A SEAM, and the reason it exists is testability: mount() otherwise reaches
- * straight for the browser's worker-backed session, so nothing on this page can
- * be exercised without spawning a Worker and 36 MB of WebAssembly. A fake session
- * — consults that record, queries that answer from a script — is what lets the
- * page's own behaviour be tested at all (869enpj26).
- *
- * Same shape as the injectable filesystem in platform-seams.md §3, one level up:
- * a hosted build and the VS Code web extension will each want to say where the
- * engine lives, and it costs one option to let them.
- */
 function sessionFactory(options) {
   return options.createSession ?? createSession;
 }

@@ -294,6 +294,44 @@ test('reset hands the engine back the frame this cell was holding', async () => 
 
 // ----------------------------------------------------------------- export
 
+test('the version to download becomes a choice, once there is one to make', async () => {
+  // THE STATE IS THE CHOICE. Every other row says what is true and offers the
+  // verb that changes it; this is the one place where the reader's version and
+  // the chapter's both exist, so the phrase that reported which was on screen
+  // becomes the control that picks between them — one button, and no second
+  // download to be taken by mistake.
+  const handed = [];
+  const page = chapter({
+    download: () => ({ filename: 'ch.prolog.md', text: 'mine' }),
+    published: () => ({ filename: 'ch.prolog.md', text: 'the original bytes' }),
+  });
+  // A phrase until there are two: a menu with one item is a control pretending
+  // to offer something.
+  assert.equal(page.panel().notebook, 'As published');
+  assert.equal(page.panel().choices, null);
+
+  page.type('p-family', 'male(albert).');
+  await page.settle(1);
+  assert.deepEqual(page.panel().choices, ['Your version', 'As published']);
+  assert.equal(page.panel().notebook, 'Your version', 'what is on screen is the default');
+
+  page.window.URL.createObjectURL = (blob) => { handed.push(blob); return 'blob:x'; };
+  page.window.URL.revokeObjectURL = () => {};
+  globalThis.URL.createObjectURL = page.window.URL.createObjectURL;
+  globalThis.URL.revokeObjectURL = page.window.URL.revokeObjectURL;
+
+  page.chooseVersion('published');
+  assert.equal(page.panel().notebook, 'As published');
+  page.find('[data-act="download"]').click();
+  assert.equal(handed.length, 1);
+
+  // The choice is theirs and it sticks: a control that silently returns to its
+  // default hands them a file they did not pick.
+  page.type('p-family', 'male(albert).\nmale(zoe).');
+  await page.settle(1);
+  assert.equal(page.panel().notebook, 'As published');
+});
+
 test('the download button reports whether anything is the reader\'s yet', async () => {
   let handed = null;
   const page = chapter({ download: () => ({ filename: 'ch.prolog.md', text: 'exported' }) });

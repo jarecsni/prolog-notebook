@@ -242,6 +242,33 @@ button.primary:hover { background: #98380f; }
 /* The unit is a grouping, not a box: its two children join the card's own grid so
    that every state phrase and every button line up down the card. */
 .page-controls .unit { display: contents; }
+/* The one row whose state is a CHOICE. A native select, because it works on a
+   touch screen and from a keyboard without anything being written here — but
+   stripped of its chrome, so a card of quiet phrases does not suddenly grow a
+   form control. The chevron is the same glyph the lozenge uses. */
+.page-controls .picker {
+  display: inline-flex;
+  align-items: center;
+  gap: .1rem;
+}
+.page-controls .picker select {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.page-controls .picker svg {
+  width: .7rem;
+  height: .7rem;
+  /* The glyph is a "<": 270° points it down, which is the direction this one
+     opens. The lozenge's own chevron uses 90° because its panel rises. */
+  transform: rotate(270deg);
+  opacity: .7;
+}
+.page-controls .picker:hover { color: var(--ink); }
 .page-controls .unit > .state { padding: .6rem 1.4rem .6rem 0; }
 .page-controls .unit + .unit > * { border-top: 1px solid var(--rule); }
 

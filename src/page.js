@@ -35,7 +35,12 @@ export function renderInto(text, root, options = {}) {
   offerDownload(root, () => ({
     filename,
     text: exportSource(notebook, edits(cells)),
-  }));
+  // THE BYTES THE PAGE WAS GIVEN, not the model written out again. A
+  // re-serialisation would be canonical form, which is not necessarily the
+  // author's file: a hand-written chapter with no ids, or attributes in another
+  // order, would come back subtly reformatted. "The chapter as published" has to
+  // mean the chapter as published.
+  }), () => ({ filename, text }));
   return notebook;
 }
 
