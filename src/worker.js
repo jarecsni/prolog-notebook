@@ -60,9 +60,16 @@ async function handle(op, args) {
       return query.all(args.limit);
     }
 
-    case 'close':
+    case 'close': {
+      // CLOSING MUST REACH THE ENGINE. Forgetting the id here — which is all this
+      // did until 869epzqpc — leaves the query open inside SWI for the life of
+      // the session, and every later query then nests inside a frame nobody can
+      // ever step or release.
+      const query = queries.get(args.qid);
       queries.delete(args.qid);
+      query?.close();
       return true;
+    }
 
     default:
       throw new Error(`unknown worker op "${op}"`);

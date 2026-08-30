@@ -120,6 +120,31 @@ export class InProcessSession {
     this.engine = engine;
     this.rebuild = rebuild;
     this.log = new ConsultLog();
+    // The one query allowed to be open. See supersede() below.
+    this.open = null;
+  }
+
+  /**
+   * ONE OPEN SEQUENCE PER SESSION, and the reason is not tidiness.
+   *
+   * SWI keeps open queries on a stack and swipl-wasm enforces it: stepping or
+   * closing anything but the innermost throws "Attempt to access not innermost
+   * query". A page cannot promise the order — the order is whatever the reader
+   * clicks — so the constraint is met by construction instead: there is never
+   * more than one open query, which means the one being closed is always the
+   * innermost, which means the close is always legal (869epzqpc).
+   *
+   * The caller is told, through the query's own `onSuperseded`, because a
+   * sequence that ends without saying so is exactly the silence this replaces.
+   */
+  supersede() {
+    const previous = this.open;
+    this.open = null;
+    if (!previous) return;
+    // Straight to the engine's query: closing is synchronous in this process, and
+    // the frame must be gone before the next PL_open_query, not merely scheduled.
+    previous.query.close({ superseded: true });
+    previous.onSuperseded?.();
   }
 
   async consult(text, name = defaultCellName()) {
@@ -129,7 +154,13 @@ export class InProcessSession {
   }
 
   query(goal) {
-    return new InProcessQuery(this.engine.query(goal));
+    // The frame opens here, in the engine's constructor, so the previous one has
+    // to be closed BEFORE this line rather than after: once a second query is
+    // open, the first is no longer innermost and can never be closed at all.
+    this.supersede();
+    const query = new InProcessQuery(this.engine.query(goal), this);
+    this.open = query;
+    return query;
   }
 
   async unconsult(name) {
@@ -144,6 +175,9 @@ export class InProcessSession {
    * session where that matters.
    */
   async restart() {
+    // Every frame died with the engine. Saying so here rather than leaving a
+    // handle that points into a heap that no longer exists.
+    this.open = null;
     this.engine = await this.rebuild();
     for (const { name, text } of this.log) this.engine.consult(text, name);
   }
@@ -162,17 +196,32 @@ export class InProcessSession {
 // renders in both, or the exported formatSolution() when there is no engine at all.
 
 class InProcessQuery {
-  constructor(query) {
+  constructor(query, session) {
     this.query = query;
+    this.session = session;
+    /** Set by the caller to hear that its sequence was closed for another one. */
+    this.onSuperseded = null;
   }
 
   async next() {
-    return this.query.next();
+    const r = this.query.next();
+    if (r.done) this.#release();
+    return r;
   }
 
   async all(limit) {
-    return this.query.all(limit);
+    const r = this.query.all(limit);
+    this.#release();
+    return r;
   }
 
-  async close() {}
+  async close(options) {
+    this.query.close(options);
+    this.#release();
+  }
+
+  /** The frame is gone, so this query is no longer the one holding the session's. */
+  #release() {
+    if (this.session?.open === this) this.session.open = null;
+  }
 }

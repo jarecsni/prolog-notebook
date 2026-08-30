@@ -60,15 +60,51 @@ export function fakeEngine({ answers = {}, fail = {} } = {}) {
       return engine;
     },
 
+    /**
+     * One open sequence, exactly as both real sessions have since 869epzqpc.
+     *
+     * A fake that let two queries be open at once would let the page pass a test
+     * the engine could never pass: SWI keeps open queries on a stack and refuses
+     * to step anything but the innermost. The real invariant is proved against a
+     * real engine in session.test.mjs; this is here so the PAGE is tested against
+     * an engine that behaves like the one it will meet.
+     */
     query(goal) {
       const solutions = [...(answers[goal] ?? [])];
-      return {
+      engine.supersede();
+      const query = {
+        superseded: false,
+        onSuperseded: null,
         async next() {
-          if (!solutions.length) return { done: true };
+          if (query.superseded) return { done: true, superseded: true };
+          if (!solutions.length) {
+            engine.release(query);
+            return { done: true };
+          }
           return { solution: {}, text: solutions.shift() };
         },
-        async close() {},
+        async close() {
+          engine.release(query);
+        },
       };
+      engine.open = query;
+      return query;
+    },
+
+    /** The query holding the engine's one frame, or null. */
+    open: null,
+
+    /** Close whatever is open, and tell it — the sessions' own seam, same name. */
+    supersede() {
+      const previous = engine.open;
+      engine.open = null;
+      if (!previous) return;
+      previous.superseded = true;
+      previous.onSuperseded?.();
+    },
+
+    release(query) {
+      if (engine.open === query) engine.open = null;
     },
   };
   return engine;
