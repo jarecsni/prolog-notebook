@@ -4,7 +4,6 @@
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
 import { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
@@ -16,7 +15,7 @@ import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } 
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 import { buildFiles } from '../src/build.js';
-import { serve } from '../src/serve.js';
+import { openInBrowser, serve } from '../src/serve.js';
 
 // The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
 // 5.9 MB of WebAssembly at module scope, so a static import here would mean that
@@ -344,16 +343,6 @@ async function page(command, args) {
   if (options.open) openInBrowser(server.url);
   // Deliberately never resolves: the server is the command.
   return new Promise(() => {});
-}
-
-/** Hand the URL to whatever the desktop uses. Failure is not worth reporting. */
-function openInBrowser(url) {
-  const opener = { darwin: 'open', win32: 'start' }[process.platform] ?? 'xdg-open';
-  try {
-    spawn(opener, [url], { stdio: 'ignore', detached: true }).unref();
-  } catch {
-    // No desktop, or no opener: the URL is on screen either way.
-  }
 }
 
 async function runFile(file, session, options) {
