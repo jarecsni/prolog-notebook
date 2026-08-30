@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0] — 2026-08-30
+
+### Added
+
+- **The CLI notices when it is out of date.** On real work — `run` — it asks npm at most once
+  a day whether there is something newer, and says nothing unless there is:
+
+      A newer Prolog Notebook is available: 0.4.0 → 0.5.0
+      Update with: npm i -g prolog-notebook
+
+  `--check-update` forces the question and answers it either way, including *you are on the
+  latest* — which the daily check deliberately never says, because a tool that congratulates
+  you on every command is one you learn to read past.
+
+  It stays out of the way by design: never for `--help` or `--version`, never under `--quiet`,
+  never when `CI` or `NO_UPDATE_NOTIFIER` is set, and never between the reader and their
+  answers — the request is started before the run and collected after it. The notice goes to
+  **stderr**, because `run --stdout` is a notebook going down a pipe.
+
+  A registry it cannot reach is reported once a day rather than on every command: silence
+  there would be indistinguishable from *you are up to date*, which is the one thing a broken
+  check must not look like. The answer is remembered in `~/.cache/prolog-notebook/`
+  (XDG-aware), not beside the package, because a global install is often read-only. A private
+  registry is honoured through npm's own `registry` config.
+
 ## [0.3.1] — 2026-08-30
 
 ### Changed
