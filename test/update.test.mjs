@@ -21,7 +21,7 @@ test('it says nothing at all when you are up to date', async () => {
   const notice = await updateNotice({
     version: '0.3.1', store: memory(), latest: async () => '0.3.1', env: {},
   });
-  assert.equal(notice, null);
+  assert.deepEqual(notice, { message: null, newer: null });
 });
 
 test('and says so plainly when there is something newer', async () => {
@@ -30,8 +30,10 @@ test('and says so plainly when there is something newer', async () => {
   });
   // It says what you HAVE first: that is the question being asked, and a line
   // that only names versions leaves the reader to work out which one is theirs.
-  assert.equal(notice, 'You have Prolog Notebook 0.3.1. The latest is 0.4.0.\n'
-    + 'Update with: npm i -g prolog-notebook');
+  assert.equal(notice.message, 'You have Prolog Notebook 0.3.1. The latest is 0.4.0.');
+  // The version itself, so a caller can offer to fetch it without reading the
+  // sentence back to find out what it said.
+  assert.equal(notice.newer, '0.4.0');
 });
 
 test('once a day, and the rest of the day from what it remembered', async () => {
@@ -48,7 +50,7 @@ test('once a day, and the rest of the day from what it remembered', async () => 
   const again = await updateNotice({
     version: '0.3.1', store, latest: never, now: now + DAY - 1, env: {},
   });
-  assert.match(again, /0\.4\.0/);
+  assert.match(again.message, /0\.4\.0/);
 
   await updateNotice({ version: '0.3.1', store, latest, now: now + DAY, env: {} });
   assert.equal(asked, 2, 'the day turned over');
@@ -60,7 +62,8 @@ test('--check-update asks anyway, and answers either way', async () => {
   const notice = await updateNotice({
     version: '0.3.1', force: true, store, latest: async () => '0.3.1', env: {},
   });
-  assert.equal(notice, 'You have the latest version of Prolog Notebook, 0.3.1.');
+  assert.equal(notice.message, 'You have the latest version of Prolog Notebook, 0.3.1.');
+  assert.equal(notice.newer, null);
 
   // Even a cache written a second ago is ignored when it was asked for.
   let asked = 0;
@@ -74,13 +77,16 @@ test('never in CI, and never when told not to', async () => {
   // `--check` will run this command on every push one day. A build that fails, or
   // even pauses, because a registry was slow is worse than no notice at all.
   for (const env of [{ CI: 'true' }, { NO_UPDATE_NOTIFIER: '1' }]) {
-    assert.equal(await updateNotice({ version: '0.1.0', store: memory(), latest: never, env }), null);
+    assert.deepEqual(
+      await updateNotice({ version: '0.1.0', store: memory(), latest: never, env }),
+      { message: null, newer: null },
+    );
   }
   // Asking explicitly still works, because that is a person, not a pipeline.
   assert.match(
-    await updateNotice({
+    (await updateNotice({
       version: '0.1.0', force: true, store: memory(), latest: async () => '0.3.1', env: { CI: 'true' },
-    }),
+    })).message,
     /You have Prolog Notebook 0\.1\.0\. The latest is 0\.3\.1\./,
   );
 });
@@ -89,12 +95,12 @@ test('everything else that can go wrong goes wrong quietly', async () => {
   // A registry answering nonsense, and a cache that cannot be written: neither is
   // the reader's problem, and neither stops the command. (Not reaching the
   // registry at all IS said — once a day — see the test below.)
-  assert.equal(await updateNotice({
+  assert.deepEqual(await updateNotice({
     version: '0.3.1',
     store: memory(),
     latest: async () => 'not-a-version',
     env: {},
-  }), null);
+  }), { message: null, newer: null });
 
   // A read-only home means the check happens every time instead of once a day.
   // That is a slower notifier, not a failure, and nothing may escape from it.
@@ -102,9 +108,9 @@ test('everything else that can go wrong goes wrong quietly', async () => {
   assert.throws(() => unwritable.write({}), /read-only/, 'the store really does throw');
 
   // Asked explicitly, silence would look like a bug, so this one says what happened.
-  assert.equal(await updateNotice({
+  assert.equal((await updateNotice({
     version: '0.3.1', force: true, store: memory(), latest: async () => null, env: {},
-  }), 'Could not reach the npm registry to check for updates.');
+  })).message, 'Could not reach the npm registry to check for updates.');
 });
 
 test('a registry it cannot reach is said once a day, not on every command', async () => {
@@ -117,12 +123,12 @@ test('a registry it cannot reach is said once a day, not on every command', asyn
   const offline = async () => { asked++; return null; };
   const now = 5_000_000;
 
-  assert.match(await updateNotice({ version: '0.3.1', store, latest: offline, now, env: {} }),
+  assert.match((await updateNotice({ version: '0.3.1', store, latest: offline, now, env: {} })).message,
     /Could not reach the npm registry/);
   assert.deepEqual(store.state, { checked: now, latest: null });
 
   assert.equal(
-    await updateNotice({ version: '0.3.1', store, latest: never, now: now + 1000, env: {} }),
+    (await updateNotice({ version: '0.3.1', store, latest: never, now: now + 1000, env: {} })).message,
     null,
     'said once; not again for the rest of the day',
   );

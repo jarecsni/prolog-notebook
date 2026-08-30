@@ -11,6 +11,7 @@ import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
 import { banner, VERSION } from '../src/version.js';
 import { updateNotice } from '../src/update.js';
+import { confirm, describeInstall, globalRoot, install, upgradePlan } from '../src/upgrade.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 
@@ -37,6 +38,7 @@ const require = createRequire(import.meta.url);
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
   prolog-notebook run <file.prolog.md>...   run every cell, write the answers back
+  prolog-notebook upgrade                  fetch the latest version
 
 Options
   --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
@@ -91,6 +93,53 @@ async function version() {
   return `${lines.join('\n')}\n\n`;
 }
 
+/**
+ * Fetch the latest, if this copy is one we know how to replace.
+ *
+ * @param {string} version what to install
+ * @returns {Promise<number>} an exit code
+ */
+async function upgrade(version) {
+  const packageRoot = new URL('..', import.meta.url).pathname;
+  const kind = describeInstall({ packageRoot, globalRoot: await globalRoot() });
+  const plan = upgradePlan(kind, version);
+  if (plan.say) {
+    process.stderr.write(`${plan.say}\n`);
+    return 1;
+  }
+  process.stderr.write(`Updating with ${NPM_LINE} ${plan.argv.join(' ')}\n`);
+  if (!(await install(plan.argv))) {
+    process.stderr.write('npm could not complete the update.\n');
+    return 1;
+  }
+  process.stderr.write(`You now have Prolog Notebook ${version}.\n`);
+  return 0;
+}
+
+/**
+ * Offer it, but only where a question is a question.
+ *
+ * A pipe, a script and CI are all places where waiting for an answer is a hang,
+ * so the notice is simply printed there. Both streams are checked because the
+ * question goes to stderr and the answer comes from stdin.
+ */
+async function offerUpgrade(newer) {
+  if (!process.stdin.isTTY || !process.stderr.isTTY) {
+    // Nobody to ask, so say what to type instead. `prolog-notebook upgrade`
+    // rather than the npm line: it knows how this copy was installed, and the
+    // npm line is wrong for a project dependency.
+    process.stderr.write('Update with: prolog-notebook upgrade\n');
+    return null;
+  }
+  if (!(await confirm('Update now?'))) {
+    process.stderr.write('  (run `prolog-notebook upgrade` whenever you like)\n');
+    return null;
+  }
+  return upgrade(newer);
+}
+
+const NPM_LINE = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 async function main(argv) {
   const args = argv.slice(2);
   if (!args.length || args.includes('-h') || args.includes('--help')) {
@@ -108,12 +157,17 @@ async function main(argv) {
   // forces the check that would otherwise wait for the day to turn over.
   const asked = args.includes('--check-update');
   if (asked && args.filter((a) => !a.startsWith('-')).length === 0) {
-    const notice = await updateNotice({ version: VERSION, force: true });
-    process.stderr.write(`${notice}\n`);
-    return 0;
+    const { message, newer } = await updateNotice({ version: VERSION, force: true });
+    if (message) process.stderr.write(`${message}\n`);
+    return newer ? (await offerUpgrade(newer)) ?? 0 : 0;
   }
 
   const command = args.shift();
+  if (command === 'upgrade') {
+    const { message, newer } = await updateNotice({ version: VERSION, force: true });
+    if (message) process.stderr.write(`${message}\n`);
+    return newer ? upgrade(newer) : 0;
+  }
   if (command !== 'run') {
     process.stderr.write(`unknown command "${command}"\n\n${USAGE}`);
     return 2;
@@ -154,8 +208,8 @@ async function main(argv) {
   // means "report only failures", and news about a newer version is not one. Not
   // starting the request is better than starting it and discarding the answer.
   const update = options.quiet && !asked
-    ? Promise.resolve(null)
-    : updateNotice({ version: VERSION, force: asked }).catch(() => null);
+    ? Promise.resolve({ message: null, newer: null })
+    : updateNotice({ version: VERSION, force: asked }).catch(() => ({ message: null, newer: null }));
 
   // One engine for the whole invocation, restarted between files. A notebook is
   // a world of its own — one cell is one virtual file, and two chapters may
@@ -172,8 +226,11 @@ async function main(argv) {
 
   // stderr, always: `run --stdout` is a notebook going down a pipe, and a version
   // notice in the middle of it would corrupt the file it is printing.
-  const notice = await update;
-  if (notice) process.stderr.write(`${notice}\n`);
+  const { message, newer } = await update;
+  if (message) process.stderr.write(`${message}\n`);
+  // Offered AFTER the work, and never re-running it: the files are written, and
+  // a command that repeated itself on a newer version would write them twice.
+  if (newer) await offerUpgrade(newer);
   return status;
 }
 

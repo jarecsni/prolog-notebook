@@ -93,6 +93,10 @@ chapter changes nothing.
 | `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
 | `--check-update` | ask npm whether a newer one exists, and say so either way |
 
+```sh
+prolog-notebook upgrade      # fetch the latest
+```
+
 Two things it will not do. A query stopped at the limit is written **without** a terminator,
 which is the format's way of saying the search was never exhausted — `false.` there would be a
 forgery. And if a program cell fails to load, nothing is written at all: every answer below it
@@ -104,6 +108,14 @@ when `CI` or `NO_UPDATE_NOTIFIER` is set, and never blocking the run. A registry
 reach is reported once a day rather than on every command — silence there would be
 indistinguishable from *you are up to date*. Ask outright with `--check-update` and it answers
 either way.
+
+When it finds something newer **and you are at a terminal**, it offers to fetch it, so the
+answer is a keystroke rather than an npm incantation. Down a pipe or in a script it prints
+`Update with: prolog-notebook upgrade` instead — a question nobody can answer is a hang.
+
+`upgrade` replaces this copy only when it can prove how it was installed. A global `npm i -g`
+it will do; a dependency of somebody's project it will not touch, and a source checkout is
+git's business. Guessing wrong there breaks a project while trying to help.
 
 It has no defence against a non-terminating goal yet — the engine runs in this process, so
 `loop :- loop.` hangs the command. Say the word `--limit` all you like; a runaway *consult* is

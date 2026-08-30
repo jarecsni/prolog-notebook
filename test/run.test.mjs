@@ -346,7 +346,10 @@ test('a run says so when a newer version exists, on stderr', async () => {
     });
     assert.deepEqual(asked, ['/prolog-notebook/latest']);
     assert.match(stderr, /You have Prolog Notebook \d+\.\d+\.\d+\. The latest is 99\.0\.0\./);
-    assert.match(stderr, /npm i -g prolog-notebook/);
+    // No prompt down a pipe — a question nobody can answer is a hang — so it says
+    // what to type. `prolog-notebook upgrade` rather than the npm line, because
+    // that command knows how this copy was installed and the npm line does not.
+    assert.match(stderr, /Update with: prolog-notebook upgrade/);
     assert.doesNotMatch(stdout, /The latest is/, 'the notebook is not to be corrupted');
     assert.match(stdout, /```text output for=/, 'and it is still a notebook');
 
