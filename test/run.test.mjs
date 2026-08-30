@@ -205,7 +205,7 @@ test('--version says which Prolog will produce your answers', async () => {
 
   assert.match(lines[0], /^Prolog Notebook v\d+\.\d+\.\d+ - Copyright \(C\) \d{4} .+, MIT License\.$/);
   assert.match(lines[1], /^Powered by SWI-Prolog \d+\.\d+\.\d+, swipl-wasm \d+\.\d+\.\d+$/);
-  assert.match(lines[2], /^(Build|Working copy) [0-9a-f]{7,}/);
+  assert.match(lines[2], /^(Built from commit|Working copy) [0-9a-f]{7,}/);
   // A banner that runs into the next shell prompt reads as an error message.
   assert.deepEqual(lines.slice(3), ['', '']);
 
@@ -247,27 +247,26 @@ test('the version of the package is the version it reports', async () => {
 
 test('a published build and a working copy make different claims', () => {
   // They are not the same program, and the difference is the whole reason this
-  // line exists: a bug report against a linked checkout with uncommitted edits
-  // means something else entirely from one against a published build.
+  // line exists: a bug report against a checkout with uncommitted edits means
+  // something else entirely from one against a published build.
   assert.equal(
-    buildLine({ commit: 'ccf8e5b', committed: '2026-08-30', packaged: '2026-08-30' }),
-    'Build ccf8e5b, committed 2026-08-30, packaged 2026-08-30'
+    buildLine({ commit: 'ccf8e5b', built: '2026-08-30 14:32:51 UTC' }),
+    'Built from commit ccf8e5b on 2026-08-30 14:32:51 UTC'
   );
-  assert.equal(
-    buildLine({ commit: 'ccf8e5b', committed: '2026-08-30' }),
-    'Working copy ccf8e5b, committed 2026-08-30'
-  );
+  assert.equal(buildLine({ commit: 'ccf8e5b' }), 'Working copy ccf8e5b');
   // A bare SHA over a dirty tree names a program nobody has.
-  assert.equal(
-    buildLine({ commit: 'ccf8e5b', committed: '2026-08-30', modified: true }),
-    'Working copy ccf8e5b (modified), committed 2026-08-30'
-  );
-  // Nothing known: no line at all. One that says "unknown" three times is worse.
+  assert.equal(buildLine({ commit: 'ccf8e5b', modified: true }), 'Working copy ccf8e5b (modified)');
+  // Nothing known: no line at all. One that says "unknown" twice is worse.
   assert.equal(buildLine(null), null);
   assert.equal(buildLine({}), null);
 
-  assert.match(bakedFrom({ commit: 'a', committed: 'b' }, new Date('2026-08-30T14:00:00Z')).packaged,
-    /^2026-08-30$/);
+  // ONE DATE, AND IT IS THE BUILD'S, in UTC. The commit's own date is not printed
+  // because the hash already identifies it, and a build stamp is read by whoever
+  // is holding the package, wherever they are.
+  assert.equal(
+    bakedFrom({ commit: 'a' }, new Date('2026-08-30T14:32:51Z')).built,
+    '2026-08-30 14:32:51 UTC'
+  );
 });
 
 test('the banner reports the state this copy is actually in', async () => {
@@ -282,11 +281,11 @@ test('the banner reports the state this copy is actually in', async () => {
   const line = (await run('node', [CLI, '--version'])).stdout.split('\n')[2];
 
   assert.match(line, stamped
-    ? /^Build [0-9a-f]{7,}, committed \d{4}-\d\d-\d\d, packaged \d{4}-\d\d-\d\d$/
-    : /^Working copy [0-9a-f]{7,}(?: \(modified\))?, committed \d{4}-\d\d-\d\d$/);
+    ? /^Built from commit [0-9a-f]{7,} on \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC$/
+    : /^Working copy [0-9a-f]{7,}(?: \(modified\))?$/);
 
   const { currentBuild } = await import('../src/build-info.js');
-  assert.equal(Boolean(currentBuild().packaged), stamped, 'the two must agree about which it is');
+  assert.equal(Boolean(currentBuild().built), stamped, 'the two must agree about which it is');
 });
 
 test('the release stamps the commit in, and does it before publishing', async () => {
