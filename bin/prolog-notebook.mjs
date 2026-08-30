@@ -37,28 +37,65 @@ for (const stream of [process.stdout, process.stderr]) {
 // src/version.js, where a page can import it too.
 const require = createRequire(import.meta.url);
 
+/**
+ * EACH OPTION UNDER THE COMMAND THAT TAKES IT (869erqra0).
+ *
+ * They were listed in one flat `Options` block with no owner, which reads as a
+ * promise that every one of them works everywhere — so `build --check-update`
+ * was a reasonable thing to type and `unknown option` was a strange thing to be
+ * told. Only three of them are actually the tool's rather than a command's, and
+ * now only those three are listed as such.
+ */
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
   prolog-notebook view <file.prolog.md>       read it in a browser, cells and all
+    --port <n>      what it listens on (default 8777)
+    --no-open       print the URL instead of opening a browser
+
   prolog-notebook build <file.prolog.md>      write a page you can host or send
+    --out <dir>     where it writes (default: <file>-site)
+
   prolog-notebook execute <file.prolog.md>... run every query, write the answers in
+    --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
+    --stdout        print the result instead of writing the file
+    --quiet         report only failures
+
   prolog-notebook clear <file.prolog.md>...   take the answers back out
+    --stdout        print the result instead of writing the file
+    --quiet         report only failures
+
   prolog-notebook upgrade                     fetch the latest version
 
-Options
-  --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
-  --stdout        print the result instead of writing the file
-  --quiet         report only failures
-  --out <dir>     where build writes (default: <file>-site)
-  --port <n>      what view listens on (default 8777)
-  --no-open       view prints the URL instead of opening a browser
-  --version       version, engine and copyright
+Anywhere
   --check-update  ask npm whether a newer one exists, and say so either way
+  --version       version, engine and copyright
   -h, --help      this
 
 A query that stops at the limit is written without a terminator, which is the
 format's way of saying the search was never exhausted. Nothing is invented.
 `;
+
+/**
+ * Which command each option belongs to, so a misplaced one can say where it lives.
+ *
+ * `unknown option "--limit"` is true and unhelpful when the flag is real and two
+ * lines further up the same help. This costs a lookup table and saves a re-read.
+ */
+const BELONGS_TO = {
+  '--limit': 'execute',
+  '--stdout': 'execute and clear',
+  '--quiet': 'execute and clear',
+  '--out': 'build',
+  '--port': 'view',
+  '--no-open': 'view',
+};
+
+function unknownOption(arg, command) {
+  const home = BELONGS_TO[arg];
+  return home && home !== command
+    ? `${arg} belongs to ${home}, not to ${command}\n`
+    : `unknown option "${arg}"\n`;
+}
 
 /**
  * A runaway goal hangs this process — the engine is in-process here, so there is
@@ -158,11 +195,18 @@ function canAsk() {
  *   to a newer version, null to carry on here.
  */
 async function upgradeFirst({ quiet = false, asked = false } = {}) {
-  if (!canAsk() || (quiet && !asked)) return null;
+  // ASKED OUTRIGHT ALWAYS ANSWERS (869erqra0). A terminal is needed to OFFER the
+  // upgrade, never to report one: `--check-update` down a pipe used to check
+  // nothing and say nothing, which is indistinguishable from "you are up to
+  // date" — the one thing this must never look like.
+  if (!asked && (!canAsk() || quiet)) return null;
   const ahead = await updateNotice({ version: VERSION, force: asked })
     .catch(() => ({ message: null, newer: null }));
   if (ahead.message) process.stderr.write(`${ahead.message}\n`);
-  if (!ahead.newer || !(await confirm('Update and continue on the new version?'))) return null;
+  // The notice is printed above whatever happens next; only the question needs
+  // somebody at the other end to answer it.
+  if (!ahead.newer || !canAsk()) return null;
+  if (!(await confirm('Update and continue on the new version?'))) return null;
   if ((await upgrade(ahead.newer)) !== 0) {
     process.stderr.write('Carrying on with the version you have.\n');
     return null;
@@ -213,8 +257,8 @@ async function main(argv) {
   }
 
   const command = args.shift();
-  if (command === 'view' || command === 'build') return page(command, args);
-  if (command === 'clear') return clear(args);
+  if (command === 'view' || command === 'build') return page(command, args, asked);
+  if (command === 'clear') return clear(args, asked);
   if (command === 'upgrade') {
     const { message, newer } = await updateNotice({ version: VERSION, force: true });
     if (message) process.stderr.write(`${message}\n`);
@@ -246,7 +290,7 @@ async function main(argv) {
     else if (arg === '--quiet') options.quiet = true;
     else if (arg === '--check-update') { /* handled above, and not a file */ }
     else if (arg.startsWith('-')) {
-      process.stderr.write(`unknown option "${arg}"\n\n${USAGE}`);
+      process.stderr.write(unknownOption(arg, 'execute'));
       return 2;
     } else files.push(arg);
   }
@@ -259,7 +303,9 @@ async function main(argv) {
 
   const jump = await upgradeFirst({ quiet: options.quiet, asked });
   if (jump !== null) return jump;
-  checked = canAsk() && (!options.quiet || asked);
+  // Whatever upgradeFirst has just reported must not be reported again below.
+  // Asked outright, it always reports now, terminal or not.
+  checked = asked || (canAsk() && !options.quiet);
 
   // STARTED NOW, READ AT THE END. The registry is somebody else's machine on
   // somebody else's network, and none of that should stand between the reader
@@ -309,14 +355,16 @@ async function main(argv) {
  * No engine, no network and no update check: this is a text operation on a file
  * the reader already has.
  */
-async function clear(args) {
+async function clear(args, asked = false) {
   const options = { stdout: false, quiet: false };
   const files = [];
   for (const arg of args) {
     if (arg === '--stdout') options.stdout = true;
     else if (arg === '--quiet') options.quiet = true;
+    // Handled by the caller, and not a file.
+    else if (arg === '--check-update') { /* global */ }
     else if (arg.startsWith('-')) {
-      process.stderr.write(`unknown option "${arg}"\n`);
+      process.stderr.write(unknownOption(arg, 'clear'));
       return 2;
     } else files.push(arg);
   }
@@ -324,6 +372,13 @@ async function clear(args) {
     process.stderr.write('clear needs at least one file\n');
     return 2;
   }
+
+  // THE SAME DOOR AS EVERY OTHER COMMAND THAT DOES REAL WORK (869erqra0). 0.5.1
+  // put `view` and `build` through it and this command shipped afterwards, so it
+  // never looked. Emptying somebody's notebook is as real as work gets here, and
+  // before the work is the only point at which a newer version changes anything.
+  const jump = await upgradeFirst({ quiet: options.quiet, asked });
+  if (jump !== null) return jump;
 
   let status = 0;
   for (const file of files) {
@@ -361,11 +416,20 @@ async function clear(args) {
  * whole reason a built page is readable before any engine arrives. Use `run` to
  * put them there.
  */
-async function page(command, args) {
+async function page(command, args, asked = false) {
   const options = { out: null, port: 8777, open: true };
   const files = [];
   while (args.length) {
     const arg = args.shift();
+    // ONE PARSER, TWO COMMANDS, AND THEY DO NOT TAKE THE SAME FLAGS. `view` and
+    // `build` share this function, so `build --port 90` was quietly accepted and
+    // ignored while the help said --port was view's (869erqra0). A flag that is
+    // read and thrown away is worse than one that is refused: it looks like it
+    // worked.
+    if (BELONGS_TO[arg] && BELONGS_TO[arg] !== command) {
+      process.stderr.write(unknownOption(arg, command));
+      return 2;
+    }
     if (arg === '--out') options.out = args.shift();
     else if (arg === '--port') {
       options.port = Number(args.shift());
@@ -374,8 +438,10 @@ async function page(command, args) {
         return 2;
       }
     } else if (arg === '--no-open') options.open = false;
+    // Handled by the caller, and not a file.
+    else if (arg === '--check-update') { /* global */ }
     else if (arg.startsWith('-')) {
-      process.stderr.write(`unknown option "${arg}"\n`);
+      process.stderr.write(unknownOption(arg, command));
       return 2;
     } else files.push(arg);
   }
@@ -387,7 +453,7 @@ async function page(command, args) {
   // The same offer the execute path makes, and for the same reason: a server about to
   // start, or a directory about to be written, is work that a newer version
   // should be doing.
-  const jump = await upgradeFirst();
+  const jump = await upgradeFirst({ asked });
   if (jump !== null) return jump;
 
   const file = files[0];

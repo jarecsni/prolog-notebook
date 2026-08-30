@@ -192,10 +192,21 @@ test('view and build ask about updates too, not only run', async () => {
   const cli = await import('node:fs').then((fs) => fs.readFileSync(
     new URL('../bin/prolog-notebook.mjs', import.meta.url), 'utf8'));
   const calls = [...cli.matchAll(/await upgradeFirst\(/g)];
-  assert.equal(calls.length, 2, 'once for run, once for view and build together');
-  // And before anything is served or written: the offer is worthless afterwards.
-  assert.ok(cli.indexOf('await upgradeFirst()') < cli.indexOf('const server = await serve('));
-  assert.ok(cli.indexOf('await upgradeFirst()') < cli.indexOf("if (command === 'build')"));
+  // execute, view-and-build, and clear — which shipped after the rule was made
+  // and missed it, until 869erqra0. A fourth command doing real work needs a
+  // fourth call, and this is the assertion that will say so.
+  assert.equal(calls.length, 3, 'execute, view/build, clear');
+  // And before anything is served, written or emptied: the offer is worthless
+  // afterwards, because by then the outcome is already on disk.
+  const door = cli.indexOf('await upgradeFirst({ asked })');
+  assert.ok(door > 0 && door < cli.indexOf('const server = await serve('));
+  assert.ok(door < cli.indexOf("if (command === 'build')"));
+  // Scoped to the function, because `page` is defined after `clear` and a
+  // whole-file lastIndexOf would be measuring the wrong call.
+  const clearFn = cli.slice(cli.indexOf('async function clear('), cli.indexOf('async function page('));
+  assert.ok(clearFn.includes('await upgradeFirst('), 'clear goes through the door at all');
+  assert.ok(clearFn.indexOf('await upgradeFirst(') < clearFn.indexOf('clearedSource('),
+    'and before it empties anything');
 });
 
 // --------------------------------- the page follows the file it came from

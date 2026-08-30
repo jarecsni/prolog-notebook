@@ -132,16 +132,24 @@ chapter.prolog.md: 4 answers removed
 `clear` empties every output block and touches nothing else; `execute` fills them in again from
 the engine. A chapter with no answers is a valid chapter — one that has not been executed yet.
 
+Each option belongs to a command, and typing one under the wrong command tells you which:
+
+| flag | on | |
+|---|---|---|
+| `--limit <n>` | `execute` | solutions to take from one query before stopping. Default 100. |
+| `--stdout` | `execute`, `clear` | print the result instead of writing the file |
+| `--quiet` | `execute`, `clear` | report only failures |
+| `--out <dir>` | `build` | where it writes. Default `<file>-site` |
+| `--port <n>` | `view` | what it listens on. Default 8777, and it takes another if that one is busy |
+| `--no-open` | `view` | print the URL instead of opening a browser |
+
+Three work anywhere, because they are about the tool rather than about a notebook:
+
 | flag | |
 |---|---|
-| `--limit <n>` | solutions to take from one query before stopping. Default 100. |
-| `--stdout` | print the result instead of writing the file |
-| `--quiet` | report only failures |
-| `--out <dir>` | where `build` writes. Default `<file>-site` |
-| `--port <n>` | what `view` listens on. Default 8777, and it takes another if that one is busy |
-| `--no-open` | `view` prints the URL instead of opening a browser |
 | `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
-| `--check-update` | ask npm whether a newer one exists, and say so either way |
+| `--check-update` | ask npm whether a newer one exists, and say so either way — forced, whatever the daily check thinks, and answered even down a pipe |
+| `-h`, `--help` | the same list, from the command itself |
 
 ```sh
 prolog-notebook upgrade      # fetch the latest
