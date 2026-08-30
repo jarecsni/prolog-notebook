@@ -270,11 +270,23 @@ test('a published build and a working copy make different claims', () => {
     /^2026-08-30$/);
 });
 
-test('run from this repo, the banner says working copy', async () => {
-  const { stdout } = await run('node', [CLI, '--version']);
-  const line = stdout.split('\n')[2];
-  assert.match(line, /^Working copy [0-9a-f]{7,}(?: \(modified\))?, committed \d{4}-\d\d-\d\d$/);
-  assert.deepEqual(Object.keys(currentBuild()).sort(), ['commit', 'committed', 'modified']);
+test('the banner reports the state this copy is actually in', async () => {
+  // BOTH STATES ARE REAL, AND ONE OF THEM ONLY HAPPENS AT RELEASE. This asserted
+  // "Working copy" unconditionally and passed everywhere except the one place it
+  // mattered: `prepublishOnly` runs the suite AFTER the release workflow has
+  // stamped the commit in, so the banner correctly said "Build 34278fd, …" and
+  // the publish was stopped by its own gate. Which state to expect is decided by
+  // the file that decides it.
+  const { existsSync } = await import('node:fs');
+  const stamped = existsSync(new URL('../src/build-info.json', import.meta.url));
+  const line = (await run('node', [CLI, '--version'])).stdout.split('\n')[2];
+
+  assert.match(line, stamped
+    ? /^Build [0-9a-f]{7,}, committed \d{4}-\d\d-\d\d, packaged \d{4}-\d\d-\d\d$/
+    : /^Working copy [0-9a-f]{7,}(?: \(modified\))?, committed \d{4}-\d\d-\d\d$/);
+
+  const { currentBuild } = await import('../src/build-info.js');
+  assert.equal(Boolean(currentBuild().packaged), stamped, 'the two must agree about which it is');
 });
 
 test('the release stamps the commit in, and does it before publishing', async () => {
