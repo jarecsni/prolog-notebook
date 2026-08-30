@@ -12,7 +12,7 @@ import { buildLine, currentBuild } from '../src/build-info.js';
 import { banner, VERSION } from '../src/version.js';
 import { updateNotice } from '../src/update.js';
 import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
-import { exportSource } from '../src/export.js';
+import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 import { buildFiles } from '../src/build.js';
 import { openInBrowser, serve } from '../src/serve.js';
@@ -42,6 +42,7 @@ const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
   prolog-notebook view <file.prolog.md>       read it in a browser, cells and all
   prolog-notebook build <file.prolog.md>      write a page you can host or send
   prolog-notebook execute <file.prolog.md>... run every query, write the answers in
+  prolog-notebook clear <file.prolog.md>...   take the answers back out
   prolog-notebook upgrade                     fetch the latest version
 
 Options
@@ -213,6 +214,7 @@ async function main(argv) {
 
   const command = args.shift();
   if (command === 'view' || command === 'build') return page(command, args);
+  if (command === 'clear') return clear(args);
   if (command === 'upgrade') {
     const { message, newer } = await updateNotice({ version: VERSION, force: true });
     if (message) process.stderr.write(`${message}\n`);
@@ -293,6 +295,62 @@ async function main(argv) {
   // Offered AFTER the work, and never re-running it: the files are written, and
   // a command that repeated itself on a newer version would write them twice.
   if (newer) await offerUpgrade(newer);
+  return status;
+}
+
+/**
+ * Take the answers back out.
+ *
+ * The counterpart to `execute`, and it exists because the alternative was editing
+ * the file by hand: a workbook edition with the answers withheld, a diff without
+ * nineteen solution sequences in the way, or starting again deliberately rather
+ * than trusting an overwrite.
+ *
+ * No engine, no network and no update check: this is a text operation on a file
+ * the reader already has.
+ */
+async function clear(args) {
+  const options = { stdout: false, quiet: false };
+  const files = [];
+  for (const arg of args) {
+    if (arg === '--stdout') options.stdout = true;
+    else if (arg === '--quiet') options.quiet = true;
+    else if (arg.startsWith('-')) {
+      process.stderr.write(`unknown option "${arg}"\n`);
+      return 2;
+    } else files.push(arg);
+  }
+  if (!files.length) {
+    process.stderr.write('clear needs at least one file\n');
+    return 2;
+  }
+
+  let status = 0;
+  for (const file of files) {
+    let source;
+    let emptied;
+    try {
+      source = readFileSync(file, 'utf8');
+      emptied = clearedSource(parse(source));
+    } catch (e) {
+      process.stderr.write(`${file}: ${e.message}\n`);
+      status = 1;
+      continue;
+    }
+    if (options.stdout) {
+      process.stdout.write(emptied.text);
+      continue;
+    }
+    if (emptied.text === source) {
+      if (!options.quiet) process.stderr.write(`${basename(file)}: nothing to remove\n`);
+      continue;
+    }
+    writeFileSync(file, emptied.text);
+    if (!options.quiet) {
+      const n = emptied.cleared;
+      process.stderr.write(`${basename(file)}: ${n} answer${n === 1 ? '' : 's'} removed\n`);
+    }
+  }
   return status;
 }
 

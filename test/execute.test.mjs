@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parse, serialise } from '../src/format.js';
 import { renderNotebook } from '../src/render.js';
-import { exportSource } from '../src/export.js';
+import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook } from '../src/run.js';
 import { buildLine, currentBuild, bakedFrom } from '../src/build-info.js';
 import { createSession } from '../src/node.js';
@@ -395,4 +395,69 @@ test('run and exec still work, and are not advertised', async () => {
   const { stdout: help } = await run('node', [CLI, '--help']);
   assert.match(help, /prolog-notebook execute/);
   assert.doesNotMatch(help, /prolog-notebook (run|exec) /);
+});
+
+// ------------------------------------------------------------------ clear
+
+test('clear takes the answers out and leaves everything else where it was', async () => {
+  // The counterpart to execute, and it exists because the alternative was editing
+  // the file by hand (869erp1wq).
+  const source = readFileSync(new URL('../notebooks/ch04-cut.prolog.md', import.meta.url), 'utf8');
+  const { text, cleared } = clearedSource(parse(source));
+
+  assert.equal(cleared, 4, 'the chapter has four answered queries');
+  assert.doesNotMatch(text, /```text output/);
+  assert.doesNotMatch(text, /input-hash/);
+
+  // Everything that is the author's is untouched — prose, program cells, goals,
+  // and the attributes on them. Emptying the answers is not licence to reformat.
+  assert.match(text, /## The complaint/);
+  assert.match(text, /```prolog query id="q-son-a" rerun="auto" hold="until-answered"/);
+  assert.match(text, /son_a\(X\) :- once\(\( male\(X\), parent\(_, X\) \)\)\./);
+  assert.match(text, /> \[!margin\] edward, then edward again/);
+
+  // And what is left is a valid chapter: one that has simply not been executed.
+  const again = parse(text);
+  assert.equal(again.cells.filter((c) => c.kind === 'query').length, 4);
+  assert.equal(again.cells.every((c) => c.kind !== 'query' || c.output === null), true);
+});
+
+test('clearing a chapter with no answers changes nothing at all', () => {
+  const source = '```prolog query id="q-1"\nfoo(X)\n```\n';
+  const { text, cleared } = clearedSource(parse(source));
+  assert.equal(cleared, 0);
+  assert.equal(text, source, 'and it must not rewrite the file to say so');
+});
+
+test('the command reports what it removed, and refuses to guess', async () => {
+  const file = await temp('ch.prolog.md', readFileSync(
+    new URL('../notebooks/ch04-cut.prolog.md', import.meta.url), 'utf8'));
+
+  const first = await run('node', [CLI, 'clear', file]);
+  assert.match(first.stderr, /ch\.prolog\.md: 4 answers removed/);
+  assert.doesNotMatch(await readFile(file, 'utf8'), /```text output/);
+
+  // Idempotent, and it says so rather than rewriting the file to no purpose.
+  const second = await run('node', [CLI, 'clear', file]);
+  assert.match(second.stderr, /nothing to remove/);
+
+  // --stdout leaves the file alone, exactly as it does for execute.
+  const untouched = await readFile(file, 'utf8');
+  const { stdout } = await run('node', [CLI, 'clear', '--stdout', file]);
+  assert.equal(await readFile(file, 'utf8'), untouched);
+  assert.doesNotMatch(stdout, /```text output/);
+
+  const noFile = await run('node', [CLI, 'clear']).catch((e) => e);
+  assert.equal(noFile.code, 2);
+  assert.match(noFile.stderr, /clear needs at least one file/);
+});
+
+test('clear then execute is the chapter it started as', async () => {
+  // The two are a pair: one empties, the other fills. A round trip that did not
+  // land on the same bytes would mean one of them is inventing something.
+  const original = readFileSync(new URL('../notebooks/ch04-cut.prolog.md', import.meta.url), 'utf8');
+  const file = await temp('ch.prolog.md', original);
+  await run('node', [CLI, 'clear', '--quiet', file]);
+  await run('node', [CLI, 'execute', '--quiet', file]);
+  assert.equal(await readFile(file, 'utf8'), original);
 });

@@ -95,6 +95,29 @@ export function exportSource(notebook, edits) {
 }
 
 /**
+ * The chapter with its answers taken back out.
+ *
+ * A query cell with no output block is valid — the result is a chapter that
+ * simply has not been executed yet, and `execute` will fill it in again. Nothing
+ * else moves: prose, program cells, goals and attributes are the author's, and
+ * this is not an excuse to reformat them.
+ *
+ * It goes through the SAME ERASURE PATH the reader's download already uses:
+ * `output: null` has always meant "there are no answers to write down here"
+ * (869ejgbxf), so nothing new decides what an emptied cell means.
+ *
+ * @param {{frontMatter: Map<string, string>, cells: object[]}} notebook
+ * @returns {{text: string, cleared: number}} the bytes, and how many were emptied
+ */
+export function clearedSource(notebook) {
+  const edits = new Map();
+  for (const cell of notebook.cells) {
+    if (cell.kind === 'query' && cell.output) edits.set(cell.id, { output: null });
+  }
+  return { text: exportSource(notebook, edits), cleared: edits.size };
+}
+
+/**
  * A filename for the reader's copy.
  *
  * From the SOURCE, never the title: a title can contain anything, including

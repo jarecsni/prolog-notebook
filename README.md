@@ -106,6 +106,16 @@ back into the file along with an `input-hash` for each — which is what makes t
 complete, and render as *current*, before the engine arrives. Running it again on an unchanged
 chapter changes nothing.
 
+And back out again, for a workbook edition or a diff you can read:
+
+```sh
+prolog-notebook clear ch04-cut.prolog.md
+ch04-cut.prolog.md: 4 answers removed
+```
+
+`clear` empties every output block and touches nothing else; `execute` fills them in again from
+the engine. A chapter with no answers is a valid chapter — one that has not been executed yet.
+
 | flag | |
 |---|---|
 | `--limit <n>` | solutions to take from one query before stopping. Default 100. |
