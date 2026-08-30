@@ -12,8 +12,12 @@ export const NAME = 'Prolog Notebook';
 /** Must equal package.json's `version` — test/run.test.mjs enforces it. */
 export const VERSION = '0.2.0';
 
+/** The two facts a licence notice is actually made of. */
+export const YEAR = '2026';
+export const HOLDER = 'Johnny Jarecsni';
+
 /** Must agree with LICENSE on the year and the holder. Same enforcement. */
-export const COPYRIGHT = 'Copyright (C) 2026 Johnny Jarecsni';
+export const COPYRIGHT = `Copyright (C) ${YEAR} ${HOLDER}`;
 
 export const LICENSE = 'MIT';
 
@@ -25,4 +29,23 @@ export const LICENSE = 'MIT';
  */
 export function banner() {
   return `${NAME} v${VERSION} - ${COPYRIGHT}, ${LICENSE} License.`;
+}
+
+/**
+ * The same facts for a page, which has a card to fit them in rather than a
+ * terminal to fill.
+ *
+ * TWO SHORT LINES BY CONSTRUCTION, not by shrinking the type: what is running,
+ * then who owns it. The engine's version joins the first line once it is known,
+ * because that line is the identity of the thing doing the work — and `©` rather
+ * than `Copyright (C)` because that is how a page writes it, while the words in
+ * both come from the same constants.
+ *
+ * @returns {{running: string, legal: string}}
+ */
+export function colophon() {
+  return {
+    running: `${NAME} v${VERSION}`,
+    legal: `© ${YEAR} ${HOLDER} · ${LICENSE} License`,
+  };
 }

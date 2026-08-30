@@ -183,7 +183,8 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
       answersButton: find('[data-act="peek-all"]')?.querySelector('.label').textContent ?? null,
       answersDisabled: find('[data-act="peek-all"]')?.disabled ?? null,
       notebook: find('.notebook-state')?.textContent ?? null,
-      about: find('.page-controls .about .tool')?.textContent ?? null,
+      about: find('.page-controls .about .running')?.textContent ?? null,
+      legal: find('.page-controls .about .legal')?.textContent ?? null,
       engineVersion: find('.page-controls .about .engine-version')?.textContent ?? null,
     }),
 

@@ -19,7 +19,7 @@ import { createSession, formatSolution, prologVersion, readableInCell } from './
 import { declaredDynamic, definedPredicates, unknownProcedure } from './clauses.js';
 import { download } from './export.js';
 import { solutionSequence } from './format.js';
-import { banner } from './version.js';
+import { colophon } from './version.js';
 
 let serial = 0;
 let panels = 0;
@@ -225,8 +225,9 @@ function mountPageBar(root, options, bus, programs, queries) {
     // own version arrives on the second line once it has started, because until
     // then nothing here knows it: it lives inside the WebAssembly, and asking is
     // what starting is for.
-    + `<p class="about"><span class="tool">${banner()}</span>`
-    + '<span class="engine-version"></span></p>'
+    + `<p class="about"><span class="running">${colophon().running}`
+    + '<span class="engine-version"></span></span>'
+    + `<span class="legal">${colophon().legal}</span></p>`
     + '</div>';
   const state = bar.querySelector('.engine-state');
   // One button, whose label is always the thing it will do. "restart engine" over
@@ -350,8 +351,9 @@ function mountPageBar(root, options, bus, programs, queries) {
     } else if (event.kind === 'restarted') {
       age = `restarted ${event.at}`;
     } else if (event.kind === 'engine-version') {
+      // Joins the line that says what is running, because that is what it is.
       // A rebuilt engine is the same build, so this is set once and left.
-      bar.querySelector('.engine-version').textContent = `Powered by SWI-Prolog ${event.version}`;
+      bar.querySelector('.engine-version').textContent = ` · SWI-Prolog ${event.version}`;
       return;
     }
     if (!age) return;

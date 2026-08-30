@@ -223,13 +223,14 @@ test('the notice in the command is the notice in the LICENSE', async () => {
   // The year and the holder live in src/version.js because a PAGE cannot read
   // LICENSE — there is no filesystem behind a module script and no build step to
   // inline one. This is what keeps the two from drifting apart.
-  const cli = await readFile(new URL('../src/version.js', import.meta.url), 'utf8');
+  const { COPYRIGHT } = await import('../src/version.js');
   const licence = await readFile(new URL('../LICENSE', import.meta.url), 'utf8');
   // The (C) is capitalised in the banner and lower case in the licence, which is
   // a house-style difference. The year and the holder are the facts, and those
-  // must agree.
+  // must agree. Compared as VALUES rather than as source text, because the
+  // notice is now composed from a year and a holder that a page also uses.
   const notice = /Copyright \([Cc]\) (\d{4} [^\n'`,]+)/;
-  assert.equal(cli.match(notice)[1].trim(), licence.match(notice)[1].trim());
+  assert.equal(COPYRIGHT.match(notice)[1].trim(), licence.match(notice)[1].trim());
 });
 
 test('the version of the package is the version it reports', async () => {
