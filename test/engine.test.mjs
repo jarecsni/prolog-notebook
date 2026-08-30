@@ -268,3 +268,21 @@ test('our own wrapper never appears in an error the reader has to read', async (
   const r = await session.query('nosuch(X)').next();
   assert.equal(r.error, 'Unknown procedure: nosuch/1');
 });
+
+test('the engine version is pinned exactly, not floated', async () => {
+  // MEASURED, and the reason this test exists: two installs of the same
+  // prolog-notebook 0.2.0, ten minutes apart, reported SWI-Prolog 10.1.10 and
+  // 10.1.13 — because `^8.0.4` floats and each swipl-wasm carries a different
+  // SWI (869erk2uv).
+  //
+  // A chapter's saved answers are only ever true of the engine that produced
+  // them, and SWI's answer spelling is not stable across releases. With a range,
+  // `--check` in CI fails on a chapter nobody touched, and two readers running
+  // `prolog-notebook run` on one file produce different bytes. Moving the engine
+  // should be a commit with the chapters re-run in it, which is what an exact
+  // pin makes it.
+  const { readFile } = await import('node:fs/promises');
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.match(pkg.dependencies['swipl-wasm'], /^\d+\.\d+\.\d+$/,
+    'swipl-wasm must be an exact version, with no ^ or ~');
+});
