@@ -164,7 +164,7 @@ test('a program cell that does not load is a failure, and nothing is written', a
     '```prolog program id="p-bad"\nthis is not( prolog\n```\n\n```prolog query id="q-x"\ntrue\n```\n');
   const before = await readFile(file, 'utf8');
 
-  const result = await run('node', [CLI, 'run', file]).catch((e) => e);
+  const result = await run('node', [CLI, 'execute', file]).catch((e) => e);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /cell p-bad did not load/);
   assert.match(result.stderr, /not written/);
@@ -175,7 +175,7 @@ test('a program cell that does not load is a failure, and nothing is written', a
 
 test('the command fills a file in place, and says so', async () => {
   const file = await temp('lists.prolog.md', NOTEBOOK);
-  const { stderr } = await run('node', [CLI, 'run', file]);
+  const { stderr } = await run('node', [CLI, 'execute', file]);
 
   assert.match(stderr, /q-split — 3 solutions/);
   assert.match(stderr, /written/);
@@ -187,17 +187,17 @@ test('the command fills a file in place, and says so', async () => {
   // wrote that stops being an annoyance.
   assert.match(stderr, /no timeout yet/);
 
-  const again = await run('node', [CLI, 'run', file]);
+  const again = await run('node', [CLI, 'execute', file]);
   assert.match(again.stderr, /unchanged/);
 });
 
 test('--stdout leaves the file alone, and --limit is checked', async () => {
   const file = await temp('lists.prolog.md', NOTEBOOK);
-  const { stdout } = await run('node', [CLI, 'run', '--stdout', '--quiet', file]);
+  const { stdout } = await run('node', [CLI, 'execute', '--stdout', '--quiet', file]);
   assert.match(stdout, /```text output for="q-one"/);
   assert.equal(await readFile(file, 'utf8'), NOTEBOOK, 'untouched');
 
-  const bad = await run('node', [CLI, 'run', '--limit', 'lots', file]).catch((e) => e);
+  const bad = await run('node', [CLI, 'execute', '--limit', 'lots', file]).catch((e) => e);
   assert.equal(bad.code, 2);
   assert.match(bad.stderr, /positive whole number/);
 });
@@ -314,7 +314,7 @@ test('the release stamps the commit in, and does it before publishing', async ()
 test('a run says so when a newer version exists, on stderr', async () => {
   // END TO END, against a registry of this test's own: the flag is parsed, the
   // request is made while the work happens, and the notice lands on STDERR —
-  // which matters, because `run --stdout` is a notebook going down a pipe and a
+  // which matters, because `execute --stdout` is a notebook going down a pipe and a
   // version notice in the middle of it would corrupt the file.
   const { createServer } = await import('node:http');
   const asked = [];
@@ -336,7 +336,7 @@ test('a run says so when a newer version exists, on stderr', async () => {
   try {
     const file = await temp('lists.prolog.md', NOTEBOOK);
     // No --quiet here: that suppresses the check entirely, which is its own test.
-    const { stdout, stderr } = await run('node', [CLI, 'run', '--stdout', file], {
+    const { stdout, stderr } = await run('node', [CLI, 'execute', '--stdout', file], {
       env: {
         PROLOG_NOTEBOOK_REGISTRY: registry,
         NO_UPDATE_NOTIFIER: '',
@@ -357,7 +357,7 @@ test('a run says so when a newer version exists, on stderr', async () => {
     // one. The request is not even made: starting it to discard the answer would
     // be a command going to the network for nothing.
     const before = asked.length;
-    const quiet = await run('node', [CLI, 'run', '--stdout', '--quiet', file], {
+    const quiet = await run('node', [CLI, 'execute', '--stdout', '--quiet', file], {
       env: {
         PROLOG_NOTEBOOK_REGISTRY: registry,
         NO_UPDATE_NOTIFIER: '',
@@ -369,7 +369,7 @@ test('a run says so when a newer version exists, on stderr', async () => {
     assert.doesNotMatch(quiet.stderr, /The latest is/);
 
     // Unless it was asked for outright, which --quiet does not override.
-    const forced = await run('node', [CLI, 'run', '--stdout', '--quiet', '--check-update', file], {
+    const forced = await run('node', [CLI, 'execute', '--stdout', '--quiet', '--check-update', file], {
       env: {
         PROLOG_NOTEBOOK_REGISTRY: registry,
         NO_UPDATE_NOTIFIER: '',
@@ -381,4 +381,18 @@ test('a run says so when a newer version exists, on stderr', async () => {
   } finally {
     server.close();
   }
+});
+
+test('run and exec still work, and are not advertised', async () => {
+  // `run` is published in every release since 0.3.0. Renaming it to `execute`
+  // (869erp0jd) must not break a command somebody has in a script — but one name
+  // is the name, so neither alias appears in --help.
+  const file = await temp('lists.prolog.md', NOTEBOOK);
+  for (const alias of ['run', 'exec']) {
+    const { stdout } = await run('node', [CLI, alias, '--stdout', '--quiet', file]);
+    assert.match(stdout, /```text output for="q-split"/, `${alias} must still execute`);
+  }
+  const { stdout: help } = await run('node', [CLI, '--help']);
+  assert.match(help, /prolog-notebook execute/);
+  assert.doesNotMatch(help, /prolog-notebook (run|exec) /);
 });

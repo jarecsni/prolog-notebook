@@ -98,7 +98,7 @@ author's *guess* at what SWI prints, published as though it ran. So write the fi
 output blocks and let the engine fill them in:
 
 ```sh
-npx prolog-notebook run notebooks/ch04-cut.prolog.md
+prolog-notebook execute notebooks/ch04-cut.prolog.md
 ```
 
 It consults every program cell, runs every query below it, and writes the solution sequences
@@ -135,7 +135,7 @@ doing the work — and if you say yes it upgrades, then runs your command on the
 One command, no re-run:
 
 ```
-$ prolog-notebook run ch04.prolog.md
+$ prolog-notebook execute ch04.prolog.md
 You have Prolog Notebook 0.4.0. The latest is 0.4.2.
 Update and continue on the new version? [Y/n] y
 Updating with npm i -g prolog-notebook@0.4.2
