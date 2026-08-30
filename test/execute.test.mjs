@@ -461,3 +461,68 @@ test('clear then execute is the chapter it started as', async () => {
   await run('node', [CLI, 'execute', '--quiet', file]);
   assert.equal(await readFile(file, 'utf8'), original);
 });
+
+// ------------------------------------------ the options mean the same thing everywhere
+
+test('an option that belongs to another command says where it lives', async () => {
+  // "unknown option --limit" is true and unhelpful when the flag is real and two
+  // lines up in the same help (869erqra0). It also caught a silent one: `view`
+  // and `build` share a parser, so `build --port 90` was accepted and ignored —
+  // a flag that is read and thrown away looks like it worked.
+  const file = await temp('lists.prolog.md', NOTEBOOK);
+  const cases = [
+    [['build', file, '--port', '90'], /--port belongs to view, not to build/],
+    [['view', file, '--out', 'x'], /--out belongs to build, not to view/],
+    [['view', file, '--limit', '5'], /--limit belongs to execute, not to view/],
+    [['execute', file, '--out', 'x'], /--out belongs to build, not to execute/],
+    [['clear', file, '--port', '1'], /--port belongs to view, not to clear/],
+    [['build', file, '--nonsense'], /unknown option "--nonsense"/],
+  ];
+  for (const [argv, says] of cases) {
+    const failed = await run('node', [CLI, ...argv]).then(() => null, (e) => e);
+    assert.ok(failed, `${argv.join(' ')} should have been refused`);
+    assert.equal(failed.code, 2);
+    assert.match(failed.stderr, says);
+  }
+});
+
+test('--check-update is answered wherever it is typed, and with nobody to ask', async () => {
+  // The help listed it under no command, exactly as though it were global — and
+  // then `build lists.prolog.md --check-update` said "unknown option". It is the
+  // one flag here that belongs to the tool rather than to a command.
+  //
+  // And it answers DOWN A PIPE. A terminal is needed to offer the upgrade, never
+  // to report one; without that, an explicit check in a script said nothing at
+  // all, which is indistinguishable from "you are up to date".
+  const { createServer } = await import('node:http');
+  const asked = [];
+  const server = createServer((req, res) => {
+    asked.push(req.url);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ version: '99.0.0' }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const registry = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const file = await temp('lists.prolog.md', NOTEBOOK);
+    const out = await mkdtemp(join(tmpdir(), 'prolog-notebook-site-'));
+    for (const argv of [['build', file, '--out', out], ['clear', '--stdout', file]]) {
+      const before = asked.length;
+      const { stderr } = await run('node', [CLI, ...argv, '--check-update'], {
+        env: {
+          PROLOG_NOTEBOOK_REGISTRY: registry,
+          // Set as a reader would set them, to prove that asking outright still
+          // wins: an explicit question is a person, not a pipeline.
+          NO_UPDATE_NOTIFIER: '1',
+          CI: 'true',
+          XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+        },
+      });
+      assert.equal(asked.length, before + 1, `${argv[0]} asked the registry`);
+      assert.match(stderr, /The latest is 99\.0\.0\./, `${argv[0]} said so`);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
