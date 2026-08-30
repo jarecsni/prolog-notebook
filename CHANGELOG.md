@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.6.1] — 2026-08-30
+
+### Fixed
+
+- **`view` served the notebook as it was when the server started.** It built the page once and
+  handed the map to the server, which held it for the life of the process — so an author who
+  edited their chapter and reloaded was shown the version the server had started with. A reload
+  is the gesture for *show me what I just did*, and answering it with the old page teaches an
+  author to doubt their own edit rather than the tool.
+
+  The request is now what reads the file, so there is no window in which the page and the file
+  can disagree, and nothing that can have missed a change. Compared by bytes rather than mtime:
+  an editor writing through a rename, a `git checkout` and two saves inside one millisecond are
+  all changes an mtime reports unreliably, and reparsing a chapter is milliseconds on a file the
+  author has open anyway. An unchanged file is read and not rebuilt.
+
+  A chapter that stops parsing keeps the last version that did, with the parser's own message
+  across the top of the page and once on stderr — not once per asset. Silently serving the
+  previous version would be the same bug wearing the fix's clothes, and blanking the page would
+  throw a chapter away over a half-typed fence. Fixing the file restores it with no restart.
+
+  `build` is unchanged: it takes the first answer and writes it.
+
 ## [0.6.0] — 2026-08-30
 
 Taking the answers back out — at the terminal, and on the page. Plus the first documentation
