@@ -118,8 +118,14 @@ export function fakeEngine({ answers = {}, fail = {} } = {}) {
  * be testing a different file. Each call replaces them, so tests are independent
  * in the only way that matters — nothing here is module state any more.
  */
-export function pageFor(source, { engine = fakeEngine(), download } = {}) {
+export function pageFor(source, { engine = fakeEngine(), download, published } = {}) {
   const notebook = parse(source);
+  // NO STYLESHEET, and that is a stated limit rather than an omission. jsdom
+  // resolves `hidden` ABOVE an author `display` rule; a browser does the
+  // opposite, which is how the version picker came to sit beside the phrase it
+  // replaces while every attribute said it was hidden. Loading the CSS here
+  // would make that bug PASS while looking like proof — so visibility is
+  // asserted as intent (`.hidden`) here, and as fact in a browser.
   const dom = new JSDOM(`<!doctype html><html><body><main>${renderNotebook(notebook)}</main></body></html>`, {
     pretendToBeVisual: true,
   });
@@ -135,7 +141,15 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
   // (869eddzgq) — and the only honest way to assert it is to watch the seam.
   let boots = 0;
   const cells = mount(root, { createSession: async () => { boots++; return engine; } });
-  if (download) offerDownload(root, download);
+  if (download) {
+    offerDownload(root, {
+      produce: download,
+      published,
+      isEdited: () => cells.programs.some((p) => p.isEdited())
+        || cells.queries.some((q) => q.isEdited()),
+      on: cells.on,
+    });
+  }
 
   const find = (selector) => window.document.querySelector(selector);
   const cell = (id) => window.document.querySelector(`[data-cell="${id}"]`);
@@ -145,6 +159,13 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
 
     /** How many times the page has asked for an engine. */
     boots: () => boots,
+
+    /** What the page INTENDS to show. Whether the cascade agrees is a browser's
+     * question — see the note above. */
+    shows: (selector) => {
+      const el = window.document.querySelector(selector);
+      return Boolean(el) && !el.hidden;
+    },
 
     /** A cell's visible output, one line per entry, chrome stripped. */
     out: (id) => [...cell(id).querySelectorAll('.out .line')]
@@ -175,6 +196,13 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
       box.dispatchEvent(new window.Event('change', { bubbles: true }));
     },
 
+    /** Choose which version the download button will hand over. */
+    chooseVersion: (value) => {
+      const select = find('.page-controls .picker select');
+      select.value = value;
+      select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    },
+
     /** The page controls, as a reader reads them. */
     panel: () => ({
       open: find('.page-controls').dataset.open === 'true',
@@ -182,7 +210,19 @@ export function pageFor(source, { engine = fakeEngine(), download } = {}) {
       answers: find('.answers-state')?.textContent ?? null,
       answersButton: find('[data-act="peek-all"]')?.querySelector('.label').textContent ?? null,
       answersDisabled: find('[data-act="peek-all"]')?.disabled ?? null,
-      notebook: find('.notebook-state')?.textContent ?? null,
+      // Whichever of the two the row is showing: a phrase, or the chosen option.
+      notebook: (() => {
+        const picker = find('.page-controls .picker');
+        if (!picker) return null;
+        if (picker.hidden) return find('.page-controls .only').textContent;
+        const select = picker.querySelector('select');
+        return select.options[select.selectedIndex].textContent;
+      })(),
+      choices: (() => {
+        const picker = find('.page-controls .picker');
+        if (!picker || picker.hidden) return null;
+        return [...picker.querySelectorAll('option')].map((o) => o.textContent);
+      })(),
       about: find('.page-controls .about .running')?.textContent ?? null,
       legal: find('.page-controls .about .legal')?.textContent ?? null,
       engineVersion: find('.page-controls .about .engine-version')?.textContent ?? null,
