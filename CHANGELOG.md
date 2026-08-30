@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.4.3] — 2026-08-30
+
+### Added
+
+- **It offers to update itself, and then carries on** — one command, no re-run:
+
+      $ prolog-notebook run ch04.prolog.md
+      You have Prolog Notebook 0.4.2. The latest is 0.4.3.
+      Update and continue on the new version? [Y/n] y
+      Updating with npm i -g prolog-notebook@0.4.3
+      You now have Prolog Notebook 0.4.3.
+      Continuing on the new version.
+        ✓ p-family
+        ✓ q-is-son — 6 solutions
+
+  The offer comes **before** the work, because that is the only point at which the answer can
+  change anything. It costs a network round trip once a day rather than once a run, since the
+  answer is cached. Continuing is a child process on the same path — npm replaces the contents
+  of the package directory, so the command the reader typed now holds the new version — with
+  stdio inherited, the exit code proxied, and an environment marker that stops the new process
+  checking again.
+
+- **`prolog-notebook upgrade`**, for when you already know. It replaces this copy only where
+  it can prove how it was installed: a global `npm i -g` it will do, a dependency of somebody's
+  project it will not touch, and a source checkout is git's business. It installs the exact
+  version you were told about rather than `@latest`, which can move in between.
+
+  Both only where there is somebody to ask — stdin and stderr must be terminals. In a pipe, a
+  script or CI the notice comes after the work, with the command to type.
+
 ## [0.4.2] — 2026-08-30
 
 ### Fixed
