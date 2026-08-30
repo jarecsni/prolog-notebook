@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.6.3] — 2026-08-30
+
+`prolog-notebook build lists.prolog.md --check-update` answered *unknown option* — on a flag the
+help listed under no command, exactly as though it were global.
+
+### Fixed
+
+- **`--check-update` works with every command**, and forces the check past the daily TTL, which
+  is the whole point of asking. It was accepted by `execute` alone.
+
+- **…and it answers down a pipe.** The check was skipped entirely without a terminal, so an
+  explicit check in a script reported nothing — indistinguishable from *you are up to date*,
+  which is the one thing an update notice must never look like. A terminal is needed to **offer**
+  an upgrade, never to **report** one.
+
+- **`build --port 90` was accepted and ignored.** `view` and `build` share a parser, so each
+  quietly took the other's flags. A flag that is read and thrown away is worse than one refused:
+  it looks like it worked.
+
+- **`clear` never looked for an update.** 0.5.1 established that every command doing real work
+  goes through one door, before the work; `clear` shipped afterwards and missed it, while
+  rewriting the author's notebook.
+
+### Changed
+
+- **The help lists each option under the command that takes it.** Only `--check-update`,
+  `--version` and `-h` are listed as working anywhere, because only those three do.
+
+- **A misplaced option says where it lives** — `--limit belongs to execute, not to view` —
+  rather than `unknown option` about a flag that is real and two lines further up.
+
 ## [0.6.2] — 2026-08-30
 
 From a field report: a built chapter opened in Chrome and Safari showed no controls and a Run
