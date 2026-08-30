@@ -600,6 +600,37 @@ export function inputHash(goal, programCells) {
 }
 
 /**
+ * A run's answers in the format's own spelling (§6).
+ *
+ * ONE PLACE, because two callers need it and they must not drift: the page,
+ * where a reader ran a cell and may download the result, and the CLI runner,
+ * which fills a chapter's answers in before it is published. A file written by
+ * one and read by the other has to mean the same thing.
+ *
+ * Three answers, and the distinctions are the point:
+ *   null       nothing to write down at all — no answers, no failure, no
+ *              exhausted search. A query cell with no output block is valid.
+ *   an object  `solutions` are the lines that end in ` ;`, `terminator` is the
+ *              final line. An EMPTY terminator is the format's way of saying the
+ *              search was never exhausted: the reader stopped part-way, or the
+ *              runner hit its limit. Writing `false.` there would forge an
+ *              exhaustion, which is the one thing we may not do.
+ *
+ * The last solution IS the terminator when a query ran to the end, because that
+ * is what a toplevel prints; replaySolutions() reads it back the same way, which
+ * is what keeps a downloaded file rendering identically to the page it came from.
+ *
+ * @param {{solutions?: string[], exhausted?: boolean, error?: string|null}} run
+ * @returns {{solutions: string[], terminator: string}|null}
+ */
+export function solutionSequence({ solutions = [], exhausted = false, error = null } = {}) {
+  if (error) return { solutions, terminator: `ERROR: ${error}` };
+  if (!exhausted) return solutions.length ? { solutions, terminator: '' } : null;
+  if (!solutions.length) return { solutions: [], terminator: 'false.' };
+  return { solutions: solutions.slice(0, -1), terminator: `${solutions[solutions.length - 1]}.` };
+}
+
+/**
  * v0.2 hashes against ALL preceding program cells rather than the dependency
  * closure. It over-approximates — editing an unrelated earlier cell marks a query
  * stale — which is the cheap, correct-by-construction side to be wrong on.

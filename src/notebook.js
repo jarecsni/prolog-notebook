@@ -18,6 +18,7 @@
 import { createSession, formatSolution, readableInCell } from './browser.js';
 import { declaredDynamic, definedPredicates, unknownProcedure } from './clauses.js';
 import { download } from './export.js';
+import { solutionSequence } from './format.js';
 
 let serial = 0;
 let panels = 0;
@@ -1265,30 +1266,17 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     /**
      * This cell's answers for an export, in the format's own spelling (§6).
      *
-     * Three answers, and the distinctions are the point:
-     *   undefined  the chapter's answers are on screen — leave the file's own
-     *              output, and its own hash, exactly where they are
-     *   null       the reader ran this and produced nothing at all — no answers,
-     *              no failure, no exhausted search. There is nothing to write
-     *              down, and a query with no output block is already valid.
-     *   an object  a run of theirs. Its terminator is empty when they stopped
-     *              part-way: the answers they took are theirs to keep, and an
-     *              unterminated sequence is the format's own way of saying the
-     *              search was never exhausted (§6). Writing `false.` there would
-     *              forge an exhaustion, which is the one thing we may not do.
+     * `undefined` is a fourth answer that only this side has: the chapter's own
+     * answers are on screen, so the file's output and its hash are left exactly
+     * where they are. Everything else is the shared spelling — including the
+     * empty terminator, which is what a reader who took two of six and moved on
+     * has actually produced.
      */
     output: () => {
       if (!mine) return undefined;
-      if (failed) return { solutions: produced, terminator: `ERROR: ${failed}` };
       // Stopping and finishing look the same from outside — both leave no open
-      // query — so this asks the only thing that distinguishes them.
-      if (!exhausted) return produced.length ? { solutions: produced, terminator: '' } : null;
-      if (!produced.length) return { solutions: [], terminator: 'false.' };
-      // The last solution IS the terminator when a query ran deterministically,
-      // and `false.` after the others when it exhausted. replaySolutions() reads
-      // it back the same way, which is what keeps a downloaded file rendering
-      // identically to the page it came from.
-      return { solutions: produced.slice(0, -1), terminator: `${produced[produced.length - 1]}.` };
+      // query — so `exhausted` is the only thing that distinguishes them.
+      return solutionSequence({ solutions: produced, exhausted, error: failed });
     },
   };
 }

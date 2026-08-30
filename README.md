@@ -70,6 +70,37 @@ It has to be **served over HTTP**. Opening the page straight from disk leaves th
 inert, because browsers block ES modules over `file://` — the page detects this and says so
 rather than failing silently.
 
+## Fill in a chapter's answers
+
+A chapter's saved answers have to come from a real run — a hand-written output block is the
+author's *guess* at what SWI prints, published as though it ran. So write the file with no
+output blocks and let the engine fill them in:
+
+```sh
+npx prolog-notebook run notebooks/ch04-cut.prolog.md
+```
+
+It consults every program cell, runs every query below it, and writes the solution sequences
+back into the file along with an `input-hash` for each — which is what makes the chapter render
+complete, and render as *current*, before the engine arrives. Running it again on an unchanged
+chapter changes nothing.
+
+| flag | |
+|---|---|
+| `--limit <n>` | solutions to take from one query before stopping. Default 100. |
+| `--stdout` | print the result instead of writing the file |
+| `--quiet` | report only failures |
+
+Two things it will not do. A query stopped at the limit is written **without** a terminator,
+which is the format's way of saying the search was never exhausted — `false.` there would be a
+forgery. And if a program cell fails to load, nothing is written at all: every answer below it
+was produced against a chapter that does not exist.
+
+It has no defence against a non-terminating goal yet — the engine runs in this process, so
+`loop :- loop.` hangs the command. Say the word `--limit` all you like; a runaway *consult* is
+not a solution count. Fixing it properly means a worker thread, and it is the prerequisite for
+putting this in CI.
+
 ## Use it
 
 Headless, in Node — this is how you test that every example in a document still works:
@@ -163,17 +194,24 @@ Working and tested:
 - execution core, environment-agnostic (`src/engine.js`), run in a Web Worker in the browser
 - Node entry point, browser entry point
 - **a chapter is a file** — parse, render and mount a `.prolog.md`, cells and all
-- program cells and query cells with `Run` / `; next` / `all` / `stop`
-- 85 passing tests
+- **a chapter is readable cold** — saved answers render with no engine, and are marked stale
+  when the program above them has moved
+- program cells and query cells with `Run` / `; next` / `all` / `stop`, per-cell reset, and a
+  page that says what the engine is holding
+- `hold` and `rerun="auto"` — the author decides what a reader may see and when it refreshes
+- **the CLI runner**: `prolog-notebook run` executes a chapter headlessly and writes its
+  answers back
+- download your own copy of a chapter, answers and all
+- 186 passing tests
 
 Not built yet:
 
-- **saved outputs on a cold page.** A published chapter should be readable, with its answers,
-  before the 5.9 MB engine arrives — and on a page where it never arrives. The format stores
-  the solution *sequence* for exactly this; nothing renders it yet.
+- `--check` — run a chapter in CI and fail the build when its answers have drifted. Needs a
+  timeout first: a test suite that can hang forever is not a test suite.
+- `build` — a static page a reader can open, without a dev server
 - custom elements (`<prolog-program>`, `<prolog-query>`) so notebooks drop into any static site
 - a VS Code notebook controller — VS Code supplies the UI, this supplies the kernel, still no Python
-- a CLI runner, to execute a document's cells in CI and fail the build when an example rots
+- persistence, so a reader's edits survive a reload
 - `trace/0` integration, for visible backtracking — where [prolog-trace-viz][ptv] would plug in
 - syntax highlighting
 
