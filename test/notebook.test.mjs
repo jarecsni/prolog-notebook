@@ -99,6 +99,19 @@ test('answering the prediction releases every cell it was holding', () => {
   assert.deepEqual([page.hidden('q-son-a'), page.hidden('q-son-b')], [false, false]);
 });
 
+test('it releases as they write, not only when they leave the box', async () => {
+  // It listened on `change` alone, which fires on blur — so a reader who typed
+  // their prediction and looked up saw nothing happen, and the link between "I
+  // wrote something" and "the answers appeared" was broken by a pause with no
+  // cause (869ernmzh).
+  const page = chapter();
+  page.type_predict('A gives one');
+  assert.equal(page.hidden('q-son-a'), true, 'not on the first keystroke');
+
+  await new Promise((resolve) => setTimeout(resolve, 1400));
+  assert.equal(page.hidden('q-son-a'), false, 'but on stopping, with no click needed');
+});
+
 test('an answer the reader has seen is never held again', () => {
   const page = chapter();
   page.cell('q-son-a').querySelector('[data-act="peek"]').click();   // show

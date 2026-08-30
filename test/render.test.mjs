@@ -65,7 +65,9 @@ test('a prediction gets a heading, a place to answer, and a reveal', () => {
   assert.match(html, /<div class="predict">/);
   assert.match(html, /<h3>Sharpen your pencil<\/h3>/);
   // The author asks the question; the renderer supplies somewhere to answer it.
-  assert.match(html, /<textarea placeholder="[^"]+" spellcheck="false"><\/textarea>/);
+  // An id on every form field: a page full of issues-panel warnings is the first
+  // thing a reader sees when they look under the bonnet (869ernmxe).
+  assert.match(html, /<textarea id="predict-\d+" placeholder="[^"]+" spellcheck="false"><\/textarea>/);
   assert.match(html, /<details>/);
   assert.match(html, /<summary>Reveal the answer \(run them first!\)<\/summary>/);
   assert.match(html, /<strong>A gives exactly one son\./);
@@ -141,7 +143,7 @@ test('a program cell carries the classes the stylesheet targets', () => {
   assert.match(html, /<button class="primary" data-act="consult">Consult<\/button>/);
   // The way back from an edit. Disabled until there is an edit to undo.
   assert.match(html, /<button data-act="reset" disabled>reset<\/button>/);
-  assert.match(html, /<textarea spellcheck="false">male\(albert\)\./);
+  assert.match(html, /<textarea id="src-p-family" spellcheck="false">male\(albert\)\./);
 });
 
 test("the cell's id reaches the DOM, because the consult is named by it", () => {
@@ -162,7 +164,7 @@ test('the program source survives verbatim, angle brackets included', () => {
 test('a query cell carries its goal and its buttons', () => {
   const html = renderQuery(query);
   assert.match(html, /^<div class="cell query" data-cell="q-is-son">/);
-  assert.match(html, /<div class="prompt"><span>\?-<\/span><input value="is_son\(X\)" spellcheck="false">/);
+  assert.match(html, /<div class="prompt"><span>\?-<\/span><input id="goal-q-is-son" value="is_son\(X\)" spellcheck="false">/);
   // Stepping is the teaching device, so `; next` is not optional chrome.
   const acts = [...html.matchAll(/data-act="([a-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(acts, ['reset', 'run', 'next', 'all', 'stop']);

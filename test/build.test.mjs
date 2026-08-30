@@ -26,6 +26,19 @@ test('the page is readable before anything is downloaded', () => {
   assert.match(html, /<title>Where does the fence go\?<\/title>/);
 });
 
+test('the console is clean before a reader has done anything', () => {
+  // This audience opens DevTools, and the first thing they saw was red: a
+  // favicon 404 on every load, and an issues-panel warning for every form field
+  // on the page (869ernmxe).
+  const html = built().get('index.html').text;
+  assert.match(html, /<link rel="icon" href="data:image\/svg\+xml,/);
+  assert.doesNotMatch(html, /favicon\.ico/);
+
+  for (const field of html.match(/<(?:textarea|input)[^>]*>/g) ?? []) {
+    assert.match(field, /\sid="[^"]+"/, `every field needs an id: ${field}`);
+  }
+});
+
 test('no markdown library reaches the reader', () => {
   // The prose is HTML by the time this is written, which is why page.js and
   // notebook.js are separate files. Shipping 137 kB of markdown parser to a page

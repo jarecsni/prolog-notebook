@@ -85,7 +85,7 @@ export function escapeHtml(text) {
  * @param {{variant: string, title: string, body: string}} cell
  * @returns {string}
  */
-export function renderContainer(cell) {
+export function renderContainer(cell, ordinal = 1) {
   switch (cell.variant) {
     case 'margin':
       // The whole note lives in the head line — `> [!margin] text with no body` —
@@ -122,7 +122,7 @@ function joinHeadAndBody(cell) {
  * markup for a place to answer it. The reveal is a <details> so that it still
  * works, unclicked, on the GitHub page.
  */
-function renderPredict(cell) {
+function renderPredict(cell, ordinal = 1) {
   const { before, summary, reveal } = splitReveal(cell.body);
   const parts = [];
   if (cell.title) parts.push(`<h3>${renderInline(cell.title)}</h3>`);
@@ -131,7 +131,11 @@ function renderPredict(cell) {
   // the format has no spelling for a per-prediction one, and inventing an
   // attribute for it would be a format change to save one line of prose — the
   // author's own question is directly above it and says what to write.
-  parts.push('<textarea placeholder="your prediction…" spellcheck="false"></textarea>');
+  // An id, because a form field without one is a warning in every browser's
+  // issues panel and this audience opens the issues panel (869ernmxe). Minted
+  // from position, since a container carries no id in the model — and stable for
+  // a given chapter, which is what a saved prediction will need (869ectt5d).
+  parts.push(`<textarea id="predict-${ordinal}" placeholder="your prediction…" spellcheck="false"></textarea>`);
   if (reveal !== null) {
     parts.push(`<details>\n<summary>${escapeHtml(summary)}</summary>\n${renderProse(reveal)}\n</details>`);
   }
@@ -177,7 +181,7 @@ export function renderProgram(cell) {
   <div class="bar">program<span class="spacer"></span><span class="status"></span>
     <button data-act="reset" disabled>reset</button>
     <button class="primary" data-act="consult">Consult</button></div>
-  <textarea spellcheck="false">${escapeHtml(cell.source)}</textarea>
+  <textarea id="src-${escapeHtml(cell.id)}" spellcheck="false">${escapeHtml(cell.source)}</textarea>
 </div>`;
 }
 
@@ -217,7 +221,8 @@ export function renderQuery(cell, options = {}) {
     <button data-act="next" disabled>; next</button>
     <button data-act="all" disabled>all</button>
     <button data-act="stop" disabled>stop</button></div>
-  <div class="prompt"><span>?-</span><input value="${escapeHtml(cell.goal)}" spellcheck="false"></div>
+  <div class="prompt"><span>?-</span>`
+    + `<input id="goal-${escapeHtml(cell.id)}" value="${escapeHtml(cell.goal)}" spellcheck="false"></div>
   <div class="out">${renderSavedOutput(cell, { stale })}</div>
 </div>`;
 }
@@ -305,7 +310,7 @@ export function renderCell(cell, options = {}) {
     case 'markdown':
       return renderProse(cell.source);
     case 'container':
-      return renderContainer(cell);
+      return renderContainer(cell, options.ordinal);
     case 'program':
       return renderProgram(cell);
     case 'query':
@@ -333,7 +338,9 @@ export function renderNotebook(notebook) {
   const parts = [];
   const kicker = renderKicker(notebook.frontMatter);
   if (kicker) parts.push(kicker);
+  let predictions = 0;
   for (const cell of notebook.cells) {
+    if (cell.kind === 'container' && cell.variant === 'predict') predictions += 1;
     // Staleness is decided here rather than in renderQuery, because it is a fact
     // about the cell's PLACE in the notebook — the program cells above it — and a
     // query cell on its own cannot know it. Computed before first paint: a 64-bit
@@ -348,7 +355,7 @@ export function renderNotebook(notebook) {
     const rerun = cell.kind === 'query'
       ? cell.rerun ?? notebook.frontMatter.get('rerun') ?? 'manual'
       : null;
-    parts.push(renderCell(cell, { stale, rerun }));
+    parts.push(renderCell(cell, { stale, rerun, ordinal: predictions }));
   }
   return `${parts.join('\n\n')}\n`;
 }
