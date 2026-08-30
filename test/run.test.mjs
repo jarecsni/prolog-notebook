@@ -22,7 +22,16 @@ import { createSession } from '../src/node.js';
 // file is what SWI actually printed, and a fake cannot say anything about that.
 
 const CLI = new URL('../bin/prolog-notebook.mjs', import.meta.url).pathname;
-const run = promisify(execFile);
+const exec = promisify(execFile);
+
+// The CLI asks npm whether it is out of date when it does real work. A suite that
+// depended on a network would be a suite that fails on a train, so it is switched
+// off here the way a reader would switch it off — except where a test is about the
+// check itself, and points it at a server of its own.
+const run = (cmd, args, options = {}) => exec(cmd, args, {
+  ...options,
+  env: { NO_UPDATE_NOTIFIER: '1', ...process.env, ...options.env },
+});
 
 const NOTEBOOK = `---
 format: prolog-notebook/1
@@ -298,4 +307,68 @@ test('the release stamps the commit in, and does it before publishing', async ()
   const publish = workflow.indexOf('run: npm publish');
   assert.ok(stamp > 0, 'the release must stamp the commit into the package');
   assert.ok(stamp < publish, 'and must do it before publishing');
+});
+
+// ------------------------------------------------------- the update notice
+
+test('a run says so when a newer version exists, on stderr', async () => {
+  // END TO END, against a registry of this test's own: the flag is parsed, the
+  // request is made while the work happens, and the notice lands on STDERR —
+  // which matters, because `run --stdout` is a notebook going down a pipe and a
+  // version notice in the middle of it would corrupt the file.
+  const { createServer } = await import('node:http');
+  const asked = [];
+  const server = createServer((req, res) => {
+    asked.push(req.url);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ version: '99.0.0' }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const registry = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    const file = await temp('lists.prolog.md', NOTEBOOK);
+    // No --quiet here: that suppresses the check entirely, which is its own test.
+    const { stdout, stderr } = await run('node', [CLI, 'run', '--stdout', file], {
+      env: {
+        PROLOG_NOTEBOOK_REGISTRY: registry,
+        NO_UPDATE_NOTIFIER: '',
+        CI: '',
+        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+      },
+    });
+    assert.deepEqual(asked, ['/prolog-notebook/latest']);
+    assert.match(stderr, /A newer Prolog Notebook is available: \d+\.\d+\.\d+ → 99\.0\.0/);
+    assert.match(stderr, /npm i -g prolog-notebook/);
+    assert.doesNotMatch(stdout, /newer Prolog Notebook/, 'the notebook is not to be corrupted');
+    assert.match(stdout, /```text output for=/, 'and it is still a notebook');
+
+    // --quiet means "report only failures", and news about a newer version is not
+    // one. The request is not even made: starting it to discard the answer would
+    // be a command going to the network for nothing.
+    const before = asked.length;
+    const quiet = await run('node', [CLI, 'run', '--stdout', '--quiet', file], {
+      env: {
+        PROLOG_NOTEBOOK_REGISTRY: registry,
+        NO_UPDATE_NOTIFIER: '',
+        CI: '',
+        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+      },
+    });
+    assert.equal(asked.length, before, 'the registry was not asked');
+    assert.doesNotMatch(quiet.stderr, /newer Prolog Notebook/);
+
+    // Unless it was asked for outright, which --quiet does not override.
+    const forced = await run('node', [CLI, 'run', '--stdout', '--quiet', '--check-update', file], {
+      env: {
+        PROLOG_NOTEBOOK_REGISTRY: registry,
+        NO_UPDATE_NOTIFIER: '',
+        CI: '',
+        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+      },
+    });
+    assert.match(forced.stderr, /newer Prolog Notebook is available/);
+  } finally {
+    server.close();
+  }
 });

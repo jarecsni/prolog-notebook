@@ -91,11 +91,19 @@ chapter changes nothing.
 | `--stdout` | print the result instead of writing the file |
 | `--quiet` | report only failures |
 | `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
+| `--check-update` | ask npm whether a newer one exists, and say so either way |
 
 Two things it will not do. A query stopped at the limit is written **without** a terminator,
 which is the format's way of saying the search was never exhausted — `false.` there would be a
 forgery. And if a program cell fails to load, nothing is written at all: every answer below it
 was produced against a chapter that does not exist.
+
+When it does real work it asks npm, at most once a day, whether there is a newer version, and
+says nothing unless there is. Never for `--help` or `--version`, never under `--quiet`, never
+when `CI` or `NO_UPDATE_NOTIFIER` is set, and never blocking the run. A registry it cannot
+reach is reported once a day rather than on every command — silence there would be
+indistinguishable from *you are up to date*. Ask outright with `--check-update` and it answers
+either way.
 
 It has no defence against a non-terminating goal yet — the engine runs in this process, so
 `loop :- loop.` hangs the command. Say the word `--limit` all you like; a runaway *consult* is

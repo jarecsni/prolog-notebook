@@ -9,7 +9,8 @@ import { basename } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
-import { banner } from '../src/version.js';
+import { banner, VERSION } from '../src/version.js';
+import { updateNotice } from '../src/update.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 
@@ -38,11 +39,12 @@ const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
   prolog-notebook run <file.prolog.md>...   run every cell, write the answers back
 
 Options
-  --limit <n>   solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
-  --stdout      print the result instead of writing the file
-  --quiet       report only failures
-  --version     version, engine and copyright
-  -h, --help    this
+  --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
+  --stdout        print the result instead of writing the file
+  --quiet         report only failures
+  --version       version, engine and copyright
+  --check-update  ask npm whether a newer one exists, and say so either way
+  -h, --help      this
 
 A query that stops at the limit is written without a terminator, which is the
 format's way of saying the search was never exhausted. Nothing is invented.
@@ -96,7 +98,18 @@ async function main(argv) {
     return 0;
   }
   if (args.includes('--version') || args.includes('-V')) {
+    // No update check here, deliberately: --version and --help are what someone
+    // types at an install that is not working, and they stay instant and offline.
     process.stdout.write(await version());
+    return 0;
+  }
+
+  // Asked for explicitly. On its own it is the whole command; alongside `run` it
+  // forces the check that would otherwise wait for the day to turn over.
+  const asked = args.includes('--check-update');
+  if (asked && args.filter((a) => !a.startsWith('-')).length === 0) {
+    const notice = await updateNotice({ version: VERSION, force: true });
+    process.stderr.write(`${notice}\n`);
     return 0;
   }
 
@@ -119,6 +132,7 @@ async function main(argv) {
       options.limit = value;
     } else if (arg === '--stdout') options.stdout = true;
     else if (arg === '--quiet') options.quiet = true;
+    else if (arg === '--check-update') { /* handled above, and not a file */ }
     else if (arg.startsWith('-')) {
       process.stderr.write(`unknown option "${arg}"\n\n${USAGE}`);
       return 2;
@@ -130,6 +144,18 @@ async function main(argv) {
     return 2;
   }
   if (!options.quiet) process.stderr.write(`${RUNAWAY_WARNING}\n`);
+
+  // STARTED NOW, READ AT THE END. The registry is somebody else's machine on
+  // somebody else's network, and none of that should stand between the reader
+  // and their answers — so the question is asked while the work happens and the
+  // answer is collected once it is done.
+  //
+  // Not asked at all under --quiet, unless it was asked for outright: --quiet
+  // means "report only failures", and news about a newer version is not one. Not
+  // starting the request is better than starting it and discarding the answer.
+  const update = options.quiet && !asked
+    ? Promise.resolve(null)
+    : updateNotice({ version: VERSION, force: asked }).catch(() => null);
 
   // One engine for the whole invocation, restarted between files. A notebook is
   // a world of its own — one cell is one virtual file, and two chapters may
@@ -143,6 +169,11 @@ async function main(argv) {
     await session.restart();
     status = Math.max(status, await runFile(file, session, options));
   }
+
+  // stderr, always: `run --stdout` is a notebook going down a pipe, and a version
+  // notice in the middle of it would corrupt the file it is printing.
+  const notice = await update;
+  if (notice) process.stderr.write(`${notice}\n`);
   return status;
 }
 
