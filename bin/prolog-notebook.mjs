@@ -3,12 +3,49 @@
 // terminal. Everything it does lives in src/run.js and src/export.js, so a VS
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
+import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
+import { prologVersion } from '../src/engine.js';
+import { buildLine, currentBuild } from '../src/build-info.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
-import { createSession } from '../src/node.js';
+
+// The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
+// 5.9 MB of WebAssembly at module scope, so a static import here would mean that
+// `--help` on a broken install fails before it can print anything — and the two
+// commands most likely to be typed at a broken install are --help and --version.
+const engine = () => import('../src/node.js');
+
+// `prolog-notebook run --stdout file | head` closes the pipe while we are still
+// writing to it. That is the reader using the shell correctly, not an error, and
+// a command that answers it with an unhandled EPIPE and a stack trace is
+// complaining about being used properly.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (e) => {
+    if (e.code !== 'EPIPE') throw e;
+  });
+}
+
+const require = createRequire(import.meta.url);
+const PACKAGE = require('../package.json');
+
+/**
+ * The name a person would say, not the one npm installs. `prolog-notebook` is an
+ * identifier; this is a title, and --version is the one place the tool says who
+ * it is rather than how to type it.
+ */
+const NAME = 'Prolog Notebook';
+
+/**
+ * The copyright holder and year.
+ *
+ * Written here rather than read from LICENSE at runtime — a command should not
+ * depend on a file it does not need — but a test asserts the two agree, so this
+ * cannot quietly drift out of step with the licence it refers to.
+ */
+const COPYRIGHT = 'Copyright (C) 2026 Johnny Jarecsni';
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
@@ -18,6 +55,7 @@ Options
   --limit <n>   solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
   --stdout      print the result instead of writing the file
   --quiet       report only failures
+  --version     version, engine and copyright
   -h, --help    this
 
 A query that stops at the limit is written without a terminator, which is the
@@ -31,10 +69,47 @@ format's way of saying the search was never exhausted. Nothing is invented.
  */
 const RUNAWAY_WARNING = 'note: a non-terminating goal will hang this command; it has no timeout yet (869ejgyax)';
 
+/**
+ * Who this is, and — the part that is not on anyone's disk — which Prolog it
+ * will run your chapters with.
+ *
+ * THE ENGINE LINE EARNS ITS 59 MILLISECONDS. swipl-wasm's own version says
+ * nothing about SWI's: 8.0.4 ships 10.1.10. A notebook's saved answers are only
+ * true of the engine that produced them, so this is the one fact here that a
+ * reader could not have looked up.
+ *
+ * An engine that will not load is REPORTED, not fatal. "I cannot start Prolog"
+ * is exactly what someone running --version to diagnose a broken install needs
+ * to be told, and exiting non-zero would hide it behind a shell error.
+ */
+async function version() {
+  const lines = [`${NAME} v${PACKAGE.version} - ${COPYRIGHT}, ${PACKAGE.license} License.`];
+  try {
+    const { createSession } = await engine();
+    const swipl = await prologVersion(await createSession());
+    const wasm = `swipl-wasm ${require('swipl-wasm/package.json').version}`;
+    lines.push(swipl ? `Powered by SWI-Prolog ${swipl}, ${wasm}` : `Powered by ${wasm}`);
+  } catch (e) {
+    // Not "powered by" anything, so it does not say so. Someone running this to
+    // find out why nothing works needs the reason, not a formula.
+    lines.push(`SWI-Prolog could not be started: ${e.message}`);
+  }
+  // Omitted rather than guessed at when there is neither a baked file nor a git
+  // repository — a line that says "unknown" three times is worse than no line.
+  lines.push(buildLine(currentBuild()));
+  // The blank line is deliberate: this is a banner, and a banner that runs into
+  // the next shell prompt reads as an error message.
+  return `${lines.join('\n')}\n\n`;
+}
+
 async function main(argv) {
   const args = argv.slice(2);
   if (!args.length || args.includes('-h') || args.includes('--help')) {
     process.stdout.write(USAGE);
+    return 0;
+  }
+  if (args.includes('--version') || args.includes('-V')) {
+    process.stdout.write(await version());
     return 0;
   }
 
@@ -73,6 +148,7 @@ async function main(argv) {
   // a world of its own — one cell is one virtual file, and two chapters may
   // define the same predicate — so carrying clauses across would let a file pass
   // because of what the file before it happened to load.
+  const { createSession } = await engine();
   const session = await createSession();
   let status = 0;
 

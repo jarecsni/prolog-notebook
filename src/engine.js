@@ -277,6 +277,31 @@ export function bindingsOf(value) {
   return out;
 }
 
+/**
+ * Which SWI-Prolog this is.
+ *
+ * Worth asking, and not derivable from anything on disk: swipl-wasm 8.0.4 ships
+ * SWI-Prolog 10.1.10, and the two numbers have no relationship at all. A
+ * chapter's saved answers are only true of the engine that produced them, so
+ * the version is part of their attribution rather than a footnote.
+ *
+ * `version` rather than `version_git`: the integer flag is always present, and
+ * its encoding is documented — MAJOR*10000 + MINOR*100 + PATCH.
+ *
+ * @param {{query: Function}} session any session, in either environment
+ * @returns {Promise<string|null>} e.g. "10.1.10", or null if the engine will not say
+ */
+export async function prologVersion(session) {
+  try {
+    const result = await session.query('current_prolog_flag(version, V)').all(1);
+    const encoded = result.solutions?.[0]?.V;
+    if (!Number.isInteger(encoded)) return null;
+    return `${Math.floor(encoded / 10000)}.${Math.floor(encoded / 100) % 100}.${encoded % 100}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Render a solution the way a Prolog top level would. */
 export function formatSolution(solution) {
   const pairs = Object.entries(solution);

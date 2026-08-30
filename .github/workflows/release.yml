@@ -70,6 +70,12 @@ jobs:
           fi
           echo "Releasing version $PKG_VERSION"
 
+      # BEFORE publish, and as a step rather than a prepack hook: npm decides what
+      # goes in the tarball BEFORE it runs prepack, so a file generated there is
+      # never packed. Measured, not assumed — prepack was the first attempt.
+      - name: Stamp the commit into the package
+        run: node scripts/build-info.mjs
+
       - name: Publish to npm
         run: npm publish --access public
 
