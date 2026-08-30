@@ -32,15 +32,20 @@ export function renderInto(text, root, options = {}) {
   // only this module has the prose. The DOM carries every program and every goal,
   // but a markdown cell has been rendered to HTML and cannot be read back out of
   // it — a chapter exported from the DOM alone would lose its writing.
-  offerDownload(root, () => ({
-    filename,
-    text: exportSource(notebook, edits(cells)),
-  // THE BYTES THE PAGE WAS GIVEN, not the model written out again. A
-  // re-serialisation would be canonical form, which is not necessarily the
-  // author's file: a hand-written chapter with no ids, or attributes in another
-  // order, would come back subtly reformatted. "The chapter as published" has to
-  // mean the chapter as published.
-  }), () => ({ filename, text }));
+  offerDownload(root, {
+    produce: () => ({ filename, text: exportSource(notebook, edits(cells)) }),
+    // THE BYTES THE PAGE WAS GIVEN, not the model written out again. A
+    // re-serialisation would be canonical form, which is not necessarily the
+    // author's file: a hand-written chapter with no ids, or attributes in
+    // another order, would come back subtly reformatted. "The chapter as
+    // published" has to mean the chapter as published.
+    published: () => ({ filename, text }),
+    // The cells are the authority on whether any of this is the reader's, and
+    // `on` is how the row hears about one that changed with nobody clicking.
+    isEdited: () => cells.programs.some((p) => p.isEdited())
+      || cells.queries.some((q) => q.isEdited()),
+    on: cells.on,
+  });
   return notebook;
 }
 

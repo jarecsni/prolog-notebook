@@ -332,6 +332,31 @@ test('the version to download becomes a choice, once there is one to make', asyn
   assert.equal(page.panel().notebook, 'As published');
 });
 
+test('a cell that ran without being clicked still moves the notebook row', async () => {
+  // THE PANEL MUST NOT LIE UNTIL THE NEXT CLICK. An automatic re-run (format §5)
+  // is started by a consult in ANOTHER cell and finishes after that click has
+  // been and gone, so a row that only listens to its own clicks reports the state
+  // as it was before the run. This is the same failure as the Hide control that
+  // jammed: a control saying something that stopped being true.
+  const answers = { 'son(X)': ['X = edward'] };
+  const page = pageFor(REACTIVE, {
+    engine: fakeEngine({ answers }),
+    download: () => ({ filename: 'ch.prolog.md', text: 'mine' }),
+    published: () => ({ filename: 'ch.prolog.md', text: 'published' }),
+  });
+  assert.equal(page.panel().notebook, 'As published');
+
+  // The reader consults an edited program. They never touch the query below it.
+  page.type('p-1', 'son(edward).\nson(alfred).');
+  answers['son(X)'] = ['X = edward', 'X = alfred'];
+  page.press('p-1', 'consult');
+  await page.settle();
+
+  assert.match(page.out('q-auto')[0], /^re-run automatically/, 'the cell ran by itself');
+  assert.equal(page.panel().notebook, 'Your version', 'and the row knows');
+  assert.deepEqual(page.panel().choices, ['Your version', 'As published']);
+});
+
 test('the download button reports whether anything is the reader\'s yet', async () => {
   let handed = null;
   const page = chapter({ download: () => ({ filename: 'ch.prolog.md', text: 'exported' }) });

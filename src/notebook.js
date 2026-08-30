@@ -108,7 +108,12 @@ export function mount(root = document, options = {}) {
   // Returned so a shell that HAS the parsed model — page.js, today — can ask the
   // cells what they now say and hand the reader a file (869ejgbxf). notebook.js
   // still knows nothing about markdown, and does not gain a parser to do it.
-  return { programs, queries };
+  //
+  // `on` goes with them because page-level chrome has to hear about cells that
+  // change WITHOUT anyone clicking: an automatic re-run (format §5) is started by
+  // a consult in another cell, and a panel that only listens to its own clicks
+  // reports the state before it.
+  return { programs, queries, on: bus.on };
 }
 
 /**
@@ -473,7 +478,8 @@ function mountPageBar(root, options, bus, programs, queries) {
  * @param {Element|Document} root
  * @param {() => {filename: string, text: string}} produce
  */
-export function offerDownload(root, produce, published = null) {
+export function offerDownload(root, options = {}) {
+  const { produce, published = null, isEdited = null, on = null } = options;
   const scope = root && root.querySelector ? root : document;
   const bar = scope.querySelector('.page-controls') ?? document.querySelector('.page-controls');
   if (!bar) return;
@@ -506,7 +512,13 @@ export function offerDownload(root, produce, published = null) {
   const select = unit.querySelector('select');
 
   const say = () => {
-    const edited = [...scope.querySelectorAll('.cell')].some((cell) => cell.dataset.edited === 'true');
+    // ASKED, not sniffed. `data-edited` is written as a side effect of a cell's
+    // own reset button refreshing, so it is missing on a cell that has no reset
+    // and stale between an action and that cell's next refresh. The cells
+    // themselves are the authority on whether anything here is the reader's.
+    const edited = isEdited
+      ? isEdited()
+      : [...scope.querySelectorAll('.cell')].some((cell) => cell.dataset.edited === 'true');
     // Offered only when both exist AND someone can produce the published copy.
     const choose = edited && Boolean(published);
     picker.hidden = !choose;
@@ -527,11 +539,15 @@ export function offerDownload(root, produce, published = null) {
   });
   select.addEventListener('change', say);
 
-  // Anything a reader does that could change the answer is a click or a
-  // keystroke, and both bubble. Cheaper than a subscription, and it cannot go
-  // stale by forgetting to fire.
+  // Most of what changes this is a click or a keystroke, and both bubble.
   scope.addEventListener('input', say);
   scope.addEventListener('click', () => requestAnimationFrame(say));
+  // But not all of it. A cell can produce answers with nobody touching it — an
+  // automatic re-run is started by a consult somewhere else, and finishes after
+  // that click has been and gone — so the notebook's own events are heard too.
+  // Without this the row reports the state as it was before the run, until the
+  // reader happens to click again.
+  on?.(() => say());
   say();
 }
 

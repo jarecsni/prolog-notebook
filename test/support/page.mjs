@@ -135,7 +135,15 @@ export function pageFor(source, { engine = fakeEngine(), download, published } =
   // (869eddzgq) — and the only honest way to assert it is to watch the seam.
   let boots = 0;
   const cells = mount(root, { createSession: async () => { boots++; return engine; } });
-  if (download) offerDownload(root, download, published);
+  if (download) {
+    offerDownload(root, {
+      produce: download,
+      published,
+      isEdited: () => cells.programs.some((p) => p.isEdited())
+        || cells.queries.some((q) => q.isEdited()),
+      on: cells.on,
+    });
+  }
 
   const find = (selector) => window.document.querySelector(selector);
   const cell = (id) => window.document.querySelector(`[data-cell="${id}"]`);
