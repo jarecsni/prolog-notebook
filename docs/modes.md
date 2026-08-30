@@ -186,6 +186,41 @@ The failure it prevents is specific. A reader who sees their own program above s
 answers does not conclude that our tool is confused; they conclude something false about
 **Prolog**. That is the one failure this project may not have.
 
+### Hiding is not clearing
+
+Two controls blank the same box, and a reader who confuses them will be surprised by the file
+they end up with. The distinction is not how much is removed — it is **what the box is a
+picture of** ([869erp9ap]):
+
+|            | hide                                | clear                                  |
+| ---------- | ----------------------------------- | -------------------------------------- |
+| acts on    | the screen                          | the notebook                           |
+| the answers are | still the chapter's, still in a download | gone from the page and from a download |
+| undone by  | show                                | reset                                  |
+| it is      | chrome                              | content                                |
+
+So hiding is for **reading** — work the exercise cold, and press show when you want the
+answer back — and it is the same mechanism the author's `hold` uses, because a held answer and
+a hidden one differ only in who asked. Clearing is for **the file**: a copy of the chapter that
+gives nothing away, the reader's half of `prolog-notebook clear`.
+
+This gives the page a third way away from the published chapter, beside running and editing —
+which is exactly why nothing new was needed to get back:
+
+> **One origin, one way back.** The chapter as published is the origin. Run, edit and clear
+> move away from it. Reset returns. Reset's meaning does not change; it simply has one more
+> thing it can undo.
+
+Two consequences that are not obvious until a reader hits them:
+
+- **`rerun="auto"` does not refill a cleared cell.** Auto exists so answers do not go stale
+  under a program that changed. A cell with no answers has none that can be stale, so there is
+  nothing for auto to do — and doing it anyway would put a spoiler back on a page the reader
+  emptied, triggered by a Consult somewhere else entirely. Same guard as `hold`.
+- **Restore is the exact inverse of clear, and no more.** It puts back the chapter's answers,
+  not the chapter's goals: an edited goal is not an answer and was not what clear took away.
+  Undoing both is what the cell's own reset is for.
+
 ### Explore needs an exit, or it is a trap
 
 A reader who edits and runs but can never *keep* the result has less than a Jupyter user has.

@@ -217,6 +217,9 @@ export function pageFor(source, { engine = fakeEngine(), download, published } =
       answers: find('.answers-state')?.textContent ?? null,
       answersButton: find('[data-act="peek-all"]')?.querySelector('.label').textContent ?? null,
       answersDisabled: find('[data-act="peek-all"]')?.disabled ?? null,
+      outputs: find('.outputs-state')?.textContent ?? null,
+      outputsButton: find('[data-act="clear-all"]')?.querySelector('.label').textContent ?? null,
+      outputsDisabled: find('[data-act="clear-all"]')?.disabled ?? null,
       // Whichever of the two the row is showing: a phrase, or the chosen option.
       notebook: (() => {
         const picker = find('.page-controls .picker');
