@@ -124,7 +124,11 @@ export function isNewer(latest, current) {
 }
 
 /**
- * The line to print, or null for silence.
+ * What to say, and what was found.
+ *
+ * An object rather than a string because a caller may want to ACT on it — offer
+ * to upgrade — and parsing our own sentence back into a version number would be
+ * a worse way to learn what we already knew.
  *
  * @param {object} options
  * @param {string} options.version what this copy is
@@ -134,7 +138,7 @@ export function isNewer(latest, current) {
  * @param {{read: Function, write: Function}} [options.store]
  * @param {() => Promise<string|null>} [options.latest]
  * @param {object} [options.env]
- * @returns {Promise<string|null>}
+ * @returns {Promise<{message: string|null, newer: string|null}>}
  */
 export async function updateNotice({
   version,
@@ -145,7 +149,12 @@ export async function updateNotice({
   latest = latestFromRegistry,
   env = process.env,
 } = {}) {
-  if (!force && (env.CI || env.NO_UPDATE_NOTIFIER)) return null;
+  const quiet = { message: null, newer: null };
+  // UPGRADED is the loop guard: the process that replaced itself re-runs this
+  // command on the new version, and that one must not go round again. A failed
+  // or partial upgrade would otherwise re-exec for ever.
+  if (!force && (env.CI || env.NO_UPDATE_NOTIFIER || env.PROLOG_NOTEBOOK_UPGRADED)) return quiet;
+  if (env.PROLOG_NOTEBOOK_UPGRADED) return quiet;
 
   const remembered = store.read();
   const fresh = !force && remembered && now - remembered.checked < ttl;
@@ -155,14 +164,20 @@ export async function updateNotice({
   if (!fresh) store.write({ checked: now, latest: newest ?? null });
 
   if (!newest) {
-    return fresh && !force ? null : 'Could not reach the npm registry to check for updates.';
+    return fresh && !force
+      ? quiet
+      : { message: 'Could not reach the npm registry to check for updates.', newer: null };
   }
   // BOTH LINES START WITH WHAT YOU HAVE, because that is the question being
   // asked. "Prolog Notebook 0.4.0 is the latest" states a fact about the world
   // and leaves the reader to work out that it is also a fact about them.
   if (isNewer(newest, version)) {
-    return `You have Prolog Notebook ${version}. The latest is ${newest}.\n`
-      + 'Update with: npm i -g prolog-notebook';
+    return {
+      message: `You have Prolog Notebook ${version}. The latest is ${newest}.`,
+      newer: newest,
+    };
   }
-  return force ? `You have the latest version of Prolog Notebook, ${version}.` : null;
+  return force
+    ? { message: `You have the latest version of Prolog Notebook, ${version}.`, newer: null }
+    : quiet;
 }
