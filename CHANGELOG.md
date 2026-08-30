@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.6.0] — 2026-08-30
+
+Taking the answers back out — at the terminal, and on the page. Plus the first documentation
+written for somebody who is not us.
+
+### Added
+
+- **`prolog-notebook clear <file>`** empties every output block and leaves everything else
+  alone: prose, program cells, goals and attributes are the author's. A chapter with no answers
+  is a valid chapter — one that has not been executed yet — so `clear` then `execute` returns
+  the original bytes exactly. For a workbook edition, for a diff you can read, or for starting
+  again deliberately rather than trusting an overwrite.
+
+- **The page can clear its own answers, and put them back.** A new row in the panel:
+
+      4 outputs in this chapter          [Clear all outputs]
+      4 outputs cleared                  [Restore outputs]
+
+  It sits next to the hide row on purpose, because the two blank the same box for opposite
+  reasons. Hiding acts on the **screen** — the answers are still the chapter's and still go
+  into a download. Clearing acts on the **notebook**: a download taken after it carries no
+  output block at all, through the same erasure the CLI uses, so a chapter emptied on the page
+  and one emptied at the terminal are the same bytes.
+
+  That makes clearing a third way away from the published chapter, beside running and editing,
+  which is why nothing new was needed to get back. **One origin, one way back**: reset already
+  meant *as published* and now has one more thing it can undo — per cell, or all at once with
+  restore. An auto cell does not refill itself once cleared, and restore is the exact inverse
+  of clear, leaving an edited goal alone.
+
+- **`docs/authoring.md` — the author's handbook.** The loop, a whole chapter from scratch,
+  what `hold` and `rerun` do to a reader, why you never hand-write an output block, staleness,
+  what a reader can do to your chapter, publishing, and nine things that otherwise cost an
+  afternoon. Every command line in it was run.
+
+### Changed
+
+- **`run` is now `execute`.** It executes a chapter and writes its answers into the file, which
+  `run` did not say — and *run* was already the name of the button a reader presses on one
+  cell. `run` and `exec` still work; nothing has been taken away.
+
+- **The README had not met the CLI.** Its banner still said the renderer was unwritten, Status
+  still counted 186 tests, and *Try it* pointed a fresh global install at a chapter that ships
+  in the repo and not in the package — so the first command in the front door failed for
+  everybody who had just installed it. It now writes a three-line chapter, executes it and
+  views it.
+
+- `docs/modes.md` §3 gains *Hiding is not clearing*.
+
 ## [0.5.1] — 2026-08-30
 
 Everything here came from one field report: a chapter written with the tool rather than a test
