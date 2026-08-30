@@ -200,15 +200,21 @@ test('--version says which Prolog will produce your answers', async () => {
   // have looked up — and a chapter's saved answers are only true of the engine
   // that produced them.
   const { stdout } = await run('node', [CLI, '--version']);
-  const lines = stdout.trim().split('\n');
+  const lines = stdout.split('\n');
 
-  assert.match(lines[0], /^prolog-notebook \d+\.\d+\.\d+$/);
-  assert.match(lines[1], /^SWI-Prolog \d+\.\d+\.\d+ \(swipl-wasm \d+\.\d+\.\d+\)$/);
-  assert.match(lines[2], /^Copyright \(c\) \d{4} .+\. MIT licence\.$/);
-  assert.match(lines[3], /^https:\/\/github\.com\//);
+  assert.match(lines[0], /^Prolog Notebook v\d+\.\d+\.\d+ - Copyright \(C\) \d{4} .+, MIT License\.$/);
+  assert.match(lines[1], /^Powered by SWI-Prolog \d+\.\d+\.\d+, swipl-wasm \d+\.\d+\.\d+$/);
+  // A banner that runs into the next shell prompt reads as an error message.
+  assert.deepEqual(lines.slice(2), ['', '']);
 
   const short = await run('node', [CLI, '-V']);
   assert.equal(short.stdout, stdout);
+});
+
+test('a closed pipe is the shell being used correctly, not an error', async () => {
+  // `--version | head -1` used to end in an unhandled EPIPE and a stack trace.
+  const { stdout } = await run('sh', ['-c', `node ${CLI} --version | head -1`]);
+  assert.match(stdout, /^Prolog Notebook v/);
 });
 
 test('the notice in the command is the notice in the LICENSE', async () => {
@@ -216,12 +222,15 @@ test('the notice in the command is the notice in the LICENSE', async () => {
   // file it does not need. This is what keeps them from drifting apart.
   const cli = await readFile(new URL('../bin/prolog-notebook.mjs', import.meta.url), 'utf8');
   const licence = await readFile(new URL('../LICENSE', import.meta.url), 'utf8');
-  const notice = /Copyright \(c\) \d{4} [^\n'`]+/;
-  assert.equal(cli.match(notice)[0].trim(), licence.match(notice)[0].trim());
+  // The (C) is capitalised in the banner and lower case in the licence, which is
+  // a house-style difference. The year and the holder are the facts, and those
+  // must agree.
+  const notice = /Copyright \([Cc]\) (\d{4} [^\n'`,]+)/;
+  assert.equal(cli.match(notice)[1].trim(), licence.match(notice)[1].trim());
 });
 
 test('the version of the package is the version it reports', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const { stdout } = await run('node', [CLI, '--version']);
-  assert.match(stdout, new RegExp(`^prolog-notebook ${pkg.version.replace(/\./g, '\\.')}$`, 'm'));
+  assert.match(stdout, new RegExp(`^Prolog Notebook v${pkg.version.replace(/\./g, '\\.')} `, 'm'));
 });

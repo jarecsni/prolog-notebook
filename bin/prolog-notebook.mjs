@@ -17,17 +17,34 @@ import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 // commands most likely to be typed at a broken install are --help and --version.
 const engine = () => import('../src/node.js');
 
+// `prolog-notebook run --stdout file | head` closes the pipe while we are still
+// writing to it. That is the reader using the shell correctly, not an error, and
+// a command that answers it with an unhandled EPIPE and a stack trace is
+// complaining about being used properly.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (e) => {
+    if (e.code !== 'EPIPE') throw e;
+  });
+}
+
 const require = createRequire(import.meta.url);
 const PACKAGE = require('../package.json');
 
 /**
- * The copyright notice.
+ * The name a person would say, not the one npm installs. `prolog-notebook` is an
+ * identifier; this is a title, and --version is the one place the tool says who
+ * it is rather than how to type it.
+ */
+const NAME = 'Prolog Notebook';
+
+/**
+ * The copyright holder and year.
  *
  * Written here rather than read from LICENSE at runtime — a command should not
- * depend on a file it does not need — but a test asserts the two agree, so the
- * year cannot quietly drift out of step with the licence it refers to.
+ * depend on a file it does not need — but a test asserts the two agree, so this
+ * cannot quietly drift out of step with the licence it refers to.
  */
-const COPYRIGHT = 'Copyright (c) 2026 Johnny Jarecsni';
+const COPYRIGHT = 'Copyright (C) 2026 Johnny Jarecsni';
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
@@ -65,19 +82,20 @@ const RUNAWAY_WARNING = 'note: a non-terminating goal will hang this command; it
  * to be told, and exiting non-zero would hide it behind a shell error.
  */
 async function version() {
-  const lines = [`${PACKAGE.name} ${PACKAGE.version}`];
+  const lines = [`${NAME} v${PACKAGE.version} - ${COPYRIGHT}, ${PACKAGE.license} License.`];
   try {
     const { createSession } = await engine();
     const swipl = await prologVersion(await createSession());
-    lines.push(swipl
-      ? `SWI-Prolog ${swipl} (swipl-wasm ${require('swipl-wasm/package.json').version})`
-      : 'SWI-Prolog: started, but would not say which version it is');
+    const wasm = `swipl-wasm ${require('swipl-wasm/package.json').version}`;
+    lines.push(swipl ? `Powered by SWI-Prolog ${swipl}, ${wasm}` : `Powered by ${wasm}`);
   } catch (e) {
-    lines.push(`SWI-Prolog: could not load (${e.message})`);
+    // Not "powered by" anything, so it does not say so. Someone running this to
+    // find out why nothing works needs the reason, not a formula.
+    lines.push(`SWI-Prolog could not be started: ${e.message}`);
   }
-  lines.push(`${COPYRIGHT}. ${PACKAGE.license} licence.`);
-  lines.push(String(PACKAGE.homepage ?? '').replace(/#readme$/, ''));
-  return `${lines.filter(Boolean).join('\n')}\n`;
+  // The blank line is deliberate: this is a banner, and a banner that runs into
+  // the next shell prompt reads as an error message.
+  return `${lines.join('\n')}\n\n`;
 }
 
 async function main(argv) {
