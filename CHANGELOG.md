@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.6.5] — 2026-08-31
+
+Both from one field report on a real chapter.
+
+### Fixed
+
+- **`Attempt to access not innermost query` on a perfectly ordinary Run.** Loading the program
+  cells above a query emits `consulted`, which is exactly what `rerun="auto"` waits for — so an
+  auto cell's re-run was queued and ran while the manual run was still inside its awaits. It
+  asked whether anybody was mid-sequence, saw nobody, and opened its query underneath the one
+  about to be opened. One engine allows one open query, and whichever is not innermost cannot
+  be stepped, so the reader — who had pressed Run on one cell and touched nothing else — got
+  SWI's own words for a stack they are never supposed to meet.
+
+  A cell now claims the engine when its run **starts**, not when it succeeds. Two supporting
+  changes close the same class: the engine's version probe is awaited during boot rather than
+  fired beside the reader's first Run, and `all()` holds the session's one slot until the
+  worker has answered rather than releasing it up front.
+
+- **No way to clear your own answers in a chapter that shipped without any.** The outputs row
+  removed itself when the FILE had no saved answers — but that argument dies the moment a
+  reader presses Run, and a chapter published unrun is most chapters while an author is still
+  writing. The row now exists whenever there is a query cell, and counts what is on the page
+  rather than what is in the file: *No outputs yet*, *3 outputs on this page*, *3 outputs
+  cleared*.
+
+  The hide row above it stays keyed to the file, and correctly — hiding is for the chapter's
+  saved answers, and a reader's own run is not a spoiler.
+
 ## [0.6.4] — 2026-08-31
 
 ### Changed

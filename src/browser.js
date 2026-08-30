@@ -229,8 +229,16 @@ class WorkerQuery {
   async all(limit) {
     if (this.done) return { solutions: [], truncated: false };
     const qid = await this.#open();
-    this.#finish();
-    return this.session.send('all', { qid, limit });
+    try {
+      return await this.session.send('all', { qid, limit });
+    } finally {
+      // AFTER THE WORKER HAS ANSWERED, not before. Releasing the session's one
+      // slot up front said "nothing is open here" while the engine was still
+      // inside the goal, so anything that opened next nested inside a frame the
+      // session had already forgotten (869erqvzu). The slot is the claim that
+      // this query is the innermost one, and that stays true until it is done.
+      this.#finish();
+    }
   }
 
   async close({ superseded = false } = {}) {
