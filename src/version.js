@@ -10,7 +10,7 @@
 export const NAME = 'Prolog Notebook';
 
 /** Must equal package.json's `version` — test/run.test.mjs enforces it. */
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 /** The two facts a licence notice is actually made of. */
 export const YEAR = '2026';

@@ -627,5 +627,7 @@ test('the engine names itself once it is running', async () => {
   await page.settle();
   // It joins the line that says what is running, because that is what it is.
   assert.equal(page.panel().engineVersion, ' · SWI-Prolog 10.1.13');
-  assert.equal(page.panel().about, 'Prolog Notebook v0.2.0 · SWI-Prolog 10.1.13');
+  // Composed rather than spelled out: a test that restates the version is one
+  // more file to remember at release, and it caught nothing that this does not.
+  assert.equal(page.panel().about, `${colophon().running} · SWI-Prolog 10.1.13`);
 });

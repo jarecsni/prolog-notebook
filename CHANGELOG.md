@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.3.0] — 2026-08-30
+
+**A chapter is a file you can read, run, and fill in from the command line.** The renderer,
+the page's own behaviour, and the first half of the CLI.
+
+### Why
+
+0.2.0 made a `.prolog.md` executable. It did not make one *publishable*: the answers a chapter
+shows had to be typed by its author, which means they were the author's guess at what SWI
+prints, published as though it ran. Everything here follows from closing that gap and from
+what the closing revealed.
+
+`prolog-notebook run` now fills a chapter's answers in from a real engine. Run against the
+chapter in this repository it changes nothing — the hand-written answers were already exactly
+what SWI produces, hashes included, which is now a test.
+
+### Added
+
+- **`prolog-notebook run <file>…`** — consults every program cell, runs every query below it,
+  and writes the solution sequences back with an `input-hash` for each. `--limit`, `--stdout`,
+  `--quiet`. The logic is in `src/run.js` and takes a parsed notebook and a session, so
+  `--check` and a VS Code "run all" will get the same behaviour without a shell.
+- **`--version`**, which says which SWI-Prolog will produce your answers. swipl-wasm 8.0.7
+  ships SWI-Prolog 10.1.13, and the two numbers are unrelated — so the engine version is the
+  one fact there that nobody could have looked up. A published install also reports the commit
+  it was built from; a working copy says so, and says when it has uncommitted edits.
+- **A chapter is readable cold.** Saved answers render with no engine anywhere, and are marked
+  stale when the program above them has moved.
+- **`hold`** — a query cell can withhold its saved answers until the reader runs it, or until
+  they have written the prediction above it. A page that has already printed all six answers is
+  arguing with prose that says "press Run".
+- **`rerun="auto"`** — the answers follow the program. On consult, never on edit; never
+  starting work nobody asked for; and a held cell stays manual until its wait ends.
+- **The page's own controls**: a lozenge that raises a card — what the engine is holding, the
+  chapter's answers shown or hidden, and the notebook itself. It says which version is on
+  screen, and once the two differ, lets you download either.
+- **Per-cell reset**, on both runnable kinds. On a program cell that means out of the engine
+  as well as back to the chapter's text.
+- **A stateful cell says so** before anything is asserted into it.
+- **Download your own copy** — the reader leaves with a real `.prolog.md`, their edits and
+  their answers in it, hashed against the program that produced them.
+
+### Fixed
+
+- **An answer containing variables was not what SWI would print.** `app([1,2], Tail, L)` came
+  out as `L = [1,2|_20306],  Tail = _20428` where a toplevel prints `L = [1, 2|Tail]` — the
+  same variable shown as two, with the reader's own name for it discarded. Each binding was
+  rendered in a separate round trip into Prolog, and two round trips cannot share a variable.
+  Prolog now renders the whole answer, once, with the goal's own `variable_names`. Invisible
+  until now because every answer in the shipped chapter is a ground atom.
+- **A half-walked query was destroyed by running any other cell.** SWI keeps open queries on a
+  stack; nothing here released one, and the next query nested inside it. There is now one open
+  sequence per engine, and the cell that loses its own is told so in words about the notebook
+  rather than about SWI's internals.
+- **A `hold` release, a stuck Hide control, and a panel that resized under the cursor** — all
+  found by reading the page rather than the tests, which is why `src/notebook.js` now has a
+  jsdom harness and the page's behaviour is asserted from Node.
+- **A compile error is reported in the cell's own terms**, not as a path the reader never
+  chose.
+
+### Changed
+
+- **The engine is pinned exactly** (`swipl-wasm 8.0.7`). Two installs of one release, ten
+  minutes apart, ran SWI-Prolog 10.1.10 and 10.1.13 — and a chapter's saved answers are only
+  ever true of the engine that produced them. Moving the engine is now a commit with the
+  chapters re-run in it.
+- Solutions are spelled as SWI's own writer spells them, so compounds gain a space after each
+  comma: `foo(1, 2)`, not `foo(1,2)`. Any file with saved answers containing a compound will
+  differ on its next `run`.
+- `offerDownload()` takes an options object rather than positional arguments.
+- The engine is imported where it is used rather than at the top of the CLI, so `--help` still
+  works on an install whose WebAssembly is missing.
+
+### Notes
+
+`--check` — run a chapter in CI and fail the build when its answers have drifted — is
+deliberately **not** here. It needs a timeout first: the Node engine runs in-process, so a
+non-terminating goal hangs the command, and a test suite that can hang forever is not a test
+suite. The command says so on every run.
+
 ## [0.2.0] — 2026-08-16
 
 **Breaking: the session API is asynchronous.** `consult`, `next` and `all` now return
