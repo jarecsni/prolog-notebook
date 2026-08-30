@@ -176,19 +176,26 @@ function page(notebook) {
 </head>
 <body>
 <main>
-${renderNotebook(notebook)}
 <!--
-  THE CHAPTER ABOVE IS ALREADY READABLE. Everything below is the runtime that
-  makes it runnable, and none of it is needed to read a word.
+  FIRST IN THE DOCUMENT, AND IT COSTS A READER NOTHING (869erqq1u). mount()
+  removes this element, and the stylesheet holds it invisible for a second and a
+  half before revealing it — so a page that boots never shows it, and a page that
+  cannot boot says so where somebody staring at a dead button will see it. It
+  used to sit AFTER the chapter, several screens below the fold, which is the one
+  place it could not do its job.
+
+  The delay is CSS rather than a timer, for the obvious reason: script is exactly
+  what is broken when this matters.
 -->
 <div id="boot-warning">
   <strong>This notebook is not running.</strong>
   The page loaded but its JavaScript did not. The usual cause is opening
-  <code>index.html</code> straight from disk — browsers block ES modules over
-  <code>file://</code>. Serve it over HTTP instead, or run
-  <code>prolog-notebook view</code> on the notebook itself.
-  The chapter is readable either way; only the buttons need this.
+  <code>index.html</code> straight from disk — browsers refuse ES modules over
+  <code>file://</code>, and the engine cannot be fetched there either. Serve this
+  directory over HTTP, or run <code>prolog-notebook view</code> on the notebook
+  itself. The chapter is readable either way; only the buttons need this.
 </div>
+${renderNotebook(notebook)}
 </main>
 <script type="module" src="app.js"></script>
 </body>

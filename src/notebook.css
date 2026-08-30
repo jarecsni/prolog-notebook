@@ -502,13 +502,47 @@ button.primary:hover { background: #98380f; }
 }
 
 /* Shown until mount() runs; see notebook.js. Its presence means the page is inert. */
+/* THE PAGE THAT CANNOT RUN HAS TO SAY SO, WHERE IT WILL BE READ (869erqq1u).
+
+   Two properties, and both are the point:
+
+   FIXED, so it takes no layout. A working page carries this element for the
+   fraction of a second before mount() removes it, and a banner in the flow would
+   push the whole chapter down and then let it snap back — a visible jolt on every
+   single load, to warn about something that is not happening.
+
+   REVEALED ON A DELAY, in CSS. mount() removes it long before the animation
+   fires, so a page that boots never shows it at all; a page that cannot boot
+   shows it a second and a half in. It cannot be a timer, because script is the
+   thing that is broken. `forwards` holds the final frame rather than snapping
+   back to invisible. */
 #boot-warning {
-  margin: 0 0 2rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  margin: 0;
   padding: 1rem 1.2rem;
-  border: 2px solid var(--err);
-  border-radius: 6px;
+  border-bottom: 2px solid var(--err);
   background: #fff5f3;
   font-size: .95rem;
+  opacity: 0;
+  animation: boot-warning .25s ease 1.5s forwards;
+}
+@keyframes boot-warning { to { opacity: 1; } }
+/* ROOM FOR IT, made on the same delay and only while it is there. A fixed banner
+   would otherwise sit over the chapter's title — the page is broken, but it
+   should not also look broken. `:has` is what keeps this honest: the moment
+   mount() removes the element the selector stops matching, so a page that boots
+   never reserves the space, and a browser too old for `:has` merely goes back to
+   the banner overlapping. */
+body:has(#boot-warning) { animation: boot-warning-room .25s ease 1.5s forwards; }
+@keyframes boot-warning-room { to { padding-top: 7rem; } }
+/* Somebody who has asked not to be moved still gets the message — only the fade
+   goes. Without this the whole rule is skipped and the warning never appears. */
+@media (prefers-reduced-motion: reduce) {
+  #boot-warning { animation-duration: 0s; }
 }
 #boot-warning strong { color: var(--err); }
 #boot-warning pre {

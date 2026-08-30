@@ -269,3 +269,14 @@ test('a chapter that never parsed at all is the command\'s problem, not the page
   const pages = livePages(() => '---\nformat: prolog-notebook/99\n---\n', { filename: 'x.prolog.md' });
   assert.throws(() => pages(), /prolog-notebook/);
 });
+
+test('the page says it is not running ABOVE the chapter, not below it', () => {
+  // It sat after the whole chapter — line 540 of 551 in the Captain's built page
+  // — so somebody staring at a dead Run button at the top would never reach it
+  // (869erqq1u). A warning below the fold of a page that looks fine is a warning
+  // that does not exist.
+  const html = built().get('index.html').text;
+  assert.ok(html.indexOf('boot-warning') < html.indexOf('class="cell'),
+    'the warning has to come before the first cell');
+  assert.match(html, /file:\/\//, 'and name the cause somebody can act on');
+});

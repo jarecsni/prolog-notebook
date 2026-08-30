@@ -776,3 +776,20 @@ test('a held cell that is cleared does not claim to be waiting for anything', as
   assert.equal(page.panel().answers, 'No saved answers on screen');
   assert.equal(page.panel().answersDisabled, true);
 });
+
+test('mounting is what makes Run and Consult live', async () => {
+  // The other half of the markup shipping them disabled (869erqq1u): a page
+  // whose runtime never arrived stays inert, and one where it did is normal.
+  // Asserted here rather than in the renderer because "the runtime turns them
+  // on" is a claim about mount(), and it is the half that would rot silently.
+  const page = chapter();
+  assert.equal(page.cell('p-family').querySelector('[data-act="consult"]').disabled, false);
+  assert.equal(page.cell('q-son-b').querySelector('[data-act="run"]').disabled, false);
+
+  // And a cell nobody mounted keeps what the renderer gave it — which is the
+  // whole point, and the state the Captain's page was stuck in.
+  const { JSDOM } = await import('jsdom');
+  const { renderQuery } = await import('../src/render.js');
+  const cold = new JSDOM(`<body>${renderQuery({ id: 'q', goal: 'a', output: null })}</body>`);
+  assert.equal(cold.window.document.querySelector('[data-act="run"]').disabled, true);
+});

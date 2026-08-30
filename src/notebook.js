@@ -595,7 +595,12 @@ export function offerDownload(root, options = {}) {
   // their version IS the chapter, and a menu with one item is a control
   // pretending to offer something.
   unit.innerHTML = '<span class="state notebook-state"><span class="only"></span>'
-    + '<span class="picker" hidden><select aria-label="which version to download">'
+    // `name` rather than `id`, because a page may hold more than one notebook
+    // (v0.4) and two ids would collide where two names cannot — this select is in
+    // no form. Without either, the issues panel flags it, which is the same red
+    // console 869ernmxe was about; it only shows up on a page that BOOTS, so the
+    // earlier sweep never saw it.
+    + '<span class="picker" hidden><select name="notebook-version" aria-label="which version to download">'
     + '<option value="mine">Your version</option>'
     + '<option value="published">As published</option>'
     + `</select>${icon('chevron')}</span></span>`
@@ -677,6 +682,10 @@ function mountProgram(cell, options, bus) {
   const button = cell.querySelector('[data-act="consult"]') ?? cell.querySelector('button');
   const resetBtn = cell.querySelector('[data-act="reset"]');
   const status = cell.querySelector('.status');
+  // THE BUTTON IS LIVE BECAUSE THIS RAN, and not a moment before (869erqq1u).
+  // It ships disabled so that a page whose runtime never arrived looks like what
+  // it is, rather than offering a control nothing is listening to.
+  button.disabled = false;
 
   /**
    * The one cell whose state a re-consult does not undo (format §8).
@@ -1482,6 +1491,10 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   }
 
   decorateSaved();
+  // Same as a program cell's Consult: enabled here, by the thing that makes it
+  // do something, so the page cannot show a live-looking Run with no runtime
+  // behind it (869erqq1u).
+  runBtn.disabled = false;
   refresh();
 
   return {
