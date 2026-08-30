@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.5.1] — 2026-08-30
+
+Everything here came from one field report: a chapter written with the tool rather than a test
+written against it.
+
+### Fixed
+
+- **`view` bound quietly behind a squatter on the same port.** A stale
+  `python3 -m http.server --bind ::` holds `*:8777` on IPv6; binding `127.0.0.1:8777` on IPv4
+  does not collide with it, so `EADDRINUSE` never fired and the auto-bump never ran. `localhost`
+  then resolves to `::1` first and the reader gets somebody else's directory listing where a
+  chapter should be. The port is now connect-tested on **both stacks** before binding, because
+  *can I bind* and *will the reader reach me* are different questions.
+
+- **`view` printed its URL on stderr**, where a wrapper never saw it — which is how somebody
+  came to type `localhost` by hand. It is the command's output and is on stdout now; `view`
+  writes no notebook and no data there, so nothing can be corrupted by it.
+
+- **`view` and `build` never looked for an update.** The offer went into the `run` path first
+  and stayed there. Every command that does real work now goes through one door, always before
+  the work — the only point at which the answer can change the outcome.
+
+- **A prediction released the hold on blur, not on typing.** A reader who typed their prediction
+  and looked up saw nothing happen, and the link between *I wrote something* and *the answers
+  appeared* was broken by a pause with no cause. Debounced `input` at 1.2 s now, with `change`
+  kept so leaving the box is still immediate.
+
+- **The console was not clean, and this audience opens the console.** A `favicon.ico` 404 on
+  every load — now a `data:` URI carrying the notebook's own `?-` prompt — and an issues-panel
+  warning for every form field on the page, all of which were anonymous. Every field has an id:
+  `src-<cell>`, `goal-<cell>`, `predict-<n>`.
+
+- **A missing browser opener took the whole command down.** `spawn` reports that
+  asynchronously, so the `try/catch` around it caught nothing and an unhandled `'error'` event
+  killed `view` after the server had started. `start` on Windows is a shell builtin and was
+  never going to work spawned by name; it goes through `cmd` now.
+
 ## [0.5.0] — 2026-08-30
 
 **The CLI can show a notebook.** Until now the only way to see one running was to clone this
