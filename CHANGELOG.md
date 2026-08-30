@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.2] — 2026-08-30
+
+### Fixed
+
+- **The update check asked the registry for a media type it is entitled to refuse**, so on some
+  of npm's edges every check answered `Could not reach the npm registry to check for updates.`
+  `application/vnd.npm.install-v1+json` is defined for the packument; `/{name}/latest` may
+  answer 406 to it, and does. Measured both ways from one machine minutes apart, which is what
+  made it look transient. It now asks for plain JSON, which that endpoint has always served.
+
 ## [0.4.1] — 2026-08-30
 
 ### Changed

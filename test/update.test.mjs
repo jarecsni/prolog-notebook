@@ -153,8 +153,10 @@ test('the cache is in the reader\'s cache directory, not in the install', () => 
 
 test('the registry call asks for the small document, and shrugs at anything else', async () => {
   // The only part of this that ever touches the wire, so the only part with a
-  // stubbed fetch: the abbreviated document, because the full packument carries
-  // every version ever published to answer a one-line question.
+  // stubbed fetch. `/latest` because the packument carries every version ever
+  // published to answer a one-line question — and PLAIN JSON, because npm's
+  // abbreviated type is defined for the packument and this endpoint is entitled
+  // to answer 406, which is exactly what it did to 0.4.0's notifier.
   let seen = null;
   const version = await latestFromRegistry({
     registry: 'https://example.invalid',
@@ -165,7 +167,8 @@ test('the registry call asks for the small document, and shrugs at anything else
   });
   assert.equal(version, '9.9.9');
   assert.equal(seen.url, 'https://example.invalid/prolog-notebook/latest');
-  assert.match(seen.accept, /install-v1\+json/);
+  assert.equal(seen.accept, 'application/json');
+  assert.doesNotMatch(seen.accept, /install-v1/, 'that type belongs to the packument, not to /latest');
 
   // A trailing slash is what npm's own config carries, and two slashes in a URL
   // is the kind of thing a registry is entitled to refuse.
