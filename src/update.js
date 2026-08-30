@@ -150,9 +150,12 @@ export async function updateNotice({
   if (!newest) {
     return fresh && !force ? null : 'Could not reach the npm registry to check for updates.';
   }
+  // BOTH LINES START WITH WHAT YOU HAVE, because that is the question being
+  // asked. "Prolog Notebook 0.4.0 is the latest" states a fact about the world
+  // and leaves the reader to work out that it is also a fact about them.
   if (isNewer(newest, version)) {
-    return `A newer Prolog Notebook is available: ${version} → ${newest}\n`
+    return `You have Prolog Notebook ${version}. The latest is ${newest}.\n`
       + 'Update with: npm i -g prolog-notebook';
   }
-  return force ? `Prolog Notebook ${version} is the latest.` : null;
+  return force ? `You have the latest version of Prolog Notebook, ${version}.` : null;
 }

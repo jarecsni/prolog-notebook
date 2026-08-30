@@ -7,7 +7,7 @@
 - **The CLI notices when it is out of date.** On real work — `run` — it asks npm at most once
   a day whether there is something newer, and says nothing unless there is:
 
-      A newer Prolog Notebook is available: 0.4.0 → 0.5.0
+      You have Prolog Notebook 0.4.0. The latest is 0.5.0.
       Update with: npm i -g prolog-notebook
 
   `--check-update` forces the question and answers it either way, including *you are on the

@@ -338,9 +338,9 @@ test('a run says so when a newer version exists, on stderr', async () => {
       },
     });
     assert.deepEqual(asked, ['/prolog-notebook/latest']);
-    assert.match(stderr, /A newer Prolog Notebook is available: \d+\.\d+\.\d+ → 99\.0\.0/);
+    assert.match(stderr, /You have Prolog Notebook \d+\.\d+\.\d+\. The latest is 99\.0\.0\./);
     assert.match(stderr, /npm i -g prolog-notebook/);
-    assert.doesNotMatch(stdout, /newer Prolog Notebook/, 'the notebook is not to be corrupted');
+    assert.doesNotMatch(stdout, /The latest is/, 'the notebook is not to be corrupted');
     assert.match(stdout, /```text output for=/, 'and it is still a notebook');
 
     // --quiet means "report only failures", and news about a newer version is not
@@ -356,7 +356,7 @@ test('a run says so when a newer version exists, on stderr', async () => {
       },
     });
     assert.equal(asked.length, before, 'the registry was not asked');
-    assert.doesNotMatch(quiet.stderr, /newer Prolog Notebook/);
+    assert.doesNotMatch(quiet.stderr, /The latest is/);
 
     // Unless it was asked for outright, which --quiet does not override.
     const forced = await run('node', [CLI, 'run', '--stdout', '--quiet', '--check-update', file], {
@@ -367,7 +367,7 @@ test('a run says so when a newer version exists, on stderr', async () => {
         XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
       },
     });
-    assert.match(forced.stderr, /newer Prolog Notebook is available/);
+    assert.match(forced.stderr, /The latest is 99\.0\.0\./);
   } finally {
     server.close();
   }

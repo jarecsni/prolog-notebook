@@ -28,7 +28,9 @@ test('and says so plainly when there is something newer', async () => {
   const notice = await updateNotice({
     version: '0.3.1', store: memory(), latest: async () => '0.4.0', env: {},
   });
-  assert.equal(notice, 'A newer Prolog Notebook is available: 0.3.1 → 0.4.0\n'
+  // It says what you HAVE first: that is the question being asked, and a line
+  // that only names versions leaves the reader to work out which one is theirs.
+  assert.equal(notice, 'You have Prolog Notebook 0.3.1. The latest is 0.4.0.\n'
     + 'Update with: npm i -g prolog-notebook');
 });
 
@@ -58,7 +60,7 @@ test('--check-update asks anyway, and answers either way', async () => {
   const notice = await updateNotice({
     version: '0.3.1', force: true, store, latest: async () => '0.3.1', env: {},
   });
-  assert.equal(notice, 'Prolog Notebook 0.3.1 is the latest.');
+  assert.equal(notice, 'You have the latest version of Prolog Notebook, 0.3.1.');
 
   // Even a cache written a second ago is ignored when it was asked for.
   let asked = 0;
@@ -79,7 +81,7 @@ test('never in CI, and never when told not to', async () => {
     await updateNotice({
       version: '0.1.0', force: true, store: memory(), latest: async () => '0.3.1', env: { CI: 'true' },
     }),
-    /0\.1\.0 → 0\.3\.1/,
+    /You have Prolog Notebook 0\.1\.0\. The latest is 0\.3\.1\./,
   );
 });
 
