@@ -45,6 +45,11 @@ function createBus() {
   return {
     on: (watcher) => watchers.add(watcher),
     emit: (event) => { for (const watcher of watchers) watcher(event); },
+    // The cells with a solution sequence open right now. One engine allows one
+    // (869epzqpc), so this is 0 or 1 — but it is a set because what the page
+    // needs to know is "is the reader mid-enquiry anywhere", and counting is how
+    // a cell that is not this one gets to say so.
+    stepping: new Set(),
     queue: (job) => {
       // Both arms are the same job on purpose: a re-run that threw must not stop
       // the next cell's from ever starting.
@@ -913,6 +918,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   const finish = () => {
     query = null;
     running = false;
+    bus.stepping.delete(cell);
     // Run must come back, whatever ended the query. Leaving it disabled after a
     // Stop turns a rescued page into a dead one, which is worse than the freeze
     // this whole mechanism exists to prevent.
@@ -1058,6 +1064,17 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
         return;
       }
       query = session.query(goal);
+      bus.stepping.add(cell);
+      // A sequence ends when another one starts — one engine, one open query
+      // (869epzqpc). The reader hears it here, in the cell it happened to, with
+      // the solutions they did take still under it and Run still lit. Silence was
+      // the old behaviour and it was worse than an interruption: the cell looked
+      // fine until they came back to it and got SWI's own words for a stack they
+      // never knew existed.
+      query.onSuperseded = () => {
+        write('sequence closed — another query was run. Press Run to start this one again.', 'done');
+        finish();
+      };
       setRunning(false);
       // A re-run the reader did not ask for must not leave the page in a state
       // they did not ask for either: it takes the whole sequence, exactly as the
@@ -1122,12 +1139,22 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
       // that quizzes the reader and then answers itself is worse than one that
       // never asked.
       if (held) return;
-      // Mid-sequence. Re-running would yank the solution stream out from under a
-      // reader walking it with `; next` — so it stays as it is, and the tick says
-      // the program has changed since, exactly as a manual cell would.
       if (running || query) return;
       if (!outOfDate()) return;
-      bus.queue(() => run({ cause: 'auto' }));
+      bus.queue(() => {
+        // MID-SEQUENCE ANYWHERE ON THE PAGE, not just in this cell. One engine
+        // allows one open query, so an automatic re-run would close whatever the
+        // reader is walking with `; next` (869epzqpc) — the page interrupting an
+        // enquiry nobody asked it to interrupt. It stays as it is instead, and
+        // the tick says the program has changed since, exactly as a manual cell
+        // would; the next consult after they finish picks it up.
+        //
+        // Checked here rather than where the event arrived, because this is
+        // queued behind the other cells' re-runs and the reader may have started
+        // stepping in between.
+        if (bus.stepping.size || running || query) return undefined;
+        return run({ cause: 'auto' });
+      });
     });
   }
 
@@ -1174,11 +1201,18 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   /**
    * Put the chapter's query and its answers back.
    *
-   * No engine work, and none needed: the chapter's saved answers make no claim
-   * about what the engine is holding. They say whose they are, which is the only
-   * claim they have ever made (docs/modes.md §3).
+   * No CLAUSES change, and none need to: the chapter's saved answers make no
+   * claim about what the engine is holding. They say whose they are, which is the
+   * only claim they have ever made (docs/modes.md §3).
+   *
+   * The one piece of engine state it does give back is this cell's own open
+   * query. A reader pressing reset has said "pretend I never ran this", and a
+   * page that leaves a frame open in their name has agreed with them in words and
+   * disagreed in fact — the same argument that makes a program cell's reset
+   * un-consult.
    */
   resetBtn?.addEventListener('click', () => {
+    query?.close();
     input.value = published.goal;
     out.innerHTML = published.out;
     mine = false;

@@ -159,3 +159,62 @@ test('abort is restart, and leaves a usable session behind', async () => {
   await session.abort();
   assert.deepEqual((await session.query('p(X)').all()).solutions.map((s) => s.X), [1]);
 });
+
+// ------------------------------------------- one open sequence per session
+
+test('a second query closes the first, rather than trapping it underneath', async () => {
+  // THE BUG (869epzqpc): SWI keeps open queries on a STACK and swipl-wasm
+  // enforces it — next() and close() both throw "Attempt to access not innermost
+  // query" on anything else. A reader who walks half of one sequence and then
+  // runs another cell had, until this, killed the first one with no way back and
+  // no explanation. Nothing released the frame either: the worker forgot the id
+  // and left the query open inside the engine for the life of the session.
+  const session = await createSession();
+  await session.consult('n(1). n(2). n(3).', 'cell-n');
+
+  const first = session.query('n(X)');
+  let told = 0;
+  first.onSuperseded = () => { told++; };
+  assert.equal((await first.next()).text, 'X = 1', 'one of three taken, frame open');
+
+  const second = session.query('n(X)');
+  assert.equal((await second.next()).text, 'X = 1');
+  assert.equal(told, 1, 'the first sequence is told it was closed');
+
+  // AND IT SAYS WHICH KIND OF ENDING IT WAS. `done` alone would let a caller
+  // conclude the search was exhausted and write `false.` under it (format §6),
+  // which is the one thing we may not forge.
+  assert.deepEqual(await first.next(), { done: true, superseded: true });
+
+  // The line that used to throw: the survivor is unharmed and still walks.
+  assert.equal((await second.next()).text, 'X = 2');
+  assert.equal((await second.next()).text, 'X = 3');
+  assert.equal((await second.next()).done, true);
+});
+
+test('a sequence that finished holds nothing, so it is never closed for another', async () => {
+  // swipl-wasm closes a query when its search ends, which is why a drained
+  // sequence costs nothing and why `all` is always safe.
+  const session = await createSession();
+  await session.consult('n(1). n(2).', 'cell-n');
+
+  const first = session.query('n(X)');
+  first.onSuperseded = () => assert.fail('nothing was open to close');
+  await first.all();
+
+  const second = session.query('n(X)');
+  assert.equal((await second.next()).text, 'X = 1');
+});
+
+test('closing a sequence by hand gives the frame back too', async () => {
+  const session = await createSession();
+  await session.consult('n(1). n(2). n(3).', 'cell-n');
+
+  const first = session.query('n(X)');
+  await first.next();
+  await first.close();
+  first.onSuperseded = () => assert.fail('it was already closed');
+
+  const second = session.query('n(X)');
+  assert.deepEqual((await second.all()).solutions.map((s) => s.X), [1, 2, 3]);
+});

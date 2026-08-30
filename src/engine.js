@@ -131,7 +131,36 @@ export class PrologQuery {
     this.handle = handle;
     this.session = session;
     this.exhausted = false;
+    // Ended by something other than its own search — see close(). Kept apart from
+    // `exhausted` because "the search finished" and "we stopped it" are different
+    // facts, and only the first may ever be written down as `false.` (format §6).
+    this.superseded = false;
     this.count = 0;
+  }
+
+  /**
+   * Give the query frame back to the engine.
+   *
+   * SWI KEEPS OPEN QUERIES ON A STACK, and swipl-wasm enforces it: both
+   * `next()` and `close()` call `__must_be_innermost_query`, which throws
+   * "Attempt to access not innermost query". An abandoned query is therefore not
+   * merely untidy — it is a frame every later query has to nest inside, and the
+   * abandoned one can never be stepped again (869epzqpc).
+   *
+   * Nothing else releases it. Running the search to `done` does, because
+   * swipl-wasm closes the query itself at that point, which is why a drained
+   * sequence costs nothing. Everything else must come through here.
+   *
+   * @param {{superseded?: boolean}} [options] `superseded` when the session
+   *   closed this to make room for another query rather than the caller being
+   *   finished with it. It changes what next() reports, and it must: a caller
+   *   that reads plain `done` concludes the search was exhausted.
+   */
+  close({ superseded = false } = {}) {
+    if (superseded) this.superseded = true;
+    if (this.exhausted) return;
+    this.exhausted = true;
+    this.handle.close();
   }
 
   /**
@@ -144,7 +173,10 @@ export class PrologQuery {
    * @returns {{done: boolean, solution?: object, text?: string, error?: string}}
    */
   next() {
-    if (this.exhausted) return { done: true };
+    // `superseded` travels with the done, because a closed query and an exhausted
+    // one are indistinguishable from `{done: true}` alone — and the difference is
+    // whether the caller may write `false.` under it.
+    if (this.exhausted) return this.superseded ? { done: true, superseded: true } : { done: true };
     let r;
     try {
       r = this.handle.next();

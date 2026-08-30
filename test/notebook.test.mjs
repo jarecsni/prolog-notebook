@@ -225,13 +225,70 @@ test('the fake engine has the shape of the real ones', () => {
   // engine, because a prototype is not an instance.
   const fake = fakeEngine();
   for (const real of [InProcessSession, WorkerSession]) {
-    for (const method of ['consult', 'unconsult', 'restart', 'abort', 'query']) {
+    for (const method of ['consult', 'unconsult', 'restart', 'abort', 'query', 'supersede']) {
       assert.equal(typeof real.prototype[method], 'function', `${real.name}.${method}`);
       assert.equal(typeof fake[method], 'function', `fake.${method}`);
     }
   }
   // And the log the page interrogates is the real class, not a stand-in for it.
   assert.ok(fake.log instanceof ConsultLog);
+});
+
+// ------------------------------------------------ one sequence at a time
+
+test('running another query closes a half-walked sequence, and says so in its cell', async () => {
+  // ONE ENGINE, ONE OPEN QUERY (869epzqpc). SWI keeps them on a stack, so a
+  // sequence left part-way was already dead the moment another cell ran — it just
+  // said nothing until the reader came back and pressed `; next`, and then said it
+  // in SWI's words about a stack they never knew existed.
+  const page = chapter();
+  page.press('q-is-son', 'run');
+  await page.settle();
+  assert.ok(page.out('q-is-son').includes('1.  X = edward'), 'one of two taken');
+
+  page.press('q-son-b-george', 'run');
+  await page.settle();
+
+  assert.equal(
+    page.out('q-is-son').at(-1),
+    'sequence closed — another query was run. Press Run to start this one again.'
+  );
+  // What they DID take stays. It is theirs, and it is still true of the program
+  // above — which is why the tick is left alone as well.
+  assert.ok(page.out('q-is-son').includes('1.  X = edward'));
+  assert.match(page.status('q-is-son'), /^✓ ran /);
+  // And the way on is the button that was always there.
+  const cell = page.cell('q-is-son');
+  assert.equal(cell.querySelector('[data-act="next"]').disabled, true);
+  assert.equal(cell.querySelector('[data-act="run"]').disabled, false);
+});
+
+test('a sequence walked to the end is not interrupted by anything', async () => {
+  const page = chapter();
+  page.press('q-is-son', 'run');
+  await page.settle();
+  page.cell('q-is-son').querySelector('[data-act="all"]').click();
+  await page.settle();
+  assert.equal(page.out('q-is-son').at(-1), 'no more solutions.');
+
+  page.press('q-son-b-george', 'run');
+  await page.settle();
+  assert.equal(page.out('q-is-son').at(-1), 'no more solutions.', 'nothing was open to close');
+});
+
+test('reset hands the engine back the frame this cell was holding', async () => {
+  // A reader pressing reset has said "pretend I never ran this". A page that puts
+  // the text back while leaving a query open in their name has agreed with them in
+  // words and disagreed in fact — the same argument that makes a program cell's
+  // reset un-consult.
+  const page = chapter();
+  page.press('q-is-son', 'run');
+  await page.settle();
+  assert.ok(page.engine.open, 'the engine is holding a sequence for this cell');
+
+  page.press('q-is-son', 'reset');
+  await page.settle();
+  assert.equal(page.engine.open, null);
 });
 
 // ----------------------------------------------------------------- export
@@ -404,6 +461,31 @@ test('an auto re-run does not answer the question the reader is still being aske
   await page.settle();
   assert.match(page.out('q-auto')[0], /^re-run automatically/);
   assert.ok(page.out('q-auto').includes('2.  X = alfred'));
+});
+
+test('an auto cell waits while the reader is walking a sequence anywhere on the page', async () => {
+  // ONE ENGINE, ONE OPEN QUERY (869epzqpc). An automatic re-run opens one, so it
+  // would close whatever the reader is stepping through in another cell — the
+  // page interrupting an enquiry nobody asked it to interrupt. It waits instead,
+  // and the stale mark says why nothing moved.
+  const { answers, page } = reactive();
+  page.press('q-manual', 'run');
+  await page.settle();
+  assert.ok(page.engine.open, 'the reader is mid-sequence in another cell');
+
+  page.type('p-1', 'son(edward).\nson(alfred).');
+  answers['son(X)'] = ['X = edward', 'X = alfred'];
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /the chapter’s saved answers/, 'it held off');
+
+  // When they finish, the next consult picks it up. Nothing was lost, only waited.
+  page.cell('q-manual').querySelector('[data-act="all"]').click();
+  await page.settle();
+  assert.equal(page.engine.open, null);
+  page.press('p-1', 'consult');
+  await page.settle();
+  assert.match(page.out('q-auto')[0], /^re-run automatically/);
 });
 
 test('a re-run cannot start another one', async () => {

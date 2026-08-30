@@ -25,6 +25,8 @@ export class WorkerSession {
   #pending = new Map();
   #nextId = 1;
   #booting = null;
+  /** The one query allowed to hold a frame. See supersede(). */
+  #open = null;
 
   constructor({ workerUrl, swiplUrl = DEFAULT_SWIPL_URL, engineUrl, options = {} } = {}) {
     this.workerUrl = workerUrl ?? new URL('./worker.js', import.meta.url).href;
@@ -69,6 +71,42 @@ export class WorkerSession {
     return new WorkerQuery(this, goal);
   }
 
+  /**
+   * ONE OPEN SEQUENCE PER SESSION, and the reason is not tidiness.
+   *
+   * SWI keeps open queries on a stack and swipl-wasm enforces it: stepping or
+   * closing anything but the innermost throws "Attempt to access not innermost
+   * query". A page cannot promise the order — the order is whatever the reader
+   * clicks — so the constraint is met by construction instead: there is never
+   * more than one open query, which means the one being closed is always the
+   * innermost, which means the close is always legal (869epzqpc).
+   *
+   * Called at the moment a frame is about to be opened, never when the query
+   * OBJECT is made: a cell whose Run fails before it ever steps must not end
+   * someone else's sequence for nothing.
+   *
+   * @internal
+   */
+  async supersede() {
+    const previous = this.#open;
+    this.#open = null;
+    if (!previous) return;
+    await previous.close({ superseded: true });
+    // Said only after the frame is actually gone, so a listener that starts a new
+    // query cannot race the close it was told about.
+    previous.onSuperseded?.();
+  }
+
+  /** @internal a query's frame is gone — exhausted, closed, or died with the engine. */
+  release(query) {
+    if (this.#open === query) this.#open = null;
+  }
+
+  /** @internal a query has just taken the session's one frame. */
+  hold(query) {
+    this.#open = query;
+  }
+
   /** Take one cell's clauses back out. See unconsult() in session.js. */
   async unconsult(name) {
     return unconsult(this, name);
@@ -87,6 +125,8 @@ export class WorkerSession {
    */
   async restart() {
     this.#teardown(new Error('aborted'));
+    // Every frame died with the worker, so nothing is holding the session's.
+    this.#open = null;
     await this.start();
     for (const { name, text } of this.log) {
       await this.#send('consult', { text, name });
@@ -123,6 +163,7 @@ export class WorkerSession {
   }
 
   #teardown(reason) {
+    this.#open = null;
     this.#worker?.terminate();
     this.#worker = null;
     this.#booting = null;
@@ -155,35 +196,56 @@ class WorkerQuery {
     this.session = session;
     this.goal = goal;
     this.done = false;
+    // Ended by another query taking the session's one frame, rather than by its
+    // own search finishing. Kept apart from `done` because only one of the two
+    // may ever be written down as an exhausted search (format §6).
+    this.superseded = false;
+    /** Set by the caller to hear that its sequence was closed for another one. */
+    this.onSuperseded = null;
   }
 
   async #open() {
     if (this.#qid === null) {
       await this.session.start();
+      // Before the frame exists, never after: once a second query is open the
+      // first is no longer innermost and can never be closed at all.
+      await this.session.supersede();
       this.#qid = await this.session.send('open', { goal: this.goal });
+      this.session.hold(this);
     }
     return this.#qid;
   }
 
   async next() {
-    if (this.done) return { done: true };
+    if (this.done) return this.superseded ? { done: true, superseded: true } : { done: true };
     const qid = await this.#open();
     const result = await this.session.send('next', { qid });
-    if (result.done) this.done = true;
+    // The worker forgets a query that reports done — swipl-wasm has closed it —
+    // so the frame is already back and nothing here needs to ask for it.
+    if (result.done) this.#finish();
     return result;
   }
 
   async all(limit) {
     if (this.done) return { solutions: [], truncated: false };
     const qid = await this.#open();
-    this.done = true;
+    this.#finish();
     return this.session.send('all', { qid, limit });
   }
 
-  async close() {
-    if (this.#qid === null || this.done) return;
-    this.done = true;
+  async close({ superseded = false } = {}) {
+    if (superseded) this.superseded = true;
+    if (this.#qid === null || this.done) {
+      this.#finish();
+      return;
+    }
+    this.#finish();
     await this.session.send('close', { qid: this.#qid });
+  }
+
+  #finish() {
+    this.done = true;
+    this.session.release(this);
   }
 }
 

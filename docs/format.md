@@ -225,8 +225,12 @@ is_son(X)
 
   It also re-runs only when the answers on screen are **not what the page would now produce**
   — a consult of a cell nobody edited changes nothing, and re-running to print the same
-  answers is a page being busy at the reader — and never while the reader is walking a
-  solution sequence with `; next`.
+  answers is a page being busy at the reader — and **never while any sequence on the page is
+  open**. One engine allows one open query ([modes §3](modes.md)), so re-running would close
+  whatever the reader is walking with `; next`. It waits, and the next consult after they
+  finish picks it up. A cell that has run keeps its *program changed since this ran* mark
+  while it waits; one still showing the chapter's answers shows them unchanged, which is a
+  gap in what the page says out loud rather than in what it does ([869erjtd3]).
 
   **An automatic re-run takes the whole solution sequence**, where pressing Run takes the
   first and waits. Two reasons, and the second is not cosmetic: the answers it replaces
@@ -554,6 +558,7 @@ false.
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
 [869enpbc3]: https://app.clickup.com/t/869enpbc3
 [869epzqpc]: https://app.clickup.com/t/869epzqpc
+[869erjtd3]: https://app.clickup.com/t/869erjtd3
 [869edyyvm]: https://app.clickup.com/t/869edyyvm
 [869ectt20]: https://app.clickup.com/t/869ectt20
 [869ejgybm]: https://app.clickup.com/t/869ejgybm

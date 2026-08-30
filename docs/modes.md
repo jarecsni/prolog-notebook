@@ -100,11 +100,51 @@ Three rules:
      "Unknown procedure" when a goal actually calls it — and Run on any query below consults
      the cells above it, so the chapter heals itself on the next click ([869ejgyaa]).
    - On a **query** cell it is the chapter's goal and the chapter's saved answers, together,
-     because they only mean anything together. No engine work is involved: saved answers make
-     no claim about what the engine is holding.
+     because they only mean anything together. No *clauses* change: saved answers make no
+     claim about what the engine is holding. The one thing it does hand back is this cell's
+     own open sequence, if it has one — see below.
 
    Whole-notebook reset arrives with the scratchpad it undoes ([869ectt5d]); until then a
    reload is a true reset, and the page says so.
+
+### One sequence at a time
+
+A reader can have exactly **one solution sequence open per engine**, and running a query
+anywhere closes whatever was open before ([869epzqpc]).
+
+This is not a policy we chose for tidiness — it is the shape of the thing underneath. SWI
+keeps open queries on a **stack**, and swipl-wasm enforces it: `next()` and `close()` both
+throw *Attempt to access not innermost query* on anything but the innermost. A page cannot
+promise the order in which sequences are finished, because the order is whatever the reader
+clicks. So the constraint is met by construction instead — there is never more than one open
+query, therefore the one being closed is always the innermost, therefore the close is always
+legal. It lives in the **session**, not in the page, so the CLI runner and any future shell
+get it without knowing it exists.
+
+**The closed cell is told, in the cell it happened to.** It keeps every solution it took and
+gains one line:
+
+> sequence closed — another query was run. Press Run to start this one again.
+
+`; next` and *all* go grey; **Run** and *reset* stay lit; the tick still says `✓ ran`, because
+the answers it did take are still true of the program above. The alternative was silence
+followed, minutes later, by SWI's own words about a stack the reader never knew existed.
+
+Three consequences worth stating:
+
+- **Most of a chapter is unaffected.** A sequence walked to `no more solutions.`, a
+  deterministic query, and anything run with *all* hold no frame at all — swipl-wasm closes a
+  query when its search ends. Only a half-walked sequence can be interrupted.
+- **The page never does it to the reader on its own.** `rerun="auto"` holds off entirely while
+  any sequence is open, and picks the work up at the next consult after they finish
+  (format §5). A cell re-running itself is one thing; a cell ending someone's enquiry to do it
+  is another.
+- **It exports honestly.** A closed sequence has solutions and no terminator, which is the
+  format's own spelling for a search that was never exhausted (§6) — and it never was. Writing
+  `false.` under it would forge an exhaustion, which is the one thing we may not do.
+
+The same mechanism is what an evicted chapter will need in a book: when the engine pool
+reclaims a chapter no longer on screen, its open sequence ends and has to say so.
 
 ### Every output is attributable
 
@@ -271,6 +311,7 @@ and export plus the VS Code milestone covers it.
 [869ectt6g]: https://app.clickup.com/t/869ectt6g
 [869ectt0y]: https://app.clickup.com/t/869ectt0y
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
+[869epzqpc]: https://app.clickup.com/t/869epzqpc
 [869ejgyaa]: https://app.clickup.com/t/869ejgyaa
 [869enke58]: https://app.clickup.com/t/869enke58
 [869eddzfp]: https://app.clickup.com/t/869eddzfp
