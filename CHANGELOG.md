@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.6.2] — 2026-08-30
+
+From a field report: a built chapter opened in Chrome and Safari showed no controls and a Run
+button that did nothing, while the same directory worked in VS Code's browser.
+
+### Fixed
+
+- **A page that could not run looked exactly like one that could.** Opening `index.html` from
+  disk means `file://`, where browsers refuse ES modules, so none of the runtime loads. That
+  part is the browser doing its job; the page then lied about it twice.
+
+  The warning that exists for this sat **after the whole chapter** — line 540 of 551 — several
+  screens below the fold, which is the one place it could not do its job. It is now first in
+  the document and a fixed banner, revealed by a CSS `animation-delay` rather than a timer,
+  because script is precisely what is broken when it matters. `mount()` removes it long before
+  the delay elapses, so a page that boots never shows it and nothing jolts.
+
+  And **Run and Consult shipped enabled**, so the two controls a reader reaches for first were
+  full colour and inert — a screenshot of the failure was indistinguishable from success. They
+  now ship disabled and `mount()` enables them, which makes "this button works" and "something
+  is here to work it" one fact rather than two that can disagree. It also closes a real race on
+  a slow page.
+
+- **Every prediction box had the same id.** The ordinal is counted correctly and was dropped on
+  the last hop into `renderPredict`, which took its default every time. The test asserted the
+  shape of the id, which three identical ones satisfy; it now asserts uniqueness.
+
+- **The version picker had neither an id nor a name.** It only exists on a page that boots,
+  which is why the earlier console sweep never saw it. A served chapter's console is now empty.
+
+### Changed
+
+- `build` says that opening the directory from disk will not run, rather than mentioning HTTP
+  in passing. It is the point at which somebody is about to double-click the thing.
+
 ## [0.6.1] — 2026-08-30
 
 ### Fixed
