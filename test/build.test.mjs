@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from '../src/format.js';
 import { buildFiles, ENGINE, RUNTIME } from '../src/build.js';
-import { contentType, serve } from '../src/serve.js';
+import { contentType, openInBrowser, serve } from '../src/serve.js';
 
 // A chapter to a page that stands on its own (869ermwfv), and the server that
 // shows it (869ermwjv). The two share one map, so what you look at and what you
@@ -135,4 +135,38 @@ test('the browser is told what each thing is', () => {
   // stream-compile.
   assert.equal(contentType('swipl/x.wasm'), 'application/wasm');
   assert.equal(contentType('swipl/x.data'), 'application/octet-stream');
+});
+
+test('the browser is opened the way each platform actually opens things', () => {
+  const seen = [];
+  const spawnImpl = (cmd, args) => {
+    seen.push([cmd, args]);
+    return { on() {}, unref() {} };
+  };
+  const url = 'http://127.0.0.1:8777/';
+  openInBrowser(url, { spawnImpl, platform: 'darwin' });
+  openInBrowser(url, { spawnImpl, platform: 'linux' });
+  // `start` is a SHELL BUILTIN, not a program: spawning it by name fails every
+  // time. The empty string is cmd's title argument — without it the URL becomes
+  // the window title and nothing opens.
+  openInBrowser(url, { spawnImpl, platform: 'win32' });
+
+  assert.deepEqual(seen, [
+    ['open', [url]],
+    ['xdg-open', [url]],
+    ['cmd', ['/c', 'start', '', url]],
+  ]);
+});
+
+test('a machine with no opener keeps serving instead of dying', async () => {
+  // spawn reports a missing program ASYNCHRONOUSLY, so a try/catch around it
+  // catches nothing and an 'error' event with no listener is an uncaught
+  // exception — which took the whole command down, after the server had started,
+  // on any machine without a desktop.
+  const { spawn } = await import('node:child_process');
+  const child = openInBrowser('http://127.0.0.1:1/', {
+    spawnImpl: (...args) => spawn('definitely-not-a-real-opener', ...args.slice(1)),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.ok(child, 'and the process is still here to assert it');
 });

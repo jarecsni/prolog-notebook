@@ -8,6 +8,7 @@
 // A server of about forty lines rather than a dependency: it answers GET for a
 // fixed set of paths that this process generated, and 404s everything else. It
 // is not a static file server and must not become one.
+import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
 import { createServer } from 'node:http';
 
@@ -77,4 +78,30 @@ function listen(server, port, host) {
     });
     server.listen(port, host, () => resolve(server.address().port));
   });
+}
+
+/**
+ * Hand the URL to whatever the desktop uses.
+ *
+ * TWO WAYS THIS GOES WRONG, both found by reading it rather than running it:
+ *
+ * - `start` on Windows is a SHELL BUILTIN, not a program, so spawning it by name
+ *   fails every time. It has to be run through cmd, and the empty string is
+ *   cmd's title argument — without it, a quoted URL becomes the window title and
+ *   nothing opens.
+ * - spawn reports a missing program ASYNCHRONOUSLY. A try/catch around it catches
+ *   nothing, and an 'error' event with no listener is an uncaught exception —
+ *   which took the whole command down, AFTER the server had started, on any
+ *   machine without an opener. A listener that does nothing is the fix: the URL
+ *   is on screen either way, and a browser that will not open is not a reason to
+ *   stop serving.
+ */
+export function openInBrowser(url, { spawnImpl = spawn, platform = process.platform } = {}) {
+  const argv = platform === 'win32'
+    ? ['cmd', ['/c', 'start', '', url]]
+    : [platform === 'darwin' ? 'open' : 'xdg-open', [url]];
+  const child = spawnImpl(argv[0], argv[1], { stdio: 'ignore', detached: true });
+  child.on('error', () => {});
+  child.unref?.();
+  return child;
 }
