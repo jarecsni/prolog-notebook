@@ -1338,6 +1338,31 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   };
 }
 
+/**
+ * What the cells now say, keyed by id, for src/export.js to fold into the model.
+ *
+ * HERE RATHER THAN IN page.js, because a built page has its HTML already and must
+ * not import the renderer to get this — page.js pulls in markdown-it, and 137 KB
+ * of markdown parser to answer "what does this textarea say" is the opposite of
+ * why these two files are separate.
+ *
+ * @param {{programs: object[], queries: object[]}} cells what mount() returned
+ * @returns {Map<string, object>}
+ */
+export function editsOf(cells) {
+  const map = new Map();
+  for (const program of cells.programs) {
+    map.set(program.name, { source: program.text() });
+  }
+  for (const query of cells.queries) {
+    const output = query.output();
+    map.set(query.id, output === undefined
+      ? { goal: query.goal() }
+      : { goal: query.goal(), output });
+  }
+  return map;
+}
+
 function autosizeNow(ta) {
   ta.style.height = 'auto';
   ta.style.height = `${ta.scrollHeight}px`;

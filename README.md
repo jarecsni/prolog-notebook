@@ -41,6 +41,27 @@ So a query cell gives you the first solution, and then you step.
 ## Try it
 
 ```sh
+npm i -g prolog-notebook
+prolog-notebook view notebooks/ch04-cut.prolog.md
+```
+
+That is a chapter — the `once/1` placement puzzle, a real worked section rather than a widget
+demo. It opens in your browser with the cells live: press Run, then `; next`. Nothing is
+installed but the command, and the chapter is readable before the engine arrives.
+
+To send it to somebody, or host it:
+
+```sh
+prolog-notebook build ch04-cut.prolog.md --out site/
+```
+
+A plain directory: prerendered HTML with the saved answers in it, the runtime beside it, and
+the 6.2 MB engine that is fetched only when a reader presses Run. No bundler, no build step of
+your own, nothing to configure.
+
+### Or from a checkout
+
+```sh
 git clone https://github.com/jarecsni/prolog-notebook
 cd prolog-notebook
 npm install
@@ -59,7 +80,7 @@ are all in it, and there is no HTML anywhere. Point the viewer at any other note
 | | |
 |---|---|
 | `notebooks/` | chapters. The product. |
-| `viewer/` | one shell page that renders any of them. Replaced by `build` in v0.3. |
+| `viewer/` | the development shell, for working on the renderer itself. `view` and `build` are what everyone else uses. |
 
 The chapter also reads on the repo page, [as a file](notebooks/ch04-cut.prolog.md), with no
 build step and no site: prose as prose, Prolog syntax-highlighted, the saved answers in place,
@@ -247,8 +268,8 @@ Working and tested:
 - program cells and query cells with `Run` / `; next` / `all` / `stop`, per-cell reset, and a
   page that says what the engine is holding
 - `hold` and `rerun="auto"` — the author decides what a reader may see and when it refreshes
-- **the CLI runner**: `prolog-notebook run` executes a chapter headlessly and writes its
-  answers back
+- **the CLI**: `run` executes a chapter headlessly and writes its answers back, `view` opens it
+  in a browser, `build` writes a page you can host or send
 - download your own copy of a chapter, answers and all
 - 186 passing tests
 
@@ -256,7 +277,6 @@ Not built yet:
 
 - `--check` — run a chapter in CI and fail the build when its answers have drifted. Needs a
   timeout first: a test suite that can hang forever is not a test suite.
-- `build` — a static page a reader can open, without a dev server
 - custom elements (`<prolog-program>`, `<prolog-query>`) so notebooks drop into any static site
 - a VS Code notebook controller — VS Code supplies the UI, this supplies the kernel, still no Python
 - persistence, so a reader's edits survive a reload

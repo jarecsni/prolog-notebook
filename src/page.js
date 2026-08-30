@@ -6,7 +6,7 @@
 // a prerendered chapter from downloading 137 KB of markdown-it to render nothing.
 import { parse } from './format.js';
 import { renderNotebook } from './render.js';
-import { mount, offerDownload } from './notebook.js';
+import { editsOf, mount, offerDownload } from './notebook.js';
 import { exportSource, filenameFor } from './export.js';
 
 /**
@@ -33,7 +33,7 @@ export function renderInto(text, root, options = {}) {
   // but a markdown cell has been rendered to HTML and cannot be read back out of
   // it — a chapter exported from the DOM alone would lose its writing.
   offerDownload(root, {
-    produce: () => ({ filename, text: exportSource(notebook, edits(cells)) }),
+    produce: () => ({ filename, text: exportSource(notebook, editsOf(cells)) }),
     // THE BYTES THE PAGE WAS GIVEN, not the model written out again. A
     // re-serialisation would be canonical form, which is not necessarily the
     // author's file: a hand-written chapter with no ids, or attributes in
@@ -47,21 +47,6 @@ export function renderInto(text, root, options = {}) {
     on: cells.on,
   });
   return notebook;
-}
-
-/** What the cells now say, keyed by id, for src/export.js to fold into the model. */
-function edits(cells) {
-  const map = new Map();
-  for (const program of cells.programs) {
-    map.set(program.name, { source: program.text() });
-  }
-  for (const query of cells.queries) {
-    const output = query.output();
-    map.set(query.id, output === undefined
-      ? { goal: query.goal() }
-      : { goal: query.goal(), output });
-  }
-  return map;
 }
 
 /**

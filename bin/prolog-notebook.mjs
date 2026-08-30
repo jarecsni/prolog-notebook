@@ -4,8 +4,9 @@
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
 import { createRequire } from 'node:module';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { spawn } from 'node:child_process';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
@@ -14,6 +15,8 @@ import { updateNotice } from '../src/update.js';
 import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
+import { buildFiles } from '../src/build.js';
+import { serve } from '../src/serve.js';
 
 // The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
 // 5.9 MB of WebAssembly at module scope, so a static import here would mean that
@@ -37,6 +40,8 @@ const require = createRequire(import.meta.url);
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
+  prolog-notebook view <file.prolog.md>    read it in a browser, cells and all
+  prolog-notebook build <file.prolog.md>   write a page you can host or send
   prolog-notebook run <file.prolog.md>...   run every cell, write the answers back
   prolog-notebook upgrade                  fetch the latest version
 
@@ -44,6 +49,9 @@ Options
   --limit <n>     solutions to take from one query before stopping (default ${DEFAULT_LIMIT})
   --stdout        print the result instead of writing the file
   --quiet         report only failures
+  --out <dir>     where build writes (default: <file>-site)
+  --port <n>      what view listens on (default 8777)
+  --no-open       view prints the URL instead of opening a browser
   --version       version, engine and copyright
   --check-update  ask npm whether a newer one exists, and say so either way
   -h, --help      this
@@ -173,6 +181,7 @@ async function main(argv) {
   }
 
   const command = args.shift();
+  if (command === 'view' || command === 'build') return page(command, args);
   if (command === 'upgrade') {
     const { message, newer } = await updateNotice({ version: VERSION, force: true });
     if (message) process.stderr.write(`${message}\n`);
@@ -271,6 +280,80 @@ async function main(argv) {
   // a command that repeated itself on a newer version would write them twice.
   if (newer) await offerUpgrade(newer);
   return status;
+}
+
+/**
+ * `build` and `view`, which are the same page put in two different places.
+ *
+ * Neither runs a cell: a chapter's answers are already in the file, which is the
+ * whole reason a built page is readable before any engine arrives. Use `run` to
+ * put them there.
+ */
+async function page(command, args) {
+  const options = { out: null, port: 8777, open: true };
+  const files = [];
+  while (args.length) {
+    const arg = args.shift();
+    if (arg === '--out') options.out = args.shift();
+    else if (arg === '--port') {
+      options.port = Number(args.shift());
+      if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
+        process.stderr.write('--port takes a port number\n');
+        return 2;
+      }
+    } else if (arg === '--no-open') options.open = false;
+    else if (arg.startsWith('-')) {
+      process.stderr.write(`unknown option "${arg}"\n`);
+      return 2;
+    } else files.push(arg);
+  }
+  if (files.length !== 1) {
+    process.stderr.write(`${command} takes exactly one notebook\n`);
+    return 2;
+  }
+
+  const file = files[0];
+  let built;
+  try {
+    const source = readFileSync(file, 'utf8');
+    built = buildFiles(parse(source), source, { filename: basename(file) });
+  } catch (e) {
+    process.stderr.write(`${file}: ${e.message}\n`);
+    return 1;
+  }
+
+  if (command === 'build') {
+    const out = options.out ?? `${file.replace(/\.prolog\.md$/, '')}-site`;
+    for (const [name, entry] of built) {
+      const target = join(out, name);
+      mkdirSync(dirname(target), { recursive: true });
+      if (entry.text !== undefined) writeFileSync(target, entry.text);
+      else copyFileSync(entry.copy, target);
+    }
+    process.stderr.write(`${out}: ${built.size} files\n`);
+    process.stderr.write(`Open ${join(out, 'index.html')} over HTTP, or host the directory.\n`);
+    return 0;
+  }
+
+  const server = await serve(built, { port: options.port });
+  process.stderr.write(`${basename(file)} at ${server.url}\n`);
+  if (server.port !== options.port) {
+    process.stderr.write(`(${options.port} was taken)\n`);
+  }
+  process.stderr.write('Ctrl-C to stop.\n');
+  if (options.open) openInBrowser(server.url);
+  // Deliberately never resolves: the server is the command.
+  return new Promise(() => {});
+}
+
+/** Hand the URL to whatever the desktop uses. Failure is not worth reporting. */
+function openInBrowser(url) {
+  const opener = { darwin: 'open', win32: 'start' }[process.platform] ?? 'xdg-open';
+  try {
+    spawn(opener, [url], { stdio: 'ignore', detached: true }).unref();
+  } catch {
+    // No desktop, or no opener: the URL is on screen either way.
+  }
 }
 
 async function runFile(file, session, options) {
