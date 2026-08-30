@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.1] — 2026-08-30
+
+### Changed
+
+- **The build line in `--version` carries one date, and it is the build's.**
+
+      Built from commit ca69c2a on 2026-08-30 14:42:46 UTC
+      Working copy ca69c2a (modified)
+
+  The commit's own date is gone: the hash already identifies it, and anyone who wants it can
+  ask git. A working copy now carries no date at all, which follows from the same rule rather
+  than being a separate decision — the only date left is the build's, and a working copy has
+  not been built. UTC, to the second, because a build stamp is read by whoever is holding the
+  package, wherever they are.
+
 ## [0.3.0] — 2026-08-30
 
 **A chapter is a file you can read, run, and fill in from the command line.** The renderer,
