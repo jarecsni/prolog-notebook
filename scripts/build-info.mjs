@@ -20,9 +20,10 @@ const target = new URL('../src/build-info.json', import.meta.url);
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 
 try {
-  const [commit, committed] = git('log', '-1', '--format=%h %cs').split(' ');
-  writeFileSync(target, `${JSON.stringify(bakedFrom({ commit, committed }), null, 2)}\n`);
-  process.stderr.write(`build-info: ${commit} ${committed}\n`);
+  const commit = git('log', '-1', '--format=%h');
+  const info = bakedFrom({ commit });
+  writeFileSync(target, `${JSON.stringify(info, null, 2)}\n`);
+  process.stderr.write(`build-info: ${info.commit} built ${info.built}\n`);
 } catch (e) {
   // A pack from an exported source tree with no git is not a failure — the
   // version banner simply omits the line. Refusing to publish over it would be

@@ -8,18 +8,19 @@
 //
 // TWO STATES, NAMED, because they are not the same claim:
 //
-//   Build ccf8e5b, committed 2026-08-30, packaged 2026-08-30
-//   Working copy ccf8e5b (modified), committed 2026-08-30
+//   Built from commit ccf8e5b on 2026-08-30 14:32:51 UTC
+//   Working copy ccf8e5b (modified)
 //
 // The first is baked in by the release workflow just before publish — git exists
 // there and does not exist inside an installed package. The second is read from
 // git at run time, and says `(modified)` when the tree has edits, because a bare
 // SHA over a dirty tree names a program that nobody has.
 //
-// NOTHING IS BUILT HERE. The package is plain ES modules, published as written,
-// so "packaged" is the honest word for the third date — there is no compiler and
-// no output to date-stamp. A working copy has no packaging time at all, which is
-// why the second state has two fields rather than three.
+// ONE DATE, AND IT IS THE BUILD'S. The commit's own date is not printed because
+// the hash already identifies it — anyone who wants it can ask git — and two
+// dates where one was asked for is noise dressed as rigour. A working copy has no
+// build time at all, which is why that state carries no date: there is nothing to
+// date yet.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
@@ -31,15 +32,13 @@ const BAKED = new URL('./build-info.json', import.meta.url);
  *
  * Pure, so both states can be tested without a filesystem or a git repository.
  *
- * @param {{commit: string, committed: string, packaged?: string, modified?: boolean}|null} info
+ * @param {{commit: string, built?: string, modified?: boolean}|null} info
  * @returns {string|null}
  */
 export function buildLine(info) {
   if (!info?.commit) return null;
-  if (info.packaged) {
-    return `Build ${info.commit}, committed ${info.committed}, packaged ${info.packaged}`;
-  }
-  return `Working copy ${info.commit}${info.modified ? ' (modified)' : ''}, committed ${info.committed}`;
+  if (info.built) return `Built from commit ${info.commit} on ${info.built}`;
+  return `Working copy ${info.commit}${info.modified ? ' (modified)' : ''}`;
 }
 
 /**
@@ -49,7 +48,7 @@ export function buildLine(info) {
  * this existed, or a source tree with no history. A line that says "unknown"
  * three times is worse than no line.
  *
- * @returns {{commit: string, committed: string, packaged?: string, modified?: boolean}|null}
+ * @returns {{commit: string, built?: string, modified?: boolean}|null}
  */
 export function currentBuild() {
   try {
@@ -75,20 +74,30 @@ function fromGit() {
     stdio: ['ignore', 'pipe', 'ignore'],
   }).trim();
   try {
-    const [commit, committed] = git('log', '-1', '--format=%h %cs').split(' ');
-    return { commit, committed, modified: git('status', '--porcelain') !== '' };
+    return {
+      commit: git('log', '-1', '--format=%h'),
+      modified: git('status', '--porcelain') !== '',
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * The facts, as prepack writes them. Exported so the script that runs at pack
- * time and the code that reads the result agree on the shape.
+ * The facts, as the release writes them. Exported so the script that runs at
+ * publish time and the code that reads the result agree on the shape.
  *
- * @param {{commit: string, committed: string}} head
+ * UTC, spelled out. A build stamp is read by whoever is holding the package,
+ * wherever they are, and a bare local time from someone else's machine says less
+ * than nothing.
+ *
+ * @param {{commit: string}} head
  * @param {Date} [now]
+ * @returns {{commit: string, built: string}}
  */
 export function bakedFrom(head, now = new Date()) {
-  return { ...head, packaged: now.toISOString().slice(0, 10) };
+  return {
+    commit: head.commit,
+    built: `${now.toISOString().slice(0, 19).replace('T', ' ')} UTC`,
+  };
 }
