@@ -14,7 +14,7 @@ import { updateNotice } from '../src/update.js';
 import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
-import { buildFiles } from '../src/build.js';
+import { livePages } from '../src/build.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
 // The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
@@ -391,10 +391,17 @@ async function page(command, args) {
   if (jump !== null) return jump;
 
   const file = files[0];
+  // ASKED AGAIN ON EVERY REQUEST, and built again only when the bytes have moved
+  // (869erpuhk). `build` takes the first answer and writes it; `view` keeps the
+  // producer, so a reload shows the chapter as it is now rather than as it was
+  // when the server started.
+  const pages = livePages(() => readFileSync(file, 'utf8'), {
+    filename: basename(file),
+    onError: (e) => process.stderr.write(`${file}: ${e.message}\n`),
+  });
   let built;
   try {
-    const source = readFileSync(file, 'utf8');
-    built = buildFiles(parse(source), source, { filename: basename(file) });
+    built = pages();
   } catch (e) {
     process.stderr.write(`${file}: ${e.message}\n`);
     return 1;
@@ -413,7 +420,7 @@ async function page(command, args) {
     return 0;
   }
 
-  const server = await serve(built, { port: options.port });
+  const server = await serve(pages, { port: options.port });
   // THE URL IS THIS COMMAND'S OUTPUT. `view` writes no notebook and no data to
   // stdout, so there is nothing for it to corrupt — and a URL on stderr is a URL
   // a wrapper does not see, which is how somebody came to type localhost by hand
