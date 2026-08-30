@@ -15,10 +15,11 @@
 // engine agree with what I can see — through a tick that names its state and a
 // reset that undoes it. A blank tick beside a greyed button is indistinguishable
 // from a broken page, which is how an earlier version of this file read.
-import { createSession, formatSolution, readableInCell } from './browser.js';
+import { createSession, formatSolution, prologVersion, readableInCell } from './browser.js';
 import { declaredDynamic, definedPredicates, unknownProcedure } from './clauses.js';
 import { download } from './export.js';
 import { solutionSequence } from './format.js';
+import { colophon } from './version.js';
 
 let serial = 0;
 let panels = 0;
@@ -214,7 +215,20 @@ function mountPageBar(root, options, bus, programs, queries) {
     + '<div class="unit answers"><span class="state answers-state"></span></div>'
     + '<div class="unit"><span class="state engine-state"></span>'
     + `<button data-act="restart"><span class="icon">${icon('power')}</span>`
-    + '<span class="label">Start engine</span></button></div></div>';
+    + '<span class="label">Start engine</span></button></div>'
+    // WHAT THIS IS, rather than what it is doing. Every row above is a state and
+    // the button that changes it; this changes nothing and has no verb, so it is
+    // not a row — it is the panel's footer, quieter than everything above it.
+    //
+    // The same words as `prolog-notebook --version`, from the same module, so the
+    // page and the command cannot describe one release differently. The engine's
+    // own version arrives on the second line once it has started, because until
+    // then nothing here knows it: it lives inside the WebAssembly, and asking is
+    // what starting is for.
+    + `<p class="about"><span class="running">${colophon().running}`
+    + '<span class="engine-version"></span></span>'
+    + `<span class="legal">${colophon().legal}</span></p>`
+    + '</div>';
   const state = bar.querySelector('.engine-state');
   // One button, whose label is always the thing it will do. "restart engine" over
   // an engine that has never started names a state the reader cannot act on and
@@ -336,6 +350,11 @@ function mountPageBar(root, options, bus, programs, queries) {
       age = `started ${event.at}`;
     } else if (event.kind === 'restarted') {
       age = `restarted ${event.at}`;
+    } else if (event.kind === 'engine-version') {
+      // Joins the line that says what is running, because that is what it is.
+      // A rebuilt engine is the same build, so this is set once and left.
+      bar.querySelector('.engine-version').textContent = ` · SWI-Prolog ${event.version}`;
+      return;
     }
     if (!age) return;
     say(`${loaded()} · ${age}`, event.kind === 'restarted'
@@ -515,7 +534,15 @@ async function boot(options, bus, status) {
   if (!wasBooted) bus.emit({ kind: 'booting', at: clock() });
   const session = await sessionFactory(options)(options);
   bus.booted = true;
-  if (!wasBooted) bus.emit({ kind: 'started', at: clock() });
+  if (!wasBooted) {
+    bus.emit({ kind: 'started', at: clock() });
+    // Asked for, not waited for. The light going green is the answer to "did it
+    // start", and holding that back for a round trip about a version number
+    // would be the page reporting the less interesting fact first.
+    prologVersion(session)
+      .then((version) => version && bus.emit({ kind: 'engine-version', version }))
+      .catch(() => {});
+  }
   return session;
 }
 

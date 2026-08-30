@@ -9,6 +9,7 @@ import { basename } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
+import { banner } from '../src/version.js';
 import { exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 
@@ -28,24 +29,9 @@ for (const stream of [process.stdout, process.stderr]) {
   });
 }
 
+// Only for swipl-wasm's own version: everything about THIS package is in
+// src/version.js, where a page can import it too.
 const require = createRequire(import.meta.url);
-const PACKAGE = require('../package.json');
-
-/**
- * The name a person would say, not the one npm installs. `prolog-notebook` is an
- * identifier; this is a title, and --version is the one place the tool says who
- * it is rather than how to type it.
- */
-const NAME = 'Prolog Notebook';
-
-/**
- * The copyright holder and year.
- *
- * Written here rather than read from LICENSE at runtime — a command should not
- * depend on a file it does not need — but a test asserts the two agree, so this
- * cannot quietly drift out of step with the licence it refers to.
- */
-const COPYRIGHT = 'Copyright (C) 2026 Johnny Jarecsni';
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
@@ -83,7 +69,8 @@ const RUNAWAY_WARNING = 'note: a non-terminating goal will hang this command; it
  * to be told, and exiting non-zero would hide it behind a shell error.
  */
 async function version() {
-  const lines = [`${NAME} v${PACKAGE.version} - ${COPYRIGHT}, ${PACKAGE.license} License.`];
+  // The same line the page shows in its panel: src/version.js, imported by both.
+  const lines = [banner()];
   try {
     const { createSession } = await engine();
     const swipl = await prologVersion(await createSession());

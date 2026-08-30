@@ -245,6 +245,30 @@ button.primary:hover { background: #98380f; }
 .page-controls .unit > .state { padding: .6rem 1.4rem .6rem 0; }
 .page-controls .unit + .unit > * { border-top: 1px solid var(--rule); }
 
+/* WHAT THIS IS, not what it is doing. It spans both columns because it has no
+   button to line up with: every row above is a state and its verb, and this is
+   neither. Quieter than the states above it, and not selectable-looking — it is
+   a colophon, and a reader should be able to ignore it at a glance. */
+.page-controls .about {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: .55rem 0 .6rem;
+  border-top: 1px solid var(--rule);
+  font: 400 .66rem/1.5 system-ui, sans-serif;
+  color: #a49c88;
+  /* The banner is one long sentence in a narrow card. Balanced rather than left
+     to strand "License." on a line of its own; ignored where unsupported. */
+  text-wrap: pretty;
+}
+/* Two lines: what is running, then who owns it. Each is short enough not to wrap
+   at this width, which is why the split is by MEANING rather than by shrinking
+   the type until the sentence fits. */
+.page-controls .about > span { display: block; }
+/* Inline, because it belongs to the sentence above it rather than to a line of
+   its own — and absent until the engine has been asked, which cannot happen
+   until it is running. */
+.page-controls .about .engine-version { display: inline; }
+
 /* Free to wrap, now that there is a column to wrap in. The widening pill had to
    ellipsise this sentence to keep the buttons on screen; a row has the width it
    needs and the card grows downward instead. */

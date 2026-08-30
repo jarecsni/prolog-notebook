@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pageFor, fakeEngine } from './support/page.mjs';
 import { InProcessSession, ConsultLog } from '../src/session.js';
+import { colophon } from '../src/version.js';
 import { WorkerSession } from '../src/browser.js';
 
 // The page's own behaviour, in a DOM that is not a browser (869enpj26).
@@ -520,4 +521,37 @@ test('an auto cell mid-sequence is left alone, and says why', async () => {
   await page.settle();
   assert.match(page.out('q-auto')[0], /^your run/, 'their sequence survived');
   assert.equal(page.status('q-auto'), 'program changed since this ran');
+});
+
+// ------------------------------------------------------------- the colophon
+
+test('the panel says what this is, from the same words the command uses', async () => {
+  // One release cannot be described two ways: the page and `prolog-notebook
+  // --version` take their facts from src/version.js. The page arranges them as
+  // two short lines — what is running, then who owns it — because it has a card
+  // to fit them in rather than a terminal to fill.
+  const page = chapter();
+  assert.equal(page.panel().about, colophon().running);
+  assert.equal(page.panel().legal, colophon().legal);
+  assert.match(page.panel().about, /^Prolog Notebook v\d+\.\d+\.\d+$/);
+  assert.match(page.panel().legal, /^© \d{4} .+ · MIT License$/);
+
+  // The engine's own version is not knowable until it has started — it lives
+  // inside the WebAssembly — so nothing is said rather than guessed at.
+  assert.equal(page.panel().engineVersion, '');
+});
+
+test('the engine names itself once it is running', async () => {
+  const engine = fakeEngine({ answers: ANSWERS });
+  // The real sessions answer this by asking SWI for current_prolog_flag(version).
+  engine.query = ((inner) => (goal) => (goal.includes('current_prolog_flag')
+    ? { async next() { return { done: true, solution: {}, text: '' }; }, async all() { return { solutions: [{ V: 100113 }] }; }, async close() {} }
+    : inner(goal)))(engine.query);
+
+  const page = pageFor(CHAPTER, { engine });
+  page.press('q-son-a', 'run');
+  await page.settle();
+  // It joins the line that says what is running, because that is what it is.
+  assert.equal(page.panel().engineVersion, ' · SWI-Prolog 10.1.13');
+  assert.equal(page.panel().about, 'Prolog Notebook v0.2.0 · SWI-Prolog 10.1.13');
 });
