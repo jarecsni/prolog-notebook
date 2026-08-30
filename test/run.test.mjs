@@ -68,14 +68,14 @@ test('a chapter with no answers comes back with the answers SWI printed', async 
   // list keeps its tail. This is the whole reason `next().text` is used rather
   // than the bindings — a file whose answers are subtly not what a reader sees
   // when they press Run is worse than a file with no answers at all.
-  assert.deepEqual(split.output.solutions, ['X = [],  Y = [1,2]', 'X = [1],  Y = [2]']);
-  assert.equal(split.output.terminator, 'X = [1,2],  Y = [].');
+  assert.deepEqual(split.output.solutions, ['X = [],  Y = [1, 2]', 'X = [1],  Y = [2]']);
+  assert.equal(split.output.terminator, 'X = [1, 2],  Y = [].');
 
   // A deterministic query's last solution IS its terminator, exactly as a
   // toplevel prints it (format §6).
   const one = filled.cells.find((c) => c.id === 'q-one');
   assert.deepEqual(one.output.solutions, []);
-  assert.equal(one.output.terminator, 'Z = [1,2].');
+  assert.equal(one.output.terminator, 'Z = [1, 2].');
 });
 
 test('the answers are hashed against the program that produced them', async () => {

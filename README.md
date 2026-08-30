@@ -181,7 +181,13 @@ Both were found by driving a real browser, not by reading documentation.
 
 **Module context.** `prolog.query(Goal)` runs with `system` as its context module, while
 `consult/1` loads into `user`. Unqualified goals raise `Unknown procedure: system:foo/1`
-*even though the consult reported success*. Goals are wrapped as `user:( Goal )`.
+*even though the consult reported success*. Goals are read and called in `user`.
+
+**One round trip per answer, or the variables come apart.** Formatting each binding with its
+own `term_string/2` call loses the fact that two of them are the *same* variable:
+`app([1,2], Tail, L)` came out as `L = [1,2|_20306],  Tail = _20428` where a real toplevel
+prints `L = [1, 2|Tail]`. Render the whole answer inside Prolog, in one call, with the goal's
+own `variable_names`.
 
 **The last solution arrives with `done`.** `next()` can return `{done: true, value: {...}}` —
 a final binding and the end of the search in a single step. Treating `done` as "stop, no more

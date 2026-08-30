@@ -311,7 +311,27 @@ disagrees with the preceding cell is an error. An output block following no cell
 ### The solution sequence
 
 The body is **SWI's own toplevel spelling**, which is what makes it readable on GitHub and
-faithful to what the reader will see:
+faithful to what the reader will see. Faithful literally: each solution is rendered by SWI's
+own writer, inside Prolog, with the toplevel's own options — so operators, quoting, and above
+all **shared variables** come out as a reader would get them at a `swipl` prompt.
+
+`app([1,2], Tail, L)` prints `L = [1, 2|Tail]`, one binding, the hole named by the variable
+the reader passed in. Rendering each binding separately gave `L = [1,2|_20306],  Tail =
+_20428` — two differently-numbered variables where there is one, which for a chapter about
+partial lists is the opposite of the lesson ([869erjw27]). The naming rule is the toplevel's:
+a variable takes the **last** name bound to it, and that binding is then not printed on its
+own; anything still unnamed becomes `_A`, `_B`.
+
+Two deliberate departures from what a terminal shows:
+
+- **Nothing is elided.** A real toplevel prints `L = [1, 2, 3, 4, 5, 6, 7, 8, 9|...]` because
+  `max_depth(10)` is in its answer options. That is a courtesy to a terminal; here the answer
+  is *saved*, and a chapter whose answers trail off into `...` is a chapter with the answer
+  missing.
+- **One solution is one line.** The toplevel puts each binding on its own line; a solution
+  here is a single line, so several bindings are joined with a comma and two spaces.
+
+The rest of the shape:
 
 - each solution is terminated by a line ending in ` ;`
 - the sequence ends with a line ending in `.` — `false.` (exhausted), `true.` (success, no
@@ -558,6 +578,7 @@ false.
 [869eddzgq]: https://app.clickup.com/t/869eddzgq
 [869enpbc3]: https://app.clickup.com/t/869enpbc3
 [869epzqpc]: https://app.clickup.com/t/869epzqpc
+[869erjw27]: https://app.clickup.com/t/869erjw27
 [869erjtd3]: https://app.clickup.com/t/869erjtd3
 [869edyyvm]: https://app.clickup.com/t/869edyyvm
 [869ectt20]: https://app.clickup.com/t/869ectt20
