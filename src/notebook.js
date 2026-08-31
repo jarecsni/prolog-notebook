@@ -502,14 +502,25 @@ function mountPageBar(root, options, bus, programs, queries) {
     refreshOutputs = () => {
       const gone = queries.filter((q) => q.isCleared());
       const left = queries.filter((q) => q.hasOutput());
-      // Restore only once there is nothing left to clear, which is the rule the
-      // hide/show button already follows: in a half-cleared page the useful move
-      // is to finish, and one vocabulary is cheaper to learn than two.
-      const back = left.length === 0 && gone.length > 0;
       // A cleared cell that never had saved answers has nothing of the chapter's
-      // to give back, so a page of only those leaves restore with no work.
+      // to give back: restore is the way back to the FILE, and the file is empty.
       const restorable = gone.filter((q) => q.hasSaved).length;
-      wipe.disabled = back ? restorable === 0 : left.length === 0;
+      // Restore only once there is nothing left to clear — the rule the hide/show
+      // button already follows, since in a half-cleared page the useful move is to
+      // finish — AND only when there is something to put back.
+      //
+      // That second half was missing (869erzhe7): a chapter published without
+      // answers, run by the reader and then cleared, offered them a DISABLED
+      // "Restore outputs". The Captain: "it shows the incorrect 'Restore output' -
+      // disabled … dont show restore when there's nothing to restore."
+      //
+      // He is right, and it is the doctrine rather than a detail. A disabled
+      // control says "this could happen, but not now"; there is no now in which
+      // that chapter's answers come back, because it never had any. The true
+      // reading of that state is the one the page started in — no outputs, nothing
+      // to clear — so the button says so.
+      const back = left.length === 0 && restorable > 0;
+      wipe.disabled = !back && left.length === 0;
       // COUNTED FROM THE PAGE, which is the only count that stays true for both
       // kinds of chapter: one published with its answers in it, and one still
       // being written where every output on screen is the reader's own.

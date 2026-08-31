@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.7.1] — 2026-08-31
+
+### Fixed
+
+- **`build` could not find the engine when the tool was installed.** It looked for swipl-wasm at
+  `<this package>/node_modules/swipl-wasm/…`, and npm **hoists** — the dependency is installed as
+  a *sibling* of `prolog-notebook`, not inside it. Nesting is what npm falls back to on a version
+  conflict, so the one layout that path assumed is the one npm avoids:
+
+  ```
+  Error: ENOENT: no such file or directory, copyfile
+    '.../node_modules/prolog-notebook/node_modules/swipl-wasm/dist/swipl/swipl-bundle.js'
+  ```
+
+  This was never a 0.7.0 regression — 0.6.5 fails identically from a real install. `build` has
+  only ever worked from a checkout, where that path happens to exist, which is the only way we
+  had ever run it. The engine is now located through Node's own resolution, which finds the
+  package wherever it was put: hoisted, nested, in pnpm's store, or in a workspace.
+
+### Added
+
+- **A test that uses the package the way somebody else receives it** — `npm run test:packaged`
+  packs the tarball, installs it elsewhere, and builds and runs a chapter with it, asserting
+  first that swipl-wasm really was hoisted so the test cannot pass vacuously. Every other test
+  runs against the checkout, where `node_modules` sits exactly where a relative path expects it,
+  which is precisely why this class of bug was invisible twice. CI runs it on every push and
+  before every publish.
+
+### Fixed
+
+- **A chapter with no saved answers no longer offers a disabled *Restore outputs*.** Run a cell in
+  such a chapter, clear it, and the panel offered to put back answers that never existed — greyed
+  out, because there was nothing to put back. A disabled control says *this could happen, but not
+  now*, and there was no now. The button now reads *Clear all outputs*, disabled, which is the
+  page's opening state and the truth: nothing on screen, nothing to clear. The count still says
+  *1 output cleared*, because that part was never a lie — it is why the page looks empty.
+
+  Most chapters ship without saved answers, since `hold` is how an author keeps them from
+  students, so this was the common chapter's common path rather than an edge case.
+
 ## [0.7.0] — 2026-08-31
 
 A site of notebooks, rather than a folder of unrelated pages.

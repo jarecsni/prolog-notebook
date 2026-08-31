@@ -8,6 +8,17 @@ import { ConsultLog, defaultCellName, unconsult } from './session.js';
 export * from './engine.js';
 export { ConsultLog } from './session.js';
 
+/**
+ * WHERE A PAGE SERVED OUT OF THIS REPO FINDS THE ENGINE — and only such a page.
+ *
+ * The same-looking literal in build.js was a bug: it guessed at a node_modules
+ * layout npm does not use, so `build` could not find the engine when the tool was
+ * installed (869erzf1j). This one is NOT that bug, and must not be "fixed" into a
+ * new one. There is no module resolution in a browser to ask instead, and every
+ * caller that ships — the app.js of a built page — passes `swiplUrl` outright. So
+ * this default is reached in exactly one situation: a page served from the repo
+ * root by `npm run dev`, where `../node_modules/…` from `/src/` is the truth.
+ */
 const DEFAULT_SWIPL_URL = new URL(
   '../node_modules/swipl-wasm/dist/swipl/swipl-bundle.js',
   import.meta.url

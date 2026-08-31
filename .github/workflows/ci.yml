@@ -36,3 +36,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # THE PACKAGE AS SOMEBODY ELSE RECEIVES IT. The suite above runs against the
+      # checkout, where node_modules sits where a relative path expects it — which
+      # is how `build` shipped broken for every install through 0.6.5 (869erzf1j).
+      - name: Test the packaged artefact
+        run: npm run test:packaged
