@@ -38,6 +38,18 @@ for (const stream of [process.stdout, process.stderr]) {
 const require = createRequire(import.meta.url);
 
 /**
+ * WHAT A COMMAND TAKES BESIDE ITS OPTIONS, named and explained once.
+ *
+ * `.prolog.md` is a convention and nothing enforces it — any markdown file runs —
+ * so the operand is `<file>` everywhere and the line below the usage says what
+ * kind of file to hand it. The plural is how the two commands that take several
+ * say so; `...` in the usage line said the same thing in punctuation, which is a
+ * detail the reader does not need while working out which command they want.
+ */
+const FILE = ['<file>', 'Prolog Notebook file (.md)'];
+const FILES = ['<file>', 'Prolog Notebook files (.md), one or more'];
+
+/**
  * THE COMMANDS, AND WHAT EACH ONE TAKES — one table, three readers (869erqra0).
  *
  * The whole help, a single command's help, and the message a misplaced option
@@ -49,7 +61,7 @@ const require = createRequire(import.meta.url);
  */
 const COMMANDS = {
   view: {
-    usage: 'prolog-notebook view <file.prolog.md>',
+    takes: [FILE],
     blurb: 'read it in a browser, cells and all',
     options: [
       ['--port <n>', 'what it listens on (default 8777)'],
@@ -57,12 +69,12 @@ const COMMANDS = {
     ],
   },
   build: {
-    usage: 'prolog-notebook build <file.prolog.md>',
+    takes: [FILE],
     blurb: 'write a page you can host or send',
     options: [['--out <dir>', 'where it writes (default: <file>-site)']],
   },
   execute: {
-    usage: 'prolog-notebook execute <file.prolog.md>...',
+    takes: [FILES],
     blurb: 'run every query, write the answers in',
     options: [
       ['--limit <n>', `solutions to take from one query before stopping (default ${DEFAULT_LIMIT})`],
@@ -74,7 +86,7 @@ const COMMANDS = {
       + "format's way of saying the search was never exhausted. Nothing is invented.\n",
   },
   clear: {
-    usage: 'prolog-notebook clear <file.prolog.md>...',
+    takes: [FILES],
     blurb: 'take the answers back out',
     options: [
       ['--stdout', 'print the result instead of writing the file'],
@@ -82,7 +94,7 @@ const COMMANDS = {
     ],
   },
   upgrade: {
-    usage: 'prolog-notebook upgrade',
+    takes: [],
     blurb: 'fetch the latest version',
     options: [],
   },
@@ -121,20 +133,30 @@ const anywhere = (help) => `Anywhere
  * commands taking many files is a detail of the same kind: true, and the answer
  * to a question nobody asks while finding out which command they want.
  */
-const shortUsage = (usage) => usage
-  .replace(/^prolog-notebook /, '')
-  .replace(/<file\.prolog\.md>(\.\.\.)?/, '<file>');
+const called = (name) => {
+  const { takes, options } = COMMANDS[name];
+  return [name, ...takes.map(([operand]) => operand), options.length ? '<options>' : '']
+    .filter(Boolean)
+    .join(' ');
+};
 
 function commandLine(name) {
-  const { usage, blurb } = COMMANDS[name];
-  return `  ${shortUsage(usage).padEnd(18)}${blurb}`;
+  const { takes, blurb } = COMMANDS[name];
+  const summary = [name, ...takes.map(([operand]) => operand)].join(' ');
+  return `  ${summary.padEnd(18)}${blurb}`;
 }
 
-/** One command and the options only it takes — the unit of its own help. */
+/**
+ * One command, everything it takes, and nothing another command takes.
+ *
+ * Operands and options are laid out the same way because they are the same kind
+ * of fact — what may follow the command — and a reader who has to learn two
+ * shapes to read one screen is being charged for our tidiness.
+ */
 function commandHelp(name) {
-  const { usage, blurb, options } = COMMANDS[name];
-  return [`  ${usage.padEnd(46)}${blurb}`]
-    .concat(options.map(([flag, what]) => `    ${flag.padEnd(16)}${what}`))
+  const { takes, blurb, options } = COMMANDS[name];
+  return [`  prolog-notebook ${called(name).padEnd(30)}${blurb}`]
+    .concat([...takes, ...options].map(([what, why]) => `    ${what.padEnd(16)}${why}`))
     .join('\n');
 }
 

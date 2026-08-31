@@ -548,8 +548,14 @@ test('the bare screen names the commands and leaves their switches to them', asy
   // the question a reader is answering while finding out which command they want.
   assert.doesNotMatch(stdout, /\.\.\./);
   assert.doesNotMatch(stdout, /\.prolog\.md/);
+  // A command's own help says what kind of file, on a line laid out exactly like
+  // the switches under it — one shape to read, not two.
   const clear = (await run('node', [CLI, 'clear', '--help'])).stdout;
-  assert.match(clear, /<file\.prolog\.md>\.\.\./);
+  assert.match(clear, /^ {4}<file> {10}Prolog Notebook files \(\.md\), one or more$/m);
+  assert.match(clear, /^ {4}--stdout {8}/m);
+  // <options> is claimed only by a command that has some.
+  assert.match(clear, /prolog-notebook clear <file> <options>/);
+  assert.doesNotMatch((await run('node', [CLI, 'upgrade', '--help'])).stdout, /<options>/);
 
   // THE POINT: no per-command switch appears here. The three under Anywhere are
   // not per-command — they are true wherever they are typed.
@@ -578,7 +584,7 @@ test('a command asked for help answers about itself, and nothing else', async ()
   // Printing everything makes the reader find their command again in a page they
   // did not ask for.
   const { stdout } = await run('node', [CLI, 'build', '--help']);
-  assert.match(stdout, /prolog-notebook build <file\.prolog\.md>/);
+  assert.match(stdout, /prolog-notebook build <file> <options>/);
   assert.match(stdout, /--out <dir>/);
   for (const other of ['view <file', 'execute <file', 'clear <file', 'upgrade  ']) {
     assert.doesNotMatch(stdout, new RegExp(other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

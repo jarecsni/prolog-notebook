@@ -10,9 +10,23 @@
   three flags that really do work anywhere, and where to ask for more. The `prolog-notebook`
   prefix comes off those lines — it is a label rather than an instruction when five are stacked —
   so does `.prolog.md`, which is a convention nothing enforces (any markdown file runs), and so
-  does the `...` on the two commands taking many files. All three stay in `<command> --help`,
-  where the line is the one you would actually type. The summary answers *which command*; the
-  command answers *how to call it*.
+  does the `...` on the two commands taking many files. The summary answers *which command*; the
+  command's own help answers *how to call it*.
+
+- **Every command's help is laid out the same way**, because the usage line is now derived rather
+  than written out five times:
+
+  ```
+    prolog-notebook clear <file> <options>        take the answers back out
+      <file>          Prolog Notebook files (.md), one or more
+      --stdout        print the result instead of writing the file
+      --quiet         report only failures
+  ```
+
+  What the command takes is named on a line beside the switches — they are the same kind of fact,
+  and a reader who has to learn two shapes to read one screen is paying for our tidiness.
+  `<options>` appears only on a command that has any, and the plural in the operand line is how
+  the two commands that take several files say so.
 
   The `--limit` footnote goes with them, to `execute --help` where the flag it explains lives.
 
