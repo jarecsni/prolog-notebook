@@ -38,6 +38,23 @@ for (const stream of [process.stdout, process.stderr]) {
 const require = createRequire(import.meta.url);
 
 /**
+ * WHAT A COMMAND TAKES BESIDE ITS OPTIONS, named and explained once.
+ *
+ * `.prolog.md` is a convention and nothing enforces it — any markdown file runs —
+ * so the operand is `<file>` everywhere and the line below the usage says what
+ * kind of file to hand it.
+ *
+ * SEVERAL FILES ARE `<file(s)>`, NOT THE POSIX `<file>...`, and the departure is
+ * deliberate. The ellipsis is the convention — Base Specifications 12.1, and what
+ * cc, cp, grep and git print — but it is punctuation you have to already know, and
+ * the Captain read it as saying less than it does. `(s)` is legible to someone who
+ * has never read a man page, and the row below spells it out in words anyway.
+ * Nobody types either form, so the cost of being unconventional here is zero.
+ */
+const FILE = ['<file>', 'Prolog Notebook file (.md)'];
+const FILES = ['<file(s)>', 'space separated list of Prolog Notebook files (.md)'];
+
+/**
  * THE COMMANDS, AND WHAT EACH ONE TAKES — one table, three readers (869erqra0).
  *
  * The whole help, a single command's help, and the message a misplaced option
@@ -49,7 +66,7 @@ const require = createRequire(import.meta.url);
  */
 const COMMANDS = {
   view: {
-    usage: 'prolog-notebook view <file.prolog.md>',
+    takes: [FILE],
     blurb: 'read it in a browser, cells and all',
     options: [
       ['--port <n>', 'what it listens on (default 8777)'],
@@ -57,12 +74,12 @@ const COMMANDS = {
     ],
   },
   build: {
-    usage: 'prolog-notebook build <file.prolog.md>',
+    takes: [FILE],
     blurb: 'write a page you can host or send',
     options: [['--out <dir>', 'where it writes (default: <file>-site)']],
   },
   execute: {
-    usage: 'prolog-notebook execute <file.prolog.md>...',
+    takes: [FILES],
     blurb: 'run every query, write the answers in',
     options: [
       ['--limit <n>', `solutions to take from one query before stopping (default ${DEFAULT_LIMIT})`],
@@ -74,7 +91,7 @@ const COMMANDS = {
       + "format's way of saying the search was never exhausted. Nothing is invented.\n",
   },
   clear: {
-    usage: 'prolog-notebook clear <file.prolog.md>...',
+    takes: [FILES],
     blurb: 'take the answers back out',
     options: [
       ['--stdout', 'print the result instead of writing the file'],
@@ -82,7 +99,7 @@ const COMMANDS = {
     ],
   },
   upgrade: {
-    usage: 'prolog-notebook upgrade',
+    takes: [],
     blurb: 'fetch the latest version',
     options: [],
   },
@@ -94,26 +111,85 @@ const ALIASES = { exec: 'execute', run: 'execute' };
 /** The command this argument names, aliases resolved, or null. */
 const commandNamed = (arg) => (COMMANDS[arg] ? arg : ALIASES[arg] ?? null);
 
-const ANYWHERE = `Anywhere
+/**
+ * What works anywhere, and one line saying what --help has just done.
+ *
+ * The flag is contextual and that line was not: `-h, --help  this` was written
+ * before a command could be asked about itself and nobody revisited it, so the
+ * summary sat there promising the summary (869ery5hj). Each screen says which
+ * of the two it is.
+ */
+const anywhere = (help) => `Anywhere
   --check-update  ask npm whether a newer one exists, and say so either way
   --version       version, engine and copyright
-  -h, --help      this
+  -h, --help      ${help}
 `;
 
-/** One command, laid out exactly as it is laid out in the full help. */
+/**
+ * One command, one line — the summary's unit.
+ *
+ * Everything but the name and the blurb belongs to the command's own help, where
+ * the line is the one you would actually type rather than an entry in a list.
+ * This screen answers WHICH COMMAND; that one answers HOW TO CALL IT.
+ */
+/**
+ * How the command is called: options before operands, as POSIX has it and as
+ * every tool a reader has already met prints it.
+ *
+ * `[<options>]` IS BRACKETED AND `<file(s)>` IS NOT, which is the same convention
+ * saying the two are not alike: brackets mean you may leave it out, and every
+ * command here works with no options and none works with no file.
+ *
+ * The rows below the line stay operand-first, because that row explains the
+ * placeholder in the line above and is no use to anyone underneath five switches.
+ */
+const called = (name) => {
+  const { takes, options } = COMMANDS[name];
+  return [name, options.length ? '[<options>]' : '', ...takes.map(([operand]) => operand)]
+    .filter(Boolean)
+    .join(' ');
+};
+
+function commandLine(name) {
+  // THE NAME AND WHAT IT DOES, AND NOTHING ELSE. A reader on this screen is
+  // choosing a command, and every one of them takes a file — so the operand told
+  // them nothing about the choice while making five lines wider than the answer
+  // they came for.
+  return `  ${name.padEnd(11)}${COMMANDS[name].blurb}`;
+}
+
+/**
+ * One command, everything it takes, and nothing another command takes.
+ *
+ * Operands and options are laid out the same way because they are the same kind
+ * of fact — what may follow the command — and a reader who has to learn two
+ * shapes to read one screen is being charged for our tidiness.
+ */
 function commandHelp(name) {
-  const { usage, blurb, options } = COMMANDS[name];
-  return [`  ${usage.padEnd(44)}${blurb}`]
-    .concat(options.map(([flag, what]) => `    ${flag.padEnd(16)}${what}`))
+  const { takes, blurb, options } = COMMANDS[name];
+  return [`  prolog-notebook ${called(name).padEnd(32)}${blurb}`]
+    .concat([...takes, ...options].map(([what, why]) => `    ${what.padEnd(16)}${why}`))
     .join('\n');
 }
 
+/**
+ * THE SUMMARY NAMES THE COMMANDS AND NOTHING ELSE (869ery5hj).
+ *
+ * The Captain, on running the tool bare: "this is not great, why do we have
+ * command level help then." It printed every option of every command, so the tier
+ * below it earned nothing and the first screen a new reader met was the longest
+ * one in the tool. What is left is the list, the three flags that do work
+ * anywhere, and where to ask for more.
+ *
+ * The execute note goes with them. It explains --limit, and the comment on it in
+ * COMMANDS says it travels wherever --limit goes and nowhere else — a rule this
+ * screen was breaking.
+ */
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
-${Object.keys(COMMANDS).map(commandHelp).join('\n\n')}
+${Object.keys(COMMANDS).map(commandLine).join('\n')}
 
-${ANYWHERE}
-${COMMANDS.execute.note}`;
+${anywhere("this, or one command's: prolog-notebook build --help")}`;
 
 /**
  * JUST THE COMMAND ASKED ABOUT (869erqra0).
@@ -127,7 +203,7 @@ ${COMMANDS.execute.note}`;
  */
 function helpFor(name) {
   const { note } = COMMANDS[name];
-  return `${commandHelp(name)}\n\n${ANYWHERE}${note ? `\n${note}` : ''}`;
+  return `${commandHelp(name)}\n\n${anywhere('this')}${note ? `\n${note}` : ''}`;
 }
 
 /**
