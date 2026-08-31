@@ -393,7 +393,7 @@ test('run and exec still work, and are not advertised', async () => {
     assert.match(stdout, /```text output for="q-split"/, `${alias} must still execute`);
   }
   const { stdout: help } = await run('node', [CLI, '--help']);
-  assert.match(help, /^ {2}execute <file> /m);
+  assert.match(help, /^ {2}execute <file\(s\)> /m);
   assert.doesNotMatch(help, /^ {2}(run|exec) </m);
 });
 
@@ -551,13 +551,17 @@ test('the bare screen names the commands and leaves their switches to them', asy
   // A command's own help says what kind of file, on a line laid out exactly like
   // the switches under it — one shape to read, not two.
   const clear = (await run('node', [CLI, 'clear', '--help'])).stdout;
-  assert.match(clear, /^ {4}<file>\.\.\. {7}Prolog Notebook files \(\.md\), one or more$/m);
+  assert.match(clear,
+    /^ {4}<file\(s\)> {7}space separated list of Prolog Notebook files \(\.md\)$/m);
   assert.match(clear, /^ {4}--stdout {8}/m);
-  // Several files are marked the way cc, cp, grep and git mark them — the POSIX
-  // ellipsis (Base Specifications 12.1) — and only where it is true.
-  assert.match(clear, /prolog-notebook clear <file>\.\.\. <options>/);
-  assert.match((await run('node', [CLI, 'build', '--help'])).stdout,
-    /prolog-notebook build <file> <options>/);
+  // Options before operands, as POSIX has it and as every tool the reader has
+  // already met prints it. `(s)` marks the commands that take several, and only
+  // those: it is legible without having read a man page, which the conventional
+  // ellipsis is not.
+  assert.match(clear, /prolog-notebook clear <options> <file\(s\)>/);
+  const build = (await run('node', [CLI, 'build', '--help'])).stdout;
+  assert.match(build, /prolog-notebook build <options> <file>/);
+  assert.doesNotMatch(build, /\(s\)/);
   assert.doesNotMatch((await run('node', [CLI, 'upgrade', '--help'])).stdout, /<options>/);
 
   // THE POINT: no per-command switch appears here. The three under Anywhere are
@@ -587,7 +591,7 @@ test('a command asked for help answers about itself, and nothing else', async ()
   // Printing everything makes the reader find their command again in a page they
   // did not ask for.
   const { stdout } = await run('node', [CLI, 'build', '--help']);
-  assert.match(stdout, /prolog-notebook build <file> <options>/);
+  assert.match(stdout, /prolog-notebook build <options> <file>/);
   assert.match(stdout, /--out <dir>/);
   for (const other of ['view <file', 'execute <file', 'clear <file', 'upgrade  ']) {
     assert.doesNotMatch(stdout, new RegExp(other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
