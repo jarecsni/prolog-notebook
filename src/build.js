@@ -16,6 +16,7 @@
 // `view` can serve it, and a test can read it, without any of the three
 // disagreeing about what a page is.
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { parse } from './format.js';
 import { renderNotebook } from './render.js';
 
@@ -30,6 +31,25 @@ import { renderNotebook } from './render.js';
  */
 const require = createRequire(import.meta.url);
 export const ENGINE_VERSION = require('swipl-wasm/package.json').version;
+
+/**
+ * WHERE THE ENGINE ACTUALLY IS — asked for, never guessed (869erzf1j).
+ *
+ * This was `new URL('../node_modules/swipl-wasm/dist/swipl/', import.meta.url)`,
+ * which is true in a checkout and false in every install: npm HOISTS, so
+ * swipl-wasm lands as a SIBLING of this package rather than inside it, and
+ * `build` died on a missing file for anybody who had installed the tool rather
+ * than cloned it. Nested is the exception npm resorts to on a version conflict —
+ * the one layout that literal assumed was the one npm avoids.
+ *
+ * Node's own resolution finds the package wherever it was put: hoisted, nested,
+ * inside pnpm's store, or in a workspace. The line above already asked properly
+ * for the version; this one now asks properly for the bytes.
+ */
+export const ENGINE_HOME = new URL(
+  'dist/swipl/',
+  pathToFileURL(require.resolve('swipl-wasm/package.json')),
+);
 
 /** The runtime a page needs. Copied side by side, so their relative imports hold. */
 export const RUNTIME = [
@@ -86,7 +106,7 @@ export function buildFiles(notebook, source, options = {}) {
   const {
     filename = 'notebook.prolog.md',
     src = new URL('./', import.meta.url),
-    engine = new URL('../node_modules/swipl-wasm/dist/swipl/', import.meta.url),
+    engine = ENGINE_HOME,
     prefix = './',
     engineVersion = ENGINE_VERSION,
   } = options;
