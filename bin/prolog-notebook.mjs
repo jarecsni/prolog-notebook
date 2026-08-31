@@ -128,35 +128,34 @@ const anywhere = (help) => `Anywhere
 /**
  * One command, one line — the summary's unit.
  *
- * Two things come off the usage here and stay in the command's own help, where it
- * is the line you would actually type rather than an entry in a list.
- *
- * `prolog-notebook` is a label rather than an instruction once five are stacked.
- * `.prolog.md` is a CONVENTION, NOT A REQUIREMENT — nothing checks the extension,
- * any markdown file runs — so the summary says what the command takes and the
- * command's own help says what to call it.
+ * Everything but the name and the blurb belongs to the command's own help, where
+ * the line is the one you would actually type rather than an entry in a list.
+ * This screen answers WHICH COMMAND; that one answers HOW TO CALL IT.
  */
 /**
  * How the command is called: options before operands, as POSIX has it and as
  * every tool a reader has already met prints it.
+ *
+ * `[<options>]` IS BRACKETED AND `<file(s)>` IS NOT, which is the same convention
+ * saying the two are not alike: brackets mean you may leave it out, and every
+ * command here works with no options and none works with no file.
  *
  * The rows below the line stay operand-first, because that row explains the
  * placeholder in the line above and is no use to anyone underneath five switches.
  */
 const called = (name) => {
   const { takes, options } = COMMANDS[name];
-  return [name, options.length ? '<options>' : '', ...takes.map(([operand]) => operand)]
+  return [name, options.length ? '[<options>]' : '', ...takes.map(([operand]) => operand)]
     .filter(Boolean)
     .join(' ');
 };
 
 function commandLine(name) {
-  const { takes, blurb } = COMMANDS[name];
-  // The operand is printed as it is. `<file(s)>` costs three characters and says
-  // which commands take several, which is worth having here — unlike an ellipsis,
-  // which was punctuation the summary had to explain somewhere else.
-  const summary = [name, ...takes.map(([operand]) => operand)].join(' ');
-  return `  ${summary.padEnd(20)}${blurb}`;
+  // THE NAME AND WHAT IT DOES, AND NOTHING ELSE. A reader on this screen is
+  // choosing a command, and every one of them takes a file — so the operand told
+  // them nothing about the choice while making five lines wider than the answer
+  // they came for.
+  return `  ${name.padEnd(11)}${COMMANDS[name].blurb}`;
 }
 
 /**
@@ -168,7 +167,7 @@ function commandLine(name) {
  */
 function commandHelp(name) {
   const { takes, blurb, options } = COMMANDS[name];
-  return [`  prolog-notebook ${called(name).padEnd(30)}${blurb}`]
+  return [`  prolog-notebook ${called(name).padEnd(32)}${blurb}`]
     .concat([...takes, ...options].map(([what, why]) => `    ${what.padEnd(16)}${why}`))
     .join('\n');
 }

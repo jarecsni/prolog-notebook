@@ -4,20 +4,28 @@
 
 ### Changed
 
-- **The bare help screen names the commands and leaves the switches to them.** It printed every
-  option of every command, which made the first screen a new reader meets the longest one in the
-  tool and left the per-command help earning nothing. What remains is one line per command, the
-  three flags that really do work anywhere, and where to ask for more. The `prolog-notebook`
-  prefix comes off those lines — it is a label rather than an instruction when five are stacked —
-  so does `.prolog.md`, which is a convention nothing enforces (any markdown file runs), and so
-  does the `...` on the two commands taking many files. The summary answers *which command*; the
-  command's own help answers *how to call it*.
+- **The bare help screen names the commands and leaves everything else to them.** It printed
+  every option of every command, which made the first screen a new reader meets the longest one in
+  the tool and left the per-command help earning nothing. What remains is the name, what it does,
+  the three flags that really do work anywhere, and where to ask for more:
+
+  ```
+    view       read it in a browser, cells and all
+    build      write a page you can host or send
+    execute    run every query, write the answers in
+    clear      take the answers back out
+    upgrade    fetch the latest version
+  ```
+
+  Not even the operand: every command takes a file, so naming it here said nothing about the
+  choice this screen exists to help with. The summary answers *which command*; the command's own
+  help answers *how to call it*.
 
 - **Every command's help is laid out the same way**, because the usage line is now derived rather
   than written out five times:
 
   ```
-    prolog-notebook clear <options> <file(s)>     take the answers back out
+    prolog-notebook clear [<options>] <file(s)>     take the answers back out
       <file(s)>       space separated list of Prolog Notebook files (.md)
       --stdout        print the result instead of writing the file
       --quiet         report only failures
@@ -26,9 +34,10 @@
   What the command takes is named on a line beside the switches — they are the same kind of fact,
   and a reader who has to learn two shapes to read one screen is paying for our tidiness.
   Options come before operands, as POSIX has it and as every tool a reader has already met prints
-  it. `<options>` appears only on a command that has any. A command taking several files says
-  `<file(s)>` rather than the conventional `<file>...` — the ellipsis is punctuation you have to
-  already know, and nobody types either form, so the cost of being legible here is nothing.
+  it, and they are bracketed because they may be left out where the file may not. `[<options>]`
+  appears only on a command that has any. A command taking several files says `<file(s)>` rather
+  than the conventional `<file>...` — the ellipsis is punctuation you have to already know, and
+  nobody types either form, so the cost of being legible here is nothing.
 
   The `--limit` footnote goes with them, to `execute --help` where the flag it explains lives.
 
