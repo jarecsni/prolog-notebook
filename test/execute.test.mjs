@@ -551,10 +551,13 @@ test('the bare screen names the commands and leaves their switches to them', asy
   // A command's own help says what kind of file, on a line laid out exactly like
   // the switches under it — one shape to read, not two.
   const clear = (await run('node', [CLI, 'clear', '--help'])).stdout;
-  assert.match(clear, /^ {4}<file> {10}Prolog Notebook files \(\.md\), one or more$/m);
+  assert.match(clear, /^ {4}<file>\.\.\. {7}Prolog Notebook files \(\.md\), one or more$/m);
   assert.match(clear, /^ {4}--stdout {8}/m);
-  // <options> is claimed only by a command that has some.
-  assert.match(clear, /prolog-notebook clear <file> <options>/);
+  // Several files are marked the way cc, cp, grep and git mark them — the POSIX
+  // ellipsis (Base Specifications 12.1) — and only where it is true.
+  assert.match(clear, /prolog-notebook clear <file>\.\.\. <options>/);
+  assert.match((await run('node', [CLI, 'build', '--help'])).stdout,
+    /prolog-notebook build <file> <options>/);
   assert.doesNotMatch((await run('node', [CLI, 'upgrade', '--help'])).stdout, /<options>/);
 
   // THE POINT: no per-command switch appears here. The three under Anywhere are

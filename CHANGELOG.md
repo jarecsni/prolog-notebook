@@ -17,16 +17,18 @@
   than written out five times:
 
   ```
-    prolog-notebook clear <file> <options>        take the answers back out
-      <file>          Prolog Notebook files (.md), one or more
+    prolog-notebook clear <file>... <options>     take the answers back out
+      <file>...       Prolog Notebook files (.md), one or more
       --stdout        print the result instead of writing the file
       --quiet         report only failures
   ```
 
   What the command takes is named on a line beside the switches — they are the same kind of fact,
   and a reader who has to learn two shapes to read one screen is paying for our tidiness.
-  `<options>` appears only on a command that has any, and the plural in the operand line is how
-  the two commands that take several files say so.
+  `<options>` appears only on a command that has any, and several files are marked the way every
+  other tool marks them — the POSIX ellipsis, as printed by `cc`, `cp`, `grep` and `git`. It
+  appears on the command's own screen and not on the summary, where arity is not the question
+  being asked.
 
   The `--limit` footnote goes with them, to `execute --help` where the flag it explains lives.
 

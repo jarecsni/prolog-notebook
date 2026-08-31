@@ -42,12 +42,18 @@ const require = createRequire(import.meta.url);
  *
  * `.prolog.md` is a convention and nothing enforces it — any markdown file runs —
  * so the operand is `<file>` everywhere and the line below the usage says what
- * kind of file to hand it. The plural is how the two commands that take several
- * say so; `...` in the usage line said the same thing in punctuation, which is a
- * detail the reader does not need while working out which command they want.
+ * kind of file to hand it.
+ *
+ * SEVERAL FILES ARE MARKED THE WAY EVERY OTHER TOOL MARKS THEM: a trailing
+ * ellipsis, which is POSIX (Base Specifications 12.1, "an ellipsis is used to
+ * denote that one or more occurrences of an operand are allowed") and what cc,
+ * cp, grep and git all print. The Captain asked for something more explicit than
+ * a plural and then asked what compilers do; they do this. A form like
+ * `<file1>, [..., <fileN>]` would be clearer about the count and wrong about the
+ * syntax — there is no comma to type.
  */
 const FILE = ['<file>', 'Prolog Notebook file (.md)'];
-const FILES = ['<file>', 'Prolog Notebook files (.md), one or more'];
+const FILES = ['<file>...', 'Prolog Notebook files (.md), one or more'];
 
 /**
  * THE COMMANDS, AND WHAT EACH ONE TAKES — one table, three readers (869erqra0).
@@ -129,9 +135,9 @@ const anywhere = (help) => `Anywhere
  * `prolog-notebook` is a label rather than an instruction once five are stacked.
  * `.prolog.md` is a CONVENTION, NOT A REQUIREMENT — nothing checks the extension,
  * any markdown file runs — so the summary says what the command takes and the
- * command's own help says what to call it. And the `...` that marks the two
- * commands taking many files is a detail of the same kind: true, and the answer
- * to a question nobody asks while finding out which command they want.
+ * command's own help says what to call it. And the POSIX ellipsis marking the two
+ * commands that take several files is a detail of the same kind: true, and the
+ * answer to a question nobody asks while working out which command they want.
  */
 const called = (name) => {
   const { takes, options } = COMMANDS[name];
@@ -142,8 +148,10 @@ const called = (name) => {
 
 function commandLine(name) {
   const { takes, blurb } = COMMANDS[name];
-  const summary = [name, ...takes.map(([operand]) => operand)].join(' ');
-  return `  ${summary.padEnd(18)}${blurb}`;
+  // The ellipsis goes with the options and the extension: arity is a question the
+  // reader asks about the command they have chosen, not while choosing.
+  const operands = takes.map(([operand]) => operand.replace(/\.\.\.$/, ''));
+  return `  ${[name, ...operands].join(' ').padEnd(18)}${blurb}`;
 }
 
 /**
