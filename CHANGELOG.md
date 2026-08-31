@@ -1,8 +1,31 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0] — 2026-08-31
+
+A site of notebooks, rather than a folder of unrelated pages.
 
 ### Added
+
+- **A site has exactly one runtime, and `build` keeps it that way.** A page's `app.js` and the
+  shared `lib/` are not a stable contract — `offerDownload` gained arguments in #28, `editsOf`
+  moved modules in #40 — so a site holding two generations of page has no safe resting state:
+  overwrite `lib/` and the older page imports a symbol that has moved; leave it and the page just
+  built is the broken one. So a build reconciles rather than warns.
+
+  | the site was written by | what happens |
+  |---|---|
+  | the same versions | the page is written and **nothing else is touched** — the 6.2 MB engine is not copied again |
+  | an older version | the shared files are replaced and **every page is regenerated**, said out loud: `runtime 0.6.0 → 0.7.0 · 2 pages regenerated` |
+  | an older engine | the same, plus what regeneration cannot fix: `engine 8.0.1 → 8.0.7 · re-run \`execute\` on your chapters` |
+  | a newer version | **refused.** A silent downgrade of pages you did not name is the case you almost certainly did not mean |
+
+  Outputs are never cleared on an engine bump. We would know the answers came from a different
+  engine, not that they are wrong, and erasing asserts more than we know — the complication of
+  version management belongs in what is recorded and reported, not in what is destroyed.
+
+- **A page carries the chapter it was built from.** `prolog-notebook-site/lists/lists.prolog.md`
+  sits beside the page it produced, so a site can rebuild itself with no source tree, no
+  repository and no manifest — and a reader can have the markdown.
 
 - **A site, with an index.** `build` writes every chapter into one `prolog-notebook-site`, and
   regenerates `index.html` from the directory each time — each entry titled by that chapter's own
@@ -29,7 +52,7 @@
   once at the root and every page reaches them with `../`. Two chapters used to cost 12.6 MB; they
   now cost 6.3.
 
-  And every build says where it went — `2 files → ../prolog-notebook-site/lists/ (11 shared with
+  And every build says where it went — `3 files → ../prolog-notebook-site/lists/ (12 shared with
   the site)` — plus, on the build that creates it, one line noting you may want the directory in
   `.gitignore`. Writing outside the directory you named is not something a tool should do quietly.
 

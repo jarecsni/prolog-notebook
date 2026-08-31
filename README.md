@@ -83,6 +83,11 @@ up for an existing `prolog-notebook-site`, then for a `.git`, so chapters that l
 different folders still publish as one thing. `--here` puts the site beside the notebook
 instead; `--out <dir>` puts it wherever you say.
 
+A site has exactly one runtime and one engine, so the second post costs its own page rather than
+another 6.2 MB. When you upgrade the tool, the next build brings the whole site with it and says
+so — `runtime 0.6.0 → 0.7.0 · 2 pages regenerated` — because each page keeps the chapter it was
+built from.
+
 ### Or from a checkout
 
 ```sh
