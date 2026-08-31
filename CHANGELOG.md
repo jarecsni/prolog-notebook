@@ -28,6 +28,18 @@
   which is precisely why this class of bug was invisible twice. CI runs it on every push and
   before every publish.
 
+### Fixed
+
+- **A chapter with no saved answers no longer offers a disabled *Restore outputs*.** Run a cell in
+  such a chapter, clear it, and the panel offered to put back answers that never existed — greyed
+  out, because there was nothing to put back. A disabled control says *this could happen, but not
+  now*, and there was no now. The button now reads *Clear all outputs*, disabled, which is the
+  page's opening state and the truth: nothing on screen, nothing to clear. The count still says
+  *1 output cleared*, because that part was never a lie — it is why the page looks empty.
+
+  Most chapters ship without saved answers, since `hold` is how an author keeps them from
+  students, so this was the common chapter's common path rather than an edge case.
+
 ## [0.7.0] — 2026-08-31
 
 A site of notebooks, rather than a folder of unrelated pages.

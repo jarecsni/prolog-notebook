@@ -815,10 +815,39 @@ test('a chapter with no saved answers can still clear the ones you made', async 
   await page.settle(1);
   assert.deepEqual(page.out('q-auto'), []);
   assert.equal(page.panel().outputs, '1 output cleared');
-  // Nothing of the chapter's to restore — it never had any — so the button says
-  // so by going quiet rather than by offering to put back nothing.
-  assert.equal(page.panel().outputsButton, 'Restore outputs');
+  // NOTHING OF THE CHAPTER'S TO RESTORE — it never had any — so the button must
+  // not offer to put it back. The Captain, on the first version of this: "it
+  // shows the incorrect 'Restore output' - disabled … dont show restore when
+  // there's nothing to restore."
+  //
+  // A disabled control says "this could happen, but not now", and there is no now
+  // in which those answers come back. The true reading is the state the page
+  // started in — nothing on screen, nothing to clear — so it says that instead.
+  //
+  // This test asserted `Restore outputs` when it was written, directly under a
+  // comment saying the button should go quiet. The prose was right and the
+  // assertion was wrong, which is how the bug got past it.
+  assert.equal(page.panel().outputsButton, 'Clear all outputs');
   assert.equal(page.panel().outputsDisabled, true);
+
+  // And the count still says what happened, because that part was never a lie:
+  // the reader's own output is gone, and that is why the page looks empty.
+  assert.equal(page.panel().outputs, '1 output cleared');
+});
+
+test('a chapter that shipped answers still offers them back', async () => {
+  // The other side of the same rule, so the fix above cannot quietly remove
+  // restore from the case that has always needed it.
+  const { page } = reactive(REACTIVE);
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.equal(page.panel().outputsButton, 'Restore outputs');
+  assert.equal(page.panel().outputsDisabled, false, 'there is something to put back');
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.equal(page.panel().outputsButton, 'Clear all outputs');
+  assert.equal(page.panel().outputsDisabled, false);
 });
 
 test('the version probe cannot race the run that started the engine', async () => {
