@@ -111,13 +111,22 @@ const anywhere = (help) => `Anywhere
 /**
  * One command, one line — the summary's unit.
  *
- * `prolog-notebook` in front of every usage is a label rather than an instruction
- * once five of them are stacked, so it comes off here. It stays in the command's
- * own help, where it is the line you would actually type.
+ * Two things come off the usage here and stay in the command's own help, where it
+ * is the line you would actually type rather than an entry in a list.
+ *
+ * `prolog-notebook` is a label rather than an instruction once five are stacked.
+ * And `.prolog.md` is a CONVENTION, NOT A REQUIREMENT — nothing checks the
+ * extension, any markdown file runs — so the summary says `<file>`, which is what
+ * the command actually takes. The full form belongs where it reads as the advice
+ * it is.
  */
+const shortUsage = (usage) => usage
+  .replace(/^prolog-notebook /, '')
+  .replace(/<file\.prolog\.md>/, '<file>');
+
 function commandLine(name) {
   const { usage, blurb } = COMMANDS[name];
-  return `  ${usage.replace(/^prolog-notebook /, '').padEnd(30)}${blurb}`;
+  return `  ${shortUsage(usage).padEnd(20)}${blurb}`;
 }
 
 /** One command and the options only it takes — the unit of its own help. */
