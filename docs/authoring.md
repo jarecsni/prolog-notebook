@@ -319,14 +319,28 @@ See [modes.md](modes.md) for the whole doctrine.
 ## 8. Publishing
 
 ```sh
-$ prolog-notebook build chapter.prolog.md --out site/
-site: 13 files
-Open site/index.html over HTTP, or host the directory.
+$ prolog-notebook build chapter.prolog.md
+2 files → prolog-notebook-site/chapter/ (11 shared with the site)
+prolog-notebook-site/index.html lists 3 notebooks
+Host prolog-notebook-site over HTTP — opening it from disk will not run.
 ```
 
-A plain static directory: prerendered HTML with your answers in it, the runtime beside it, and
-the engine in `swipl/`. No bundler, no build step of your own, nothing to configure. Push it to
-GitHub Pages, drop it on any static host, zip it and email it.
+A plain static directory: prerendered HTML with your answers in it, the runtime in `lib/`, the
+engine in `swipl/`, and an `index.html` listing every chapter in the site. No bundler, no build
+step of your own, nothing to configure. Push it to GitHub Pages, drop it on any static host, zip
+it and email it.
+
+**One site, however many chapters.** `build` does not write beside the notebook you gave it. It
+walks up looking for an existing `prolog-notebook-site`, then for a `.git`, and writes there —
+so a second chapter from a different folder joins the first rather than starting a site of its
+own, and the runtime and the engine are written once for all of them. The index is regenerated
+from the directory every time, with each chapter's title taken from its own H1. Order is
+alphabetical for now: a chapter never states its position, so an index is the site's opinion
+rather than the notebook's.
+
+`--here` writes `prolog-notebook-site` beside the notebook instead, and `--out <dir>` puts it
+wherever you say. Every build prints where it went, because writing outside the directory you
+named is not something a tool should do quietly.
 
 - **It must be served over HTTP.** Browsers block ES modules over `file://`, so opening
   `index.html` from disk leaves the buttons inert — the page detects that and says so rather

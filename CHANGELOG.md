@@ -2,7 +2,37 @@
 
 ## [Unreleased]
 
+### Added
+
+- **A site, with an index.** `build` writes every chapter into one `prolog-notebook-site`, and
+  regenerates `index.html` from the directory each time — each entry titled by that chapter's own
+  H1, alphabetical, because a notebook never states its own position and an index is the site's
+  opinion rather than the notebook's.
+
+- **`--here`**, for writing `prolog-notebook-site` beside the notebook instead of at the project
+  root.
+
 ### Changed
+
+- **`build` writes to one site at the project root, not a folder beside each notebook.** It used
+  to default to `<file>-site`, so `notebooks/lists.prolog.md` became `notebooks/lists-site/`:
+  twenty chapters gave you twenty orphan sites, each with its own copy of the engine, and nowhere
+  for a table of contents to live because there was no "the site" for one to be a table of
+  contents of.
+
+  The destination is now found by walking up from the notebook and taking the first hit — an
+  existing `prolog-notebook-site`, then a `.git`, then the working directory. The first clue is
+  the one that matters: a second chapter, built from a different folder, joins the first's site
+  without being told to.
+
+  **The runtime, the engine and the stylesheet are the site's, not the page's.** They are written
+  once at the root and every page reaches them with `../`. Two chapters used to cost 12.6 MB; they
+  now cost 6.3.
+
+  And every build says where it went — `2 files → ../prolog-notebook-site/lists/ (11 shared with
+  the site)` — plus, on the build that creates it, one line noting you may want the directory in
+  `.gitignore`. Writing outside the directory you named is not something a tool should do quietly.
+
 
 - **The bare help screen names the commands and leaves everything else to them.** It printed
   every option of every command, which made the first screen a new reader meets the longest one in

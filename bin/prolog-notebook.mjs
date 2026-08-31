@@ -4,7 +4,7 @@
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
 import { createRequire } from 'node:module';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
@@ -15,6 +15,7 @@ import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } 
 import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 import { livePages } from '../src/build.js';
+import { SITE, findSite, indexHtml, isShared, pageName, pagesIn, shownAs } from '../src/site.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
 // The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
@@ -76,7 +77,10 @@ const COMMANDS = {
   build: {
     takes: [FILE],
     blurb: 'write a page you can host or send',
-    options: [['--out <dir>', 'where it writes (default: <file>-site)']],
+    options: [
+      ['--out <dir>', `where the site is (default: the nearest ${SITE})`],
+      ['--here', `write ${SITE} beside the notebook instead`],
+    ],
   },
   execute: {
     takes: [FILES],
@@ -566,6 +570,7 @@ async function page(command, args, asked = false) {
       return 2;
     }
     if (arg === '--out') options.out = args.shift();
+    else if (arg === '--here') options.here = true;
     else if (arg === '--port') {
       options.port = Number(args.shift());
       if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
@@ -598,6 +603,9 @@ async function page(command, args, asked = false) {
   // when the server started.
   const pages = livePages(() => readFileSync(file, 'utf8'), {
     filename: basename(file),
+    // A built page is one page of a site and reaches the shared runtime with
+    // `../`; `view` serves a single page at the root, where it is `./`.
+    prefix: command === 'build' ? '../' : './',
     onError: (e) => process.stderr.write(`${file}: ${e.message}\n`),
   });
   let built;
@@ -609,20 +617,51 @@ async function page(command, args, asked = false) {
   }
 
   if (command === 'build') {
-    const out = options.out ?? `${file.replace(/\.prolog\.md$/, '')}-site`;
+    // THREE WAYS TO SAY WHERE, and only the first is a decision the author has to
+    // make twice: --out is the explicit one, --here is beside the notebook, and
+    // the default is the site this project already has (869ery5e8).
+    const site = options.out ? resolve(options.out)
+      : options.here ? join(dirname(resolve(file)), SITE)
+        : findSite(file);
+    const existed = existsSync(site);
+    const page = pageName(file);
+
+    let own = 0;
+    let shared = 0;
     for (const [name, entry] of built) {
-      const target = join(out, name);
+      // The runtime, the engine and the stylesheet are the site's; the page is
+      // the page's. One copy each, however many chapters.
+      const target = isShared(name) ? join(site, name) : join(site, page, name);
+      if (isShared(name)) shared += 1; else own += 1;
       mkdirSync(dirname(target), { recursive: true });
       if (entry.text !== undefined) writeFileSync(target, entry.text);
       else copyFileSync(entry.copy, target);
     }
-    process.stderr.write(`${out}: ${built.size} files\n`);
+
+    // REGENERATED FROM THE DIRECTORY, EVERY TIME. The site is the only thing that
+    // knows what the site contains — builds happen one chapter at a time, from
+    // different folders, days apart (869erptbr).
+    const listed = pagesIn(site);
+    writeFileSync(join(site, 'index.html'), indexHtml(listed));
+
+    // SAY WHERE IT WENT. This is the one command that writes outside the
+    // directory it was pointed at, and doing that in silence is spooky.
+    if (!existed) {
+      process.stderr.write(`created ${shownAs(site)}/ — you may want it in .gitignore\n`);
+    }
+    // COUNTED APART, because they answer different questions: how big is this
+    // chapter, and what does the site cost. "13 files" of a two-file page was
+    // true of the write and false about the page.
+    process.stderr.write(`${own} files → ${shownAs(join(site, page))}/`
+      + ` (${shared} shared with the site)\n`);
+    process.stderr.write(`${shownAs(join(site, 'index.html'))} lists `
+      + `${listed.length} notebook${listed.length === 1 ? '' : 's'}\n`);
     // SAID HERE BECAUSE THIS IS WHERE IT IS ACTED ON. The obvious next move is to
     // double-click index.html, and that is the one thing that cannot work:
     // browsers refuse ES modules over file:// and the engine cannot be fetched
     // there either (869erqq1u). The page says so too, but by then somebody is
     // already looking at a chapter whose buttons do nothing.
-    process.stderr.write(`Host ${out} over HTTP — opening ${join(out, 'index.html')} from disk`
+    process.stderr.write(`Host ${shownAs(site)} over HTTP — opening it from disk`
       + ' will not run.\n');
     return 0;
   }
