@@ -9,9 +9,10 @@
   tool and left the per-command help earning nothing. What remains is one line per command, the
   three flags that really do work anywhere, and where to ask for more. The `prolog-notebook`
   prefix comes off those lines — it is a label rather than an instruction when five are stacked —
-  and so does `.prolog.md`, which is a convention nothing enforces: any markdown file runs, so the
-  summary now says `<file>`. Both stay in `<command> --help`, where the line is the one you would
-  actually type and the extension reads as the advice it is.
+  so does `.prolog.md`, which is a convention nothing enforces (any markdown file runs), and so
+  does the `...` on the two commands taking many files. All three stay in `<command> --help`,
+  where the line is the one you would actually type. The summary answers *which command*; the
+  command answers *how to call it*.
 
   The `--limit` footnote goes with them, to `execute --help` where the flag it explains lives.
 

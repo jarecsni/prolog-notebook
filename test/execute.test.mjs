@@ -393,7 +393,7 @@ test('run and exec still work, and are not advertised', async () => {
     assert.match(stdout, /```text output for="q-split"/, `${alias} must still execute`);
   }
   const { stdout: help } = await run('node', [CLI, '--help']);
-  assert.match(help, /^ {2}execute <file>\.\.\. /m);
+  assert.match(help, /^ {2}execute <file> /m);
   assert.doesNotMatch(help, /^ {2}(run|exec) </m);
 });
 
@@ -544,8 +544,12 @@ test('the bare screen names the commands and leaves their switches to them', asy
 
   // `.prolog.md` is a convention and nothing enforces it, so the summary says what
   // the command takes and the command's own help says what to call it.
+  // Same for the `...` on the two commands that take many files: true, and not
+  // the question a reader is answering while finding out which command they want.
+  assert.doesNotMatch(stdout, /\.\.\./);
   assert.doesNotMatch(stdout, /\.prolog\.md/);
-  assert.match((await run('node', [CLI, 'view', '--help'])).stdout, /<file\.prolog\.md>/);
+  const clear = (await run('node', [CLI, 'clear', '--help'])).stdout;
+  assert.match(clear, /<file\.prolog\.md>\.\.\./);
 
   // THE POINT: no per-command switch appears here. The three under Anywhere are
   // not per-command — they are true wherever they are typed.
