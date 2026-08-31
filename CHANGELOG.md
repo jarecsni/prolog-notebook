@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **The bare help screen names the commands and leaves the switches to them.** It printed every
+  option of every command, which made the first screen a new reader meets the longest one in the
+  tool and left the per-command help earning nothing. What remains is one line per command, the
+  three flags that really do work anywhere, and where to ask for more. The `prolog-notebook`
+  prefix comes off those lines — it is a label rather than an instruction when five are stacked —
+  and stays in `<command> --help`, where it is the line you would actually type.
+
+  The `--limit` footnote goes with them, to `execute --help` where the flag it explains lives.
+
+- **`-h, --help` now says which help it gave you.** The line read `this` — written when there
+  was only one screen it could have meant, and never revisited when commands learned to answer
+  about themselves. The summary now offers `prolog-notebook build --help`; a command's own help
+  still says `this`, where it is once again true.
+
 ## [0.6.5] — 2026-08-31
 
 Both from one field report on a real chapter.

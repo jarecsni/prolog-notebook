@@ -94,26 +94,58 @@ const ALIASES = { exec: 'execute', run: 'execute' };
 /** The command this argument names, aliases resolved, or null. */
 const commandNamed = (arg) => (COMMANDS[arg] ? arg : ALIASES[arg] ?? null);
 
-const ANYWHERE = `Anywhere
+/**
+ * What works anywhere, and one line saying what --help has just done.
+ *
+ * The flag is contextual and that line was not: `-h, --help  this` was written
+ * before a command could be asked about itself and nobody revisited it, so the
+ * summary sat there promising the summary (869ery5hj). Each screen says which
+ * of the two it is.
+ */
+const anywhere = (help) => `Anywhere
   --check-update  ask npm whether a newer one exists, and say so either way
   --version       version, engine and copyright
-  -h, --help      this
+  -h, --help      ${help}
 `;
 
-/** One command, laid out exactly as it is laid out in the full help. */
+/**
+ * One command, one line — the summary's unit.
+ *
+ * `prolog-notebook` in front of every usage is a label rather than an instruction
+ * once five of them are stacked, so it comes off here. It stays in the command's
+ * own help, where it is the line you would actually type.
+ */
+function commandLine(name) {
+  const { usage, blurb } = COMMANDS[name];
+  return `  ${usage.replace(/^prolog-notebook /, '').padEnd(30)}${blurb}`;
+}
+
+/** One command and the options only it takes — the unit of its own help. */
 function commandHelp(name) {
   const { usage, blurb, options } = COMMANDS[name];
-  return [`  ${usage.padEnd(44)}${blurb}`]
+  return [`  ${usage.padEnd(46)}${blurb}`]
     .concat(options.map(([flag, what]) => `    ${flag.padEnd(16)}${what}`))
     .join('\n');
 }
 
+/**
+ * THE SUMMARY NAMES THE COMMANDS AND NOTHING ELSE (869ery5hj).
+ *
+ * The Captain, on running the tool bare: "this is not great, why do we have
+ * command level help then." It printed every option of every command, so the tier
+ * below it earned nothing and the first screen a new reader met was the longest
+ * one in the tool. What is left is the list, the three flags that do work
+ * anywhere, and where to ask for more.
+ *
+ * The execute note goes with them. It explains --limit, and the comment on it in
+ * COMMANDS says it travels wherever --limit goes and nowhere else — a rule this
+ * screen was breaking.
+ */
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
-${Object.keys(COMMANDS).map(commandHelp).join('\n\n')}
+${Object.keys(COMMANDS).map(commandLine).join('\n')}
 
-${ANYWHERE}
-${COMMANDS.execute.note}`;
+${anywhere("this, or one command's: prolog-notebook build --help")}`;
 
 /**
  * JUST THE COMMAND ASKED ABOUT (869erqra0).
@@ -127,7 +159,7 @@ ${COMMANDS.execute.note}`;
  */
 function helpFor(name) {
   const { note } = COMMANDS[name];
-  return `${commandHelp(name)}\n\n${ANYWHERE}${note ? `\n${note}` : ''}`;
+  return `${commandHelp(name)}\n\n${anywhere('this')}${note ? `\n${note}` : ''}`;
 }
 
 /**
