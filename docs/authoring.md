@@ -320,7 +320,7 @@ See [modes.md](modes.md) for the whole doctrine.
 
 ```sh
 $ prolog-notebook build chapter.prolog.md
-2 files → prolog-notebook-site/chapter/ (11 shared with the site)
+3 files → prolog-notebook-site/chapter/ (runtime and engine already there)
 prolog-notebook-site/index.html lists 3 notebooks
 Host prolog-notebook-site over HTTP — opening it from disk will not run.
 ```
@@ -341,6 +341,32 @@ rather than the notebook's.
 `--here` writes `prolog-notebook-site` beside the notebook instead, and `--out <dir>` puts it
 wherever you say. Every build prints where it went, because writing outside the directory you
 named is not something a tool should do quietly.
+
+**Your chapter goes into the site too**, as `prolog-notebook-site/chapter/chapter.prolog.md`,
+beside the page it produced. A reader can have the markdown, and the site can rebuild itself
+without your source tree.
+
+### A site has exactly one runtime
+
+Every page in a site loads the same `lib/` and the same engine, and a page's generated `app.js`
+is written against the runtime of the day it was built. Those two facts together mean a site can
+never hold two generations of page: whichever copy of `lib/` is there, one of them is wrong. So a
+build reconciles the site rather than warning you about it.
+
+| what the site was built by | what a build does |
+|---|---|
+| the same versions | writes your page. Nothing else moves — the 6.2 MB engine is not copied again, so a post costs its own page |
+| an older prolog-notebook | replaces the shared files and **regenerates every page**: `runtime 0.6.0 → 0.7.0 · 2 pages regenerated` |
+| an older engine | the same, and names what regenerating cannot fix: `engine 8.0.1 → 8.0.7 · re-run execute on your chapters` |
+| a **newer** prolog-notebook | refuses. Run `prolog-notebook upgrade`, or build elsewhere with `--out` |
+
+A build aimed at one chapter rewriting five other pages is a lot of initiative, which is why it
+is never quiet about it: one line names what moved and how many pages came with it.
+
+**An engine bump never clears your answers.** A newer engine means those answers came from a
+different SWI-Prolog — not that they are wrong, and most engine releases change nothing a chapter
+displays. Erasing them would assert more than anyone knows, and would trade a probably-correct
+chapter for a definitely-empty one. `execute` is how you re-run them when you want to.
 
 - **It must be served over HTTP.** Browsers block ES modules over `file://`, so opening
   `index.html` from disk leaves the buttons inert — the page detects that and says so rather

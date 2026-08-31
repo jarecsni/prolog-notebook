@@ -12,7 +12,8 @@
 // decides names and produces text, and the command does the I/O.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { FAVICON } from './build.js';
+import { ENGINE_VERSION, ENGINE_VERSION_FILE, FAVICON } from './build.js';
+import { VERSION } from './version.js';
 
 /** The one name, wherever it lands. */
 export const SITE = 'prolog-notebook-site';
@@ -71,6 +72,95 @@ export function pageName(file) {
  */
 export function isShared(name) {
   return name.startsWith('lib/') || name.startsWith('swipl/') || name === 'notebook.css';
+}
+
+/**
+ * WHAT WROTE THIS SITE — the two keys a rebuild has to compare (869erqwkp).
+ *
+ *   prolog-notebook   decides lib/*.js, notebook.css and how a page is generated
+ *   swipl-wasm        decides swipl-bundle.js, the bytes we copy
+ *
+ * SWI-Prolog's own version is a property of swipl-wasm rather than a third axis,
+ * and it is not recorded: getting it means booting the engine, which is a second
+ * of every build spent on a label. It belongs on the output block that the answers
+ * came from, which is a different ticket and the place a reader would look.
+ *
+ * Both are read back out of the site rather than kept in a manifest at the root.
+ * A directory that has been half-deleted then reports what it actually has.
+ *
+ * @returns {{runtime: string|null, engine: string|null}} null where the site is silent
+ */
+export function siteVersions(dir) {
+  return {
+    runtime: constIn(join(dir, 'lib/version.js'), /VERSION = '([^']+)'/),
+    engine: constIn(join(dir, ENGINE_VERSION_FILE), /SWIPL_WASM = "([^"]+)"/),
+  };
+}
+
+function constIn(file, pattern) {
+  if (!existsSync(file)) return null;
+  const found = pattern.exec(readFileSync(file, 'utf8'));
+  return found ? found[1] : null;
+}
+
+/** -1, 0 or 1. Numeric where both sides are numeric, which ours and swipl-wasm's are. */
+export function compareVersions(a, b) {
+  const parts = (v) => String(v).split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i += 1) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0) ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * A SITE HAS EXACTLY ONE RUNTIME: whichever tool last touched it (869erqwkp).
+ *
+ * The contract between a page's app.js and lib/ is NOT stable — `offerDownload`
+ * gained arguments in #28 and `editsOf` moved modules in #40 — so a site holding
+ * two generations of page has no safe resting state. Overwrite lib/ and the older
+ * page imports a symbol that has moved; leave it and the page just built is the
+ * broken one. There is no third option in which everything works, which is why
+ * this reconciles rather than warns.
+ *
+ * BUILD IS SCOPED IN THE PAGES IT ADDS, NOT IN THE CONSISTENCY IT GUARANTEES.
+ * Ordinarily that is one page and nothing else moves. The moment a key differs the
+ * scope widens to the whole site, because that is the only state in which nothing
+ * is broken.
+ *
+ * @returns {{verdict: 'fresh'|'same'|'newer'|'older', have: object, ours: object}}
+ *   fresh  nothing there yet — write everything
+ *   same   write the page; the runtime and engine are already the right ones
+ *   newer  overwrite the shared files and regenerate every page
+ *   older  refuse: a silent downgrade of pages the author did not name
+ */
+export function reconcile(dir, ours = { runtime: VERSION, engine: ENGINE_VERSION }) {
+  const have = siteVersions(dir);
+  if (!have.runtime && !have.engine) return { verdict: 'fresh', have, ours };
+  const runtime = compareVersions(ours.runtime, have.runtime ?? '0');
+  const engine = compareVersions(ours.engine, have.engine ?? '0');
+  if (runtime < 0 || engine < 0) return { verdict: 'older', have, ours };
+  if (runtime === 0 && engine === 0) return { verdict: 'same', have, ours };
+  return {
+    verdict: 'newer', have, ours, runtimeMoved: runtime > 0, engineMoved: engine > 0,
+  };
+}
+
+/**
+ * A built page's own chapter, for regenerating it against a newer runtime.
+ *
+ * The page directory holds the .prolog.md it was built from, so a site can be
+ * rebuilt with no source tree, no repository and no manifest — it describes
+ * itself. A page with no source file was not written by a version that emitted
+ * one, and says so by returning null rather than by being silently skipped.
+ *
+ * @returns {{filename: string, source: string}|null}
+ */
+export function sourceOf(dir, page) {
+  const where = join(dir, page);
+  if (!existsSync(where)) return null;
+  const found = readdirSync(where).find((f) => f.endsWith('.md'));
+  return found ? { filename: found, source: readFileSync(join(where, found), 'utf8') } : null;
 }
 
 /**
