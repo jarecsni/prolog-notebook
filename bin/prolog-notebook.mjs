@@ -19,7 +19,7 @@ import {
   SITE, findSite, indexHtml, isShared, pageName, pagesIn, projectSite, reconcile, shownAs,
   sourceOf,
 } from '../src/site.js';
-import { pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
+import { NOBODY, pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
 // The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
@@ -602,6 +602,12 @@ async function publish(args) {
     return 1;
   }
   process.stderr.write(`Pushed ${done.files} files to ${options.remote} ${options.branch}.\n`);
+  if (done.anonymous) {
+    // Said, not hidden: a commit attributed to a name the author never chose is
+    // a small surprise, and one line removes it.
+    process.stderr.write('git has no author identity here, so the commit is by'
+      + ` ${NOBODY[0]} <${NOBODY[1]}>. Set user.email to use your own.\n`);
+  }
   // OFFERED AS WHERE TO LOOK, NEVER AS A PROMISE: whether anything is served
   // there depends on a setting only a person can see, and saying "your site is
   // live at" when it is not is worse than saying nothing.

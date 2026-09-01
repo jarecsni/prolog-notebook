@@ -31,6 +31,11 @@ Two fewer flags, and a help screen with nothing on it that is not true.
   nobody at a terminal and no `--yes` it refuses, because a question nobody can answer is a hang
   and a push nobody agreed to is worse.
 
+  Where git has an author identity the publish is under it, because it is your publish. Where it
+  has none — a CI runner with no global config, which is where this command is most useful — it
+  stands in with `prolog-notebook <prolog-notebook@invalid>` and says so, rather than failing with
+  git's *Please tell me who you are* or inventing a name in silence.
+
 ### Removed
 
 - **`build --here`**, replaced by **`build --root`**. `--here` was a shorthand for

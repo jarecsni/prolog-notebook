@@ -5,7 +5,7 @@ import { cp, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { pagesUrl } from '../src/publish.js';
+import { NOBODY, pagesUrl } from '../src/publish.js';
 
 // The site onto a branch a host will serve (869ery8ac).
 //
@@ -17,11 +17,35 @@ const exec = promisify(execFile);
 const CLI = new URL('../bin/prolog-notebook.mjs', import.meta.url).pathname;
 const CHAPTER = new URL('../notebooks/ch04-cut.prolog.md', import.meta.url).pathname;
 
+/**
+ * NO GIT IDENTITY, NO GIT CONFIG — the environment CI actually has.
+ *
+ * The first version of these tests inherited the developer's global git config,
+ * so `commit-tree` found an author and every test passed here and failed on the
+ * runner with "Please tell me who you are". A test that borrows something from
+ * the machine it runs on is testing that machine.
+ *
+ * So the config is scrubbed for every git command AND for the CLI itself: this
+ * file's fixtures name an identity per-commit, and publish has to cope with there
+ * being none.
+ */
+function bare(extra = {}) {
+  const env = { ...process.env, ...extra };
+  // REMOVED, NOT BLANKED. An empty GIT_AUTHOR_NAME is set-and-empty, which git
+  // rejects outright — a stricter thing than having no identity at all, and not
+  // the state under test.
+  for (const key of Object.keys(env)) {
+    if (/^GIT_(AUTHOR|COMMITTER)_/.test(key)) delete env[key];
+  }
+  return { ...env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+}
+
 const run = (args, cwd) => exec('node', [CLI, ...args], {
   cwd,
-  env: { NO_UPDATE_NOTIFIER: '1', ...process.env },
+  env: bare({ NO_UPDATE_NOTIFIER: '1' }),
 });
-const git = (args, cwd) => exec('git', args, { cwd }).then(({ stdout }) => stdout.trim());
+const git = (args, cwd) => exec('git', args, { cwd, env: bare() })
+  .then(({ stdout }) => stdout.trim());
 
 /**
  * A repository with a bare remote, a chapter, and the site gitignored.
@@ -43,6 +67,9 @@ async function project({ build = true } = {}) {
   await cp(CHAPTER, join(work, 'notes/cut.prolog.md'));
   await git(['add', '-A'], work);
   await git(['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-qm', 'init'], work);
+  // git without a global config defaults the branch name and warns; name it, so
+  // the assertion about not moving off it is about publish rather than about git.
+  await git(['branch', '-M', 'main'], work);
   if (build) await run(['build', 'notes/cut.prolog.md'], work);
   return { work, remote };
 }
@@ -75,6 +102,26 @@ test('the site goes onto the branch, gitignored or not', async () => {
   assert.ok(files.includes('cut/index.html'), 'the chapter');
   assert.ok(files.includes('.nojekyll'), 'and the file that keeps Jekyll off it');
   assert.ok(files.includes('swipl/swipl-bundle.js'), 'engine included');
+
+  // A MACHINE WITH NO GIT IDENTITY IS WHERE THIS COMMAND IS MOST USEFUL, and
+  // where it used to die: `commit-tree` refuses without one. It stands in, and
+  // says it has, rather than inventing a name in silence.
+  assert.match(stderr, new RegExp(`the commit is by ${NOBODY[0]} <${NOBODY[1]}>`));
+  const author = await git(['log', '-1', '--format=%an <%ae>', 'gh-pages'], remote);
+  assert.equal(author, `${NOBODY[0]} <${NOBODY[1]}>`);
+});
+
+test('an author with an identity publishes under their own', async () => {
+  const { work, remote } = await project();
+  await git(['config', 'user.name', 'Johnny'], work);
+  await git(['config', 'user.email', 'j@example.com'], work);
+
+  const { stderr } = await run(['publish', '--yes'], work);
+  // It is their publish, so it is their name on it, and nothing is said about
+  // standing in for anybody.
+  assert.equal(await git(['log', '-1', '--format=%an <%ae>', 'gh-pages'], remote),
+    'Johnny <j@example.com>');
+  assert.doesNotMatch(stderr, /no author identity/);
 });
 
 test('it never touches the checkout, however dirty', async () => {

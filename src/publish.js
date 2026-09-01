@@ -94,9 +94,11 @@ export async function pushSite({ site, gitDir, root, remote, branch, dryRun = fa
     const fetched = await run(['fetch', '--quiet', remote, branch]);
     const parent = fetched.ok ? (await run(['rev-parse', 'FETCH_HEAD'])).out : null;
 
-    if (dryRun) return { ok: true, files, commit: null, parent };
+    const who = await identity(root);
+    if (dryRun) return { ok: true, files, commit: null, parent, anonymous: !who.configured };
 
     const commit = await run([
+      ...who.args,
       'commit-tree', tree.out,
       ...(parent ? ['-p', parent] : []),
       '-m', `Publish ${files} file${files === 1 ? '' : 's'} from prolog-notebook-site`,
@@ -105,10 +107,38 @@ export async function pushSite({ site, gitDir, root, remote, branch, dryRun = fa
 
     const pushed = await run(['push', remote, `${commit.out}:refs/heads/${branch}`]);
     if (!pushed.ok) return { ok: false, why: pushed.why };
-    return { ok: true, commit: commit.out, files };
+    return { ok: true, commit: commit.out, files, anonymous: !who.configured };
   } finally {
     rmSync(index, { recursive: true, force: true });
   }
+}
+
+/**
+ * WHO THE PUBLISH COMMIT IS BY, when git has nobody to name.
+ *
+ * `commit-tree` refuses without an identity — "Please tell me who you are" — and
+ * that is right for a commit somebody is authoring and wrong for this one: the
+ * tree is generated, the branch is an artefact, and the identity is bookkeeping.
+ * A machine with no global git config is exactly where this command is most
+ * useful, which is where it died: CI is who `--yes` exists for (869ery8ac).
+ *
+ * The author's own identity is used wherever they have one, because it IS their
+ * publish. Only when git has none does this stand in, and the command says so —
+ * a name silently invented is worse than a name explained.
+ *
+ * `.invalid` is reserved for exactly this (RFC 2606): an address that is
+ * guaranteed never to reach anybody, rather than one that might reach a stranger.
+ */
+export const NOBODY = ['prolog-notebook', 'prolog-notebook@invalid'];
+
+async function identity(root) {
+  const name = await git(['config', '--get', 'user.name'], { cwd: root });
+  const email = await git(['config', '--get', 'user.email'], { cwd: root });
+  if (name.ok && name.out && email.ok && email.out) return { configured: true, args: [] };
+  return {
+    configured: false,
+    args: ['-c', `user.name=${NOBODY[0]}`, '-c', `user.email=${NOBODY[1]}`],
+  };
 }
 
 /** Where the pushed branch would be served from, as far as we can tell. */
