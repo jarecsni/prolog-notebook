@@ -16,7 +16,8 @@ import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 import { buildFiles, livePages } from '../src/build.js';
 import {
-  SITE, findSite, indexHtml, isShared, pageName, pagesIn, reconcile, shownAs, sourceOf,
+  SITE, findSite, indexHtml, isShared, pageName, pagesIn, projectSite, reconcile, shownAs,
+  sourceOf,
 } from '../src/site.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
@@ -81,7 +82,7 @@ const COMMANDS = {
     blurb: 'write a page you can host or send',
     options: [
       ['--out <dir>', `where the site is (default: the nearest ${SITE})`],
-      ['--here', `write ${SITE} beside the notebook instead`],
+      ['--root', `write to the project's ${SITE}, skipping any nearer one`],
     ],
   },
   execute: {
@@ -580,7 +581,7 @@ async function page(command, args) {
       return 2;
     }
     if (arg === '--out') options.out = args.shift();
-    else if (arg === '--here') options.here = true;
+    else if (arg === '--root') options.root = true;
     else if (arg === '--port') {
       options.port = Number(args.shift());
       if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
@@ -625,11 +626,25 @@ async function page(command, args) {
   }
 
   if (command === 'build') {
-    // THREE WAYS TO SAY WHERE, and only the first is a decision the author has to
-    // make twice: --out is the explicit one, --here is beside the notebook, and
-    // the default is the site this project already has (869ery5e8).
+    // A DEFAULT AND TWO OVERRIDES, rather than three ways of saying the same
+    // thing (869etpd4c). The walk is the answer almost always; --root is for when
+    // a nearer site is in the way and the project's is wanted; --out is for
+    // somewhere else entirely, and says where.
+    //
+    // `--here` used to sit between them, writing a site beside the notebook. It
+    // was a shorthand for `--out ./prolog-notebook-site` that cost a second site
+    // in the project — which then won the walk for every later build in that
+    // subtree, and needed another flag to escape. And publish only ever pushes
+    // the ROOT site, so its whole effect had become putting a chapter where the
+    // next command would not look.
+    if (options.out && options.root) {
+      // Both name a destination, and one of them would have to be ignored. A flag
+      // read and thrown away looks like it worked (869erqra0).
+      process.stderr.write('--root and --out both say where to write. Pick one.\n');
+      return 2;
+    }
     const site = options.out ? resolve(options.out)
-      : options.here ? join(dirname(resolve(file)), SITE)
+      : options.root ? projectSite(file)
         : findSite(file);
     const existed = existsSync(site);
     const page = pageName(file);

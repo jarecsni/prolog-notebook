@@ -12,7 +12,7 @@
 // decides names and produces text, and the command does the I/O.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { ENGINE_VERSION, ENGINE_VERSION_FILE, FAVICON } from './build.js';
+import { ENGINE_VERSION, ENGINE_VERSION_FILE, FAVICON, NOJEKYLL } from './build.js';
 import { VERSION } from './version.js';
 
 /** The one name, wherever it lands. */
@@ -41,11 +41,30 @@ export const SITE = 'prolog-notebook-site';
  * @returns {string} the site directory, which may not exist yet
  */
 export function findSite(from, stop = process.cwd()) {
+  return walk(from, stop, (dir) => (existsSync(join(dir, SITE)) || existsSync(join(dir, '.git'))
+    ? join(dir, SITE) : null));
+}
+
+/**
+ * THE PROJECT'S OWN SITE, skipping anything nearer (869etpd4c).
+ *
+ * The same walk with one clue removed: a site somebody put in a subdirectory is
+ * not the project's, and this is the word for wanting the project's. It matters
+ * because `publish` pushes the site at the git root and nothing else — so this is
+ * how an author says "put this chapter where it can be published from" without
+ * spelling a path relative to wherever they happen to be standing.
+ */
+export function projectSite(from, stop = process.cwd()) {
+  return walk(from, stop, (dir) => (existsSync(join(dir, '.git')) ? join(dir, SITE) : null));
+}
+
+/** Up from a notebook, taking the first answer, and giving up where told. */
+function walk(from, stop, answer) {
   let dir = resolve(dirname(from));
   const root = resolve(dir).split(/[\\/]/)[0] || '/';
   for (;;) {
-    if (existsSync(join(dir, SITE))) return join(dir, SITE);
-    if (existsSync(join(dir, '.git'))) return join(dir, SITE);
+    const found = answer(dir);
+    if (found) return found;
     const up = dirname(dir);
     if (up === dir || dir === root) return join(resolve(stop), SITE);
     dir = up;
@@ -71,7 +90,8 @@ export function pageName(file) {
  * A six-chapter site was six copies of a 6.2 MB engine.
  */
 export function isShared(name) {
-  return name.startsWith('lib/') || name.startsWith('swipl/') || name === 'notebook.css';
+  return name.startsWith('lib/') || name.startsWith('swipl/')
+    || name === 'notebook.css' || name === NOJEKYLL;
 }
 
 /**
