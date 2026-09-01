@@ -368,16 +368,14 @@ test('a run says so when a newer version exists, on stderr', async () => {
     assert.equal(asked.length, before, 'the registry was not asked');
     assert.doesNotMatch(quiet.stderr, /The latest is/);
 
-    // Unless it was asked for outright, which --quiet does not override.
-    const forced = await run('node', [CLI, 'execute', '--stdout', '--quiet', '--check-update', file], {
-      env: {
-        PROLOG_NOTEBOOK_REGISTRY: registry,
-        NO_UPDATE_NOTIFIER: '',
-        CI: '',
-        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
-      },
-    });
-    assert.match(forced.stderr, /The latest is 99\.0\.0\./);
+    // AND THERE IS NO LONGER A FLAG THAT OVERRIDES IT. `--check-update` used to
+    // force the question through --quiet; it is gone, and asking outright is now
+    // a command rather than a modifier (869etgxn3).
+    const refused = await run('node', [CLI, 'execute', '--stdout', '--check-update', file], {
+      env: { PROLOG_NOTEBOOK_REGISTRY: registry },
+    }).catch((e) => e);
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, /unknown option "--check-update"/);
   } finally {
     server.close();
   }
@@ -486,14 +484,12 @@ test('an option that belongs to another command says where it lives', async () =
   }
 });
 
-test('--check-update is answered wherever it is typed, and with nobody to ask', async () => {
-  // The help listed it under no command, exactly as though it were global — and
-  // then `build lists.prolog.md --check-update` said "unknown option". It is the
-  // one flag here that belongs to the tool rather than to a command.
-  //
-  // And it answers DOWN A PIPE. A terminal is needed to offer the upgrade, never
-  // to report one; without that, an explicit check in a script said nothing at
-  // all, which is indistinguishable from "you are up to date".
+test('asking outright is a command now, not a flag on every other one', async () => {
+  // `--check-update` forced the update check that the tool performs on its own
+  // anyway, on every command, in every help screen. `upgrade` already answers the
+  // question — printing the verdict either way, and acting only when there is
+  // something to act on — so the flag was a sentence in five help screens buying
+  // nothing (869etgxn3).
   const { createServer } = await import('node:http');
   const asked = [];
   const server = createServer((req, res) => {
@@ -505,28 +501,29 @@ test('--check-update is answered wherever it is typed, and with nobody to ask', 
   const registry = `http://127.0.0.1:${server.address().port}`;
 
   try {
+    // Gone from every command that used to carry it, and refused rather than
+    // ignored: a flag read and thrown away looks like it worked.
     const file = await temp('lists.prolog.md', NOTEBOOK);
-    const out = await mkdtemp(join(tmpdir(), 'prolog-notebook-site-'));
-    for (const argv of [['build', file, '--out', out], ['clear', '--stdout', file]]) {
-      const before = asked.length;
-      const { stderr } = await run('node', [CLI, ...argv, '--check-update'], {
-        env: {
-          PROLOG_NOTEBOOK_REGISTRY: registry,
-          // Set as a reader would set them, to prove that asking outright still
-          // wins: an explicit question is a person, not a pipeline.
-          NO_UPDATE_NOTIFIER: '1',
-          CI: 'true',
-          XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
-        },
-      });
-      assert.equal(asked.length, before + 1, `${argv[0]} asked the registry`);
-      assert.match(stderr, /The latest is 99\.0\.0\./, `${argv[0]} said so`);
+    for (const argv of [['build', file], ['clear', '--stdout', file], ['execute', file]]) {
+      const failed = await run('node', [CLI, ...argv, '--check-update']).catch((e) => e);
+      assert.equal(failed.code, 2, `${argv[0]} refuses it`);
+      assert.match(failed.stderr, /unknown option "--check-update"/);
     }
+
+    // And the question is still askable, by the command whose name is the answer.
+    const { stderr } = await run('node', [CLI, 'upgrade'], {
+      env: {
+        PROLOG_NOTEBOOK_REGISTRY: registry,
+        NO_UPDATE_NOTIFIER: '1',
+        XDG_CACHE_HOME: await mkdtemp(join(tmpdir(), 'prolog-notebook-cache-')),
+      },
+    }).catch((e) => e);
+    assert.equal(asked.length, 1, 'upgrade asks the registry outright');
+    assert.match(stderr, /The latest is 99\.0\.0\./);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 });
-
 test('the bare screen names the commands and leaves their switches to them', async () => {
   // The Captain, on running the tool with no arguments: "it prints the full help
   // screen - with details on the individual commands (including switches) - this
@@ -566,25 +563,26 @@ test('the bare screen names the commands and leaves their switches to them', asy
   assert.doesNotMatch(build, /\(s\)/);
   assert.doesNotMatch((await run('node', [CLI, 'upgrade', '--help'])).stdout, /<options>/);
 
-  // THE POINT: no per-command switch appears here. The three under Anywhere are
-  // not per-command — they are true wherever they are typed.
-  const anywhere = stdout.slice(stdout.indexOf('Anywhere'));
-  const summary = stdout.slice(0, stdout.indexOf('Anywhere'));
+  // THE POINT: no per-command switch appears here. The two at the foot are not
+  // per-command — one is its own whole command and one works wherever it is typed.
   for (const flag of ['--out', '--port', '--limit', '--stdout', '--quiet', '--no-open']) {
-    assert.doesNotMatch(summary, new RegExp(flag), `${flag} belongs to a command, not here`);
+    assert.doesNotMatch(stdout, new RegExp(flag), `${flag} belongs to a command, not here`);
   }
-  for (const flag of ['--check-update', '--version', '-h, --help']) {
-    assert.match(anywhere, new RegExp(flag.replace('-h, ', '')));
-  }
+  assert.match(stdout, /^ {2}--version {3}version, engine and copyright — on its own$/m);
+  assert.match(stdout, /^ {2}-h, --help {2}this, or one command's/m);
+  // The heading went with the third one. "Anywhere" over a list of two, only one
+  // of which is, would be a label that has to be corrected as it is read.
+  assert.doesNotMatch(stdout, /Anywhere/);
+  assert.doesNotMatch(stdout, /--check-update/);
 
   // The note about a stopped search explains --limit, so it travels with --limit
   // and nowhere else. This screen was the one place breaking that rule.
   assert.doesNotMatch(stdout, /never exhausted/);
 
   // And --help says which of the two things it just did. "this" was written when
-  // there was only one screen it could mean.
-  assert.match(stdout, /-h, --help {6}this, or one command's: prolog-notebook build --help/);
-  assert.match((await run('node', [CLI, 'build', '--help'])).stdout, /-h, --help {6}this\n/);
+  // there was only one screen it could mean — and it is now said only here, since
+  // a command's own help is not a place to advertise the flag that produced it.
+  assert.match(stdout, /-h, --help {2}this, or one command's: prolog-notebook build --help/);
 });
 
 test('a command asked for help answers about itself, and nothing else', async () => {
@@ -598,8 +596,12 @@ test('a command asked for help answers about itself, and nothing else', async ()
   for (const other of ['view <file', 'execute <file', 'clear <file', 'upgrade  ']) {
     assert.doesNotMatch(stdout, new RegExp(other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  // What works anywhere stays: it is as true of this command as of any other.
-  assert.match(stdout, /Anywhere\n {2}--check-update/);
+  // AND NOTHING GLOBAL DOWN HERE. This screen exists because the reader typed
+  // --help; telling them --help is available is the one piece of help nobody in
+  // this position needs, and the other two globals are gone.
+  assert.doesNotMatch(stdout, /Anywhere/);
+  assert.doesNotMatch(stdout, /--version/);
+  assert.doesNotMatch(stdout, /--help/);
   // And the note about a stopped search belongs to --limit, so it travels with
   // execute and appears nowhere else.
   assert.doesNotMatch(stdout, /never exhausted/);

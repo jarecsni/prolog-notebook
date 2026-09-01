@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.8.0] — 2026-09-01
+
+Two fewer flags, and a help screen with nothing on it that is not true.
+
+### Removed
+
+- **`--check-update`.** It forced the update check the tool already performs on its own, and it
+  cost a line in five help screens and a parameter threaded through four functions. The question
+  it answered is still askable — `prolog-notebook upgrade` checks whatever the daily timer thinks,
+  says where you stand either way, and fetches a new version only if there is one. It is refused
+  rather than ignored, because a flag read and thrown away looks like it worked.
+
+### Changed
+
+- **`--version` is a command of its own.** `prolog-notebook build chapter.md --version` was a
+  sentence with two verbs in it, and it now says so rather than silently picking one.
+
+- **The "Anywhere" heading goes with them.** Of the three flags under it, one is gone and one is
+  no longer anywhere — a heading over a list of two, only one of which it describes, has to be
+  corrected as it is read. The summary now ends with two unheaded lines, and nothing beginning
+  with a dash is going to be mistaken for a command.
+
+- **A command's own help ends after its own options.** What the block left behind there was
+  `-h, --help  this`, printed on a screen that exists because the reader typed `--help`.
+
 ## [0.7.3] — 2026-09-01
 
 ### Fixed

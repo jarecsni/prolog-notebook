@@ -198,7 +198,7 @@ test('view and build ask about updates too, not only run', async () => {
   assert.equal(calls.length, 3, 'execute, view/build, clear');
   // And before anything is served, written or emptied: the offer is worthless
   // afterwards, because by then the outcome is already on disk.
-  const door = cli.indexOf('await upgradeFirst({ asked })');
+  const door = cli.indexOf('await upgradeFirst()');
   assert.ok(door > 0 && door < cli.indexOf('const server = await serve('));
   assert.ok(door < cli.indexOf("if (command === 'build')"));
   // Scoped to the function, because `page` is defined after `clear` and a
