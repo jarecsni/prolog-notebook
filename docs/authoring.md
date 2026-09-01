@@ -342,6 +342,32 @@ rather than the notebook's.
 `--out <dir>` puts it wherever you say. Every build prints where it went, because writing
 outside the directory you named is not something a tool should do quietly.
 
+### Putting it on the web
+
+```sh
+$ prolog-notebook publish
+prolog-notebook-site — 3 notebooks → origin gh-pages
+Publish this site? [y/N] y
+Pushed 41 files to origin gh-pages.
+If Pages is set to serve gh-pages, that is https://you.github.io/your-repo/
+Settings → Pages → Deploy from a branch → gh-pages / (root)
+```
+
+`publish` pushes the site at the top of your repository onto a branch, and a host serves that
+branch. It is built through a separate git index and work-tree, so it never touches your
+checkout — you can publish in the middle of an edit and nothing moves under you. Each publish
+descends from the last, so the branch keeps a real history rather than being force-pushed.
+
+**It only ever publishes the site at the top of the repository**, and there is no way to ask it
+for another. GitHub Pages serves **one site per repository** — one source branch, one URL — so a
+second site could not sit alongside the first, it could only replace what the URL already serves.
+A site built elsewhere with `--out` is a local thing: preview it, zip it, send it. If you want two
+published sites, you want two repositories.
+
+The one-time setup is a click, and it has to come after the first publish because the branch has
+to exist: **Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`**. Note that Pages on
+a **private** repository needs a paid plan, and the failure is an unexplained 404.
+
 The site also carries a `.nojekyll` file, which stops GitHub Pages running Jekyll over it —
 Jekyll would try to process the `.prolog.md` beside each page, and silently drops anything whose
 name begins with an underscore.

@@ -19,6 +19,7 @@ import {
   SITE, findSite, indexHtml, isShared, pageName, pagesIn, projectSite, reconcile, shownAs,
   sourceOf,
 } from '../src/site.js';
+import { pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
 // The engine is imported WHERE IT IS USED, never at the top. src/node.js pulls in
@@ -104,6 +105,16 @@ const COMMANDS = {
       ['--stdout', 'print the result instead of writing the file'],
       ['--quiet', 'report only failures'],
     ],
+  },
+  publish: {
+    takes: [],
+    blurb: 'push the site where a host will serve it',
+    options: [
+      ['--dry-run', 'say what would go and where, push nothing'],
+      ['--yes', 'do not ask first'],
+    ],
+    note: 'It pushes the site at the top of your repository, and only that one: GitHub Pages\n'
+      + 'serves one site per repository, so a second one could only ever replace it.\n',
   },
   upgrade: {
     takes: [],
@@ -413,6 +424,8 @@ async function main(argv) {
   const command = args.shift();
   if (command === 'view' || command === 'build') return page(command, args);
   if (command === 'clear') return clear(args);
+  if (command === 'publish') return publish(args);
+
   if (command === 'upgrade') {
     const { message, newer } = await updateNotice({ version: VERSION, force: true });
     if (message) process.stderr.write(`${message}\n`);
@@ -507,6 +520,98 @@ async function main(argv) {
  * No engine, no network and no update check: this is a text operation on a file
  * the reader already has.
  */
+/**
+ * THE SITE ONTO THE BRANCH A HOST WILL SERVE (869ery8ac).
+ *
+ * ONE REPOSITORY SERVES ONE SITE, which is the fact the whole shape of this
+ * command follows from. GitHub Pages takes one source per repository — a branch,
+ * or an Actions workflow — and serves it at https://<user>.github.io/<repo>/.
+ * Extra branches full of HTML are just branches; nothing serves them.
+ *
+ * So there is no operand and no way to name a site. The one at the top of the
+ * repository is the only one that can be published, and offering to push another
+ * would be offering to REPLACE what the URL already serves — a data-loss-shaped
+ * mistake dressed as a convenience. A site built somewhere else with --out is a
+ * local artefact: preview it, zip it, send it.
+ *
+ * IT IS THE MOST OUTWARD-FACING THING THIS TOOL DOES. A push to a public branch
+ * is on somebody's CDN before you can change your mind, so it says what it is
+ * about to do and waits for a yes.
+ */
+async function publish(args) {
+  const options = { branch: 'gh-pages', remote: 'origin', dryRun: false, yes: false };
+  for (const arg of args) {
+    if (arg === '--dry-run') options.dryRun = true;
+    else if (arg === '--yes' || arg === '-y') options.yes = true;
+    else {
+      process.stderr.write(unknownOption(arg, 'publish'));
+      return 2;
+    }
+  }
+
+  const repo = await repository(process.cwd());
+  if (!repo) {
+    // Publishing is pushing. Without a repository there is nowhere to push to,
+    // and no amount of arguments would supply one.
+    process.stderr.write('publish needs a git repository — this directory is not in one.\n');
+    return 2;
+  }
+
+  const site = join(repo.root, SITE);
+  if (!existsSync(site)) {
+    process.stderr.write(`no site to publish: ${shownAs(site)} does not exist.\n`
+      // Named rather than implied, because an author who has been building into a
+      // nearer site has a site — just not the one that can be served.
+      + 'Run `prolog-notebook build <file>` to make one, or `build --root <file>` if you\n'
+      + 'have been building into a site somewhere below the top of the repository.\n');
+    return 1;
+  }
+
+  const pages = pagesIn(site);
+  const url = pagesUrl(await remoteUrl(repo.root, options.remote));
+  process.stderr.write(`${shownAs(site)} — ${pages.length} notebook`
+    + `${pages.length === 1 ? '' : 's'} → ${options.remote} ${options.branch}\n`);
+
+  if (options.dryRun) {
+    const would = await pushSite({ ...repo, site, ...options });
+    if (!would.ok) {
+      process.stderr.write(`${would.why}\n`);
+      return 1;
+    }
+    process.stderr.write(`${would.files} files would be pushed. Nothing was.\n`);
+    return 0;
+  }
+
+  // A terminal is asked; a pipeline has to have said so outright. Neither is
+  // allowed to be assumed from the other — a question nobody can answer is a
+  // hang, and a push nobody agreed to is worse.
+  if (!options.yes) {
+    if (!canAsk()) {
+      process.stderr.write('Nobody to ask, and this pushes to a public branch. Pass --yes.\n');
+      return 2;
+    }
+    if (!(await confirm('Publish this site?'))) {
+      process.stderr.write('Nothing was pushed.\n');
+      return 0;
+    }
+  }
+
+  const done = await pushSite({ ...repo, site, ...options });
+  if (!done.ok) {
+    process.stderr.write(`${done.why}\n`);
+    return 1;
+  }
+  process.stderr.write(`Pushed ${done.files} files to ${options.remote} ${options.branch}.\n`);
+  // OFFERED AS WHERE TO LOOK, NEVER AS A PROMISE: whether anything is served
+  // there depends on a setting only a person can see, and saying "your site is
+  // live at" when it is not is worse than saying nothing.
+  if (url) {
+    process.stderr.write(`If Pages is set to serve ${options.branch}, that is ${url}\n`
+      + `Settings → Pages → Deploy from a branch → ${options.branch} / (root)\n`);
+  }
+  return 0;
+}
+
 async function clear(args) {
   const options = { stdout: false, quiet: false };
   const files = [];

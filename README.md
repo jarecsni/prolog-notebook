@@ -154,6 +154,8 @@ Each option belongs to a command, and typing one under the wrong command tells y
 | `--quiet` | `execute`, `clear` | report only failures |
 | `--out <dir>` | `build` | where the site is. Default: the nearest `prolog-notebook-site`, else one at the project root |
 | `--root` | `build` | write to the project's `prolog-notebook-site`, skipping any nearer one |
+| `--dry-run` | `publish` | say what would go and where, push nothing |
+| `--yes` | `publish` | do not ask first — for CI, where there is nobody to ask |
 | `--port <n>` | `view` | what it listens on. Default 8777, and it takes another if that one is busy |
 | `--no-open` | `view` | print the URL instead of opening a browser |
 
