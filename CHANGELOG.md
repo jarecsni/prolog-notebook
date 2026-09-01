@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.2] — 2026-08-31
+
+### Fixed
+
+- **After clearing a run in a chapter with no saved answers, the panel says *No outputs yet*
+  again** rather than *1 output cleared*. The row's job is what is true now, and "cleared" is a
+  fact about history: with nothing to restore, that state is indistinguishable from a chapter
+  nobody has run, so naming it invited a question — how do I get it back — with no answer.
+
+  A chapter that *did* ship answers still reads *N outputs cleared*, because there it is a real
+  state one press away from its opposite. The same `restorable` test now governs the whole row
+  rather than only the button, which is what makes the two halves agree.
+
 ## [0.7.1] — 2026-08-31
 
 ### Fixed
