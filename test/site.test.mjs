@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import {
-  SITE, compareVersions, findSite, indexHtml, isShared, pageName, pagesIn, reconcile, sourceOf,
+  SITE, compareVersions, findSite, indexHtml, isShared, pageName, pagesIn, projectSite, reconcile,
+  sourceOf,
 } from '../src/site.js';
 import { ENGINE_VERSION } from '../src/build.js';
 import { VERSION } from '../src/version.js';
@@ -101,7 +102,7 @@ test('two chapters built from different folders make one site', async () => {
   const first = await run(['build', 'cut.prolog.md'], { cwd: join(root, 'notes') });
   // Said once, on the build that creates it, and never again.
   assert.match(first.stderr, /created \.\.\/prolog-notebook-site\/ — you may want it in \.gitignore/);
-  assert.match(first.stderr, /3 files → \.\.\/prolog-notebook-site\/cut\/ \(12 shared with the site\)/);
+  assert.match(first.stderr, /3 files → \.\.\/prolog-notebook-site\/cut\/ \(13 shared with the site\)/);
   assert.match(first.stderr, /lists 1 notebook$/m);
 
   const second = await run(['build', 'lists.prolog.md'], { cwd: join(root, 'notes/deep') });
@@ -115,7 +116,8 @@ test('two chapters built from different folders make one site', async () => {
 
   const site = join(root, SITE);
   const there = await readdir(site);
-  assert.deepEqual(there.sort(), ['cut', 'index.html', 'lib', 'lists', 'notebook.css', 'swipl']);
+  assert.deepEqual(there.sort(),
+    ['.nojekyll', 'cut', 'index.html', 'lib', 'lists', 'notebook.css', 'swipl']);
 
   // One engine, one runtime, however many chapters — the six-chapter site was
   // six copies of 6.2 MB.
@@ -178,19 +180,61 @@ test('an index with nothing in it says so rather than showing an empty list', ()
   assert.match(indexHtml([{ name: 'x', title: '<script>ha</script>' }]), /&lt;script&gt;/);
 });
 
-test('--here builds beside the notebook, and --out wins over everything', async () => {
+test('--root skips a nearer site, and --out says where outright', async () => {
   const root = await project({ 'notes/lists.prolog.md': 'Splitting a list' });
 
-  await run(['build', '--here', 'lists.prolog.md'], { cwd: join(root, 'notes') });
-  assert.ok(existsSync(join(root, 'notes', SITE, 'lists/index.html')));
-  // --here means HERE: the project's own site is not touched.
-  assert.ok(!existsSync(join(root, SITE)));
+  // Somebody has put a site in the subdirectory, so the walk finds it first —
+  // which is the rule that makes chapter two join chapter one, and the rule that
+  // needs a way out (869etpd4c).
+  await mkdir(join(root, 'notes', SITE), { recursive: true });
+  await run(['build', 'lists.prolog.md'], { cwd: join(root, 'notes') });
+  assert.ok(existsSync(join(root, 'notes', SITE, 'lists/index.html')), 'nearest won');
+  assert.ok(!existsSync(join(root, SITE)), 'and the project site was not touched');
+
+  // --root is the way out, and the word for "where publish will look".
+  await run(['build', '--root', 'lists.prolog.md'], { cwd: join(root, 'notes') });
+  assert.ok(existsSync(join(root, SITE, 'lists/index.html')));
 
   const elsewhere = await mkdtemp(join(tmpdir(), 'prolog-notebook-out-'));
   await run(['build', 'lists.prolog.md', '--out', elsewhere], { cwd: join(root, 'notes') });
   assert.ok(existsSync(join(elsewhere, 'lists/index.html')));
   assert.ok(existsSync(join(elsewhere, 'index.html')));
-  assert.ok(!existsSync(join(root, SITE)));
+
+  // Two flags naming a destination is a question, not a preference order.
+  const both = await run(['build', '--root', '--out', elsewhere, 'lists.prolog.md'],
+    { cwd: join(root, 'notes') }).catch((e) => e);
+  assert.equal(both.code, 2);
+  assert.match(both.stderr, /--root and --out both say where to write/);
+
+  // And the flag it replaces is gone rather than quietly accepted.
+  const here = await run(['build', '--here', 'lists.prolog.md'], { cwd: join(root, 'notes') })
+    .catch((e) => e);
+  assert.equal(here.code, 2);
+  assert.match(here.stderr, /unknown option "--here"/);
+});
+
+test('projectSite ignores a site that is not the project\'s', async () => {
+  const root = await project({ 'notes/deep/lists.prolog.md': 'Splitting a list' });
+  const notebook = join(root, 'notes/deep/lists.prolog.md');
+  await mkdir(join(root, 'notes', SITE), { recursive: true });
+
+  // The walk stops at the nearer one; the project's answer climbs past it to the
+  // .git, which is the same place publish looks and the reason this exists.
+  assert.equal(findSite(notebook), join(root, 'notes', SITE));
+  assert.equal(projectSite(notebook), join(root, SITE));
+});
+
+test('every site carries the file that keeps Jekyll off it', async () => {
+  // GitHub runs Jekyll over a published directory unless this is there, and it
+  // would find a .prolog.md in every page directory to chew on — plus it drops
+  // anything beginning with an underscore, silently (869etpd4c).
+  const root = await project({ 'lists.prolog.md': 'Splitting a list' });
+  await run(['build', 'lists.prolog.md'], { cwd: root });
+  const marker = join(root, SITE, '.nojekyll');
+  assert.ok(existsSync(marker), 'at the site root');
+  assert.equal(await readFile(marker, 'utf8'), '', 'and empty: its content is its existence');
+  // The site's, not the page's — one per site however many chapters.
+  assert.ok(!existsSync(join(root, SITE, 'lists/.nojekyll')));
 });
 
 // ------------------------------------------------------- one runtime per site

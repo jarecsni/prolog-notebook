@@ -338,9 +338,13 @@ from the directory every time, with each chapter's title taken from its own H1. 
 alphabetical for now: a chapter never states its position, so an index is the site's opinion
 rather than the notebook's.
 
-`--here` writes `prolog-notebook-site` beside the notebook instead, and `--out <dir>` puts it
-wherever you say. Every build prints where it went, because writing outside the directory you
-named is not something a tool should do quietly.
+`--root` writes to the project's site even when a nearer one would have won the walk, and
+`--out <dir>` puts it wherever you say. Every build prints where it went, because writing
+outside the directory you named is not something a tool should do quietly.
+
+The site also carries a `.nojekyll` file, which stops GitHub Pages running Jekyll over it —
+Jekyll would try to process the `.prolog.md` beside each page, and silently drops anything whose
+name begins with an underscore.
 
 **Your chapter goes into the site too**, as `prolog-notebook-site/chapter/chapter.prolog.md`,
 beside the page it produced. A reader can have the markdown, and the site can rebuild itself

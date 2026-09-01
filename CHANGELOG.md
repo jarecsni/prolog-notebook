@@ -6,6 +6,14 @@ Two fewer flags, and a help screen with nothing on it that is not true.
 
 ### Removed
 
+- **`build --here`**, replaced by **`build --root`**. `--here` was a shorthand for
+  `--out ./prolog-notebook-site` that cost you a second site in the project — which then won the
+  nearest-wins walk for every later build in that subtree, and needed another flag to escape. A
+  convenience that requires a second flag to undo is not one. `--root` is the other direction and
+  the useful one: skip anything nearer, write to the project's site, which is the only site
+  `publish` will ever push. Naming two destinations at once (`--root --out`) is now refused rather
+  than resolved by precedence.
+
 - **`--check-update`.** It forced the update check the tool already performs on its own, and it
   cost a line in five help screens and a parameter threaded through four functions. The question
   it answered is still askable — `prolog-notebook upgrade` checks whatever the daily timer thinks,
@@ -21,6 +29,12 @@ Two fewer flags, and a help screen with nothing on it that is not true.
   no longer anywhere — a heading over a list of two, only one of which it describes, has to be
   corrected as it is read. The summary now ends with two unheaded lines, and nothing beginning
   with a dash is going to be mistaken for a command.
+
+- **Every site carries a `.nojekyll` file.** GitHub Pages runs Jekyll over a published directory
+  unless it is there — and since 0.7.0 each page directory holds the `.prolog.md` it was built
+  from, which Jekyll would happily try to process. It also silently ignores anything whose name
+  begins with an underscore. Emitted by `build` rather than by any publishing step, because the
+  site is wrong without it whoever uploads.
 
 - **A command's own help ends after its own options.** What the block left behind there was
   `-h, --help  this`, printed on a screen that exists because the reader typed `--help`.

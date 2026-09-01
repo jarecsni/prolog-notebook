@@ -80,8 +80,8 @@ configure.
 
 Build a second chapter from anywhere in the project and it joins the same site — `build` walks
 up for an existing `prolog-notebook-site`, then for a `.git`, so chapters that live in
-different folders still publish as one thing. `--here` puts the site beside the notebook
-instead; `--out <dir>` puts it wherever you say.
+different folders still publish as one thing. `--root` skips a nearer site and writes to the
+project's; `--out <dir>` puts it wherever you say.
 
 A site has exactly one runtime and one engine, so the second post costs its own page rather than
 another 6.2 MB. When you upgrade the tool, the next build brings the whole site with it and says
@@ -153,7 +153,7 @@ Each option belongs to a command, and typing one under the wrong command tells y
 | `--stdout` | `execute`, `clear` | print the result instead of writing the file |
 | `--quiet` | `execute`, `clear` | report only failures |
 | `--out <dir>` | `build` | where the site is. Default: the nearest `prolog-notebook-site`, else one at the project root |
-| `--here` | `build` | write `prolog-notebook-site` beside the notebook instead |
+| `--root` | `build` | write to the project's `prolog-notebook-site`, skipping any nearer one |
 | `--port <n>` | `view` | what it listens on. Default 8777, and it takes another if that one is busy |
 | `--no-open` | `view` | print the URL instead of opening a browser |
 
