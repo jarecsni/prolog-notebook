@@ -4,6 +4,38 @@
 
 Two fewer flags, and a help screen with nothing on it that is not true.
 
+### Added
+
+- **`prolog-notebook publish`** — the site at the top of your repository onto a branch a host will
+  serve, in one command:
+
+  ```
+  prolog-notebook-site — 3 notebooks → origin gh-pages
+  Publish this site? [y/N] y
+  Pushed 41 files to origin gh-pages.
+  ```
+
+  It is plain git plumbing, so there is no new dependency and nothing GitHub-specific in the
+  mechanism — GitLab Pages, Codeberg and a bare repo with a post-receive hook all consume a branch
+  in the same way. The commit is built through a **separate index and work-tree**, so it never
+  touches your checkout: no branch switch, no stash, nothing staged, and publishing mid-edit on a
+  dirty tree changes nothing under you. Each publish is parented on the last, so the branch keeps
+  a real history and git refuses a push that would clobber somebody else's work instead of us
+  remembering to ask.
+
+  **It publishes the root site and nothing else, by design.** GitHub Pages serves one site per
+  repository, so a second one could not sit alongside the first — it could only replace what the
+  URL already serves. Two published sites means two repositories.
+
+  `--dry-run` says what would go and pushes nothing. `--yes` skips the question for CI; with
+  nobody at a terminal and no `--yes` it refuses, because a question nobody can answer is a hang
+  and a push nobody agreed to is worse.
+
+  Where git has an author identity the publish is under it, because it is your publish. Where it
+  has none — a CI runner with no global config, which is where this command is most useful — it
+  stands in with `prolog-notebook <prolog-notebook@invalid>` and says so, rather than failing with
+  git's *Please tell me who you are* or inventing a name in silence.
+
 ### Removed
 
 - **`build --here`**, replaced by **`build --root`**. `--here` was a shorthand for
