@@ -969,6 +969,28 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   // It is a way AWAY from the chapter, like a run and like an edit, so the way
   // back is the one that has always existed — reset.
   let cleared = false;
+
+  /**
+   * IS THIS CELL AWAY FROM THE FILE — asked in ONE place, because the two controls
+   * that ask it must never answer differently (869etggku).
+   *
+   * `cleared` counts only when the chapter HAD answers, and that qualifier is the
+   * whole point. Clearing a cell whose answers came with the chapter leaves it
+   * somewhere it can come back from, so reset must be alive. Clearing one whose
+   * only output was the reader's own leaves it exactly as published — the goal is
+   * the goal, the output block is absent either way — and a reset offered there
+   * would set the goal to the goal it has and the output to the empty string it
+   * already is. A control that does nothing.
+   *
+   * The Captain, having just watched the panel row stop saying "cleared": "Reset
+   * buttons were enabled - the Lozenge still said 'no output yet'." Two controls,
+   * opposite claims about the same cell, because they held two copies of this
+   * expression and only one of them was corrected.
+   */
+  const editedFromFile = () => mine
+    || (cleared && published.out !== '')
+    || input.value !== published.goal;
+
   // The author's own spoiler mark (format §5). It is a starting state rather than
   // a lock: the reader can always press show, because withholding the answer from
   // someone who has decided they want it is theatre, not teaching.
@@ -1024,11 +1046,12 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
 
   const refresh = () => {
     if (resetBtn) {
-      // Cleared counts, and it is the reason this cell can be brought back one at
-      // a time out of a page-wide clear. A reset button left grey over an emptied
-      // cell would say the answers are gone for good, which is the opposite of
-      // what this control is for.
-      const changed = mine || cleared || input.value !== published.goal;
+      // Cleared counts WHEN THERE WAS SOMETHING TO CLEAR, and that is the reason
+      // this cell can be brought back one at a time out of a page-wide clear: a
+      // reset button left grey over a cell whose chapter answers are gone would
+      // say they are gone for good. Where the chapter had none, there is nothing
+      // to bring back and the button says so.
+      const changed = editedFromFile();
       cell.dataset.edited = String(changed);
       resetBtn.disabled = !changed;
       resetBtn.title = changed
@@ -1564,7 +1587,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     showsChapter: () => !mine && !cleared && published.out !== '',
     setHidden,
     isHidden: () => hidden,
-    isEdited: () => mine || cleared || input.value !== published.goal,
+    isEdited: editedFromFile,
     goal: () => input.value,
     /** Is there an output on screen at all — the chapter's or the reader's? */
     hasOutput: () => !cleared && (mine || published.out !== ''),

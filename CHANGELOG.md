@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.7.3] — 2026-09-01
+
+### Fixed
+
+- **A cell's reset no longer stays lit when there is nothing to reset to.** In a chapter with no
+  saved answers, running a cell and then clearing left the panel saying *No outputs yet* while
+  that cell's reset stayed enabled — two controls making opposite claims about the same cell. The
+  cell was the one that was wrong: pressing it would have set the goal to the goal it already had
+  and the output to the empty string it already was.
+
+  `cleared` now counts as a change only when the chapter had answers to clear. Clearing a cell
+  whose answers came with the chapter still leaves it somewhere it can come back from, so reset
+  stays alive there and each cell can be brought back one at a time.
+
+  The download was lying the same way, offering *as edited* for a file byte-identical to the
+  published one. Both controls now ask one function rather than keeping two copies of the
+  question — which is how they came to disagree.
+
 ## [0.7.2] — 2026-08-31
 
 ### Fixed

@@ -178,6 +178,19 @@ export function pageFor(source, { engine = fakeEngine(), download, published } =
     /** Press something, by cell and action. */
     press: (id, act) => cell(id).querySelector(`[data-act="${act}"]`).click(),
 
+    /**
+     * Whether one of a cell's controls is offered — the same question `press`
+     * answers by acting, asked without acting.
+     *
+     * A control the page has greyed out is making a claim about the cell, and
+     * until this existed no test could compare that claim with the one the panel
+     * row makes about the same page (869etggku).
+     */
+    offers: (id, act) => {
+      const button = cell(id).querySelector(`[data-act="${act}"]`);
+      return button ? !button.disabled : null;
+    },
+
     /** Press something in the page's own controls. */
     pressPage: (act) => find(`.page-controls [data-act="${act}"]`).click(),
 

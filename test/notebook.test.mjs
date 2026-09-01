@@ -835,6 +835,35 @@ test('a chapter with no saved answers can still clear the ones you made', async 
   // same words it opened with, and the reader's next move is Run, not a search
   // for the way back.
   assert.equal(page.panel().outputs, 'No outputs yet');
+
+  // AND THE CELL AGREES WITH THE ROW, which is the assertion this suite never
+  // made and the reason the Captain found the two contradicting each other in
+  // 0.7.2: "Reset buttons were enabled - the Lozenge still said 'no output yet'"
+  // (869etggku). Pressing that reset would have set the goal to the goal it has
+  // and the output to the empty string it already is.
+  assert.equal(page.offers('q-auto', 'reset'), false,
+    'nothing to reset to: this cell is exactly as published');
+});
+
+test('a cleared cell that CAN come back keeps its own way back', async () => {
+  // The other half of the same rule. Clearing answers the chapter shipped leaves
+  // every cell somewhere it can return from, one at a time — a reset left grey
+  // there would say the answers are gone for good, which is the opposite of what
+  // the control is for.
+  const { page } = reactive(REACTIVE);
+  assert.equal(page.offers('q-auto', 'reset'), false, 'untouched to begin with');
+
+  page.pressPage('clear-all');
+  await page.settle(1);
+  assert.equal(page.panel().outputs, '2 outputs cleared');
+  assert.equal(page.offers('q-auto', 'reset'), true, 'the chapter’s answers are one press away');
+
+  page.press('q-auto', 'reset');
+  await page.settle(1);
+  // One back, one still cleared — and the row reports the remainder rather than
+  // the cell that just returned, which is what a half-cleared page is.
+  assert.equal(page.panel().outputs, '1 output cleared');
+  assert.equal(page.offers('q-auto', 'reset'), false, 'this one is back to untouched');
 });
 
 test('a chapter that shipped answers still offers them back', async () => {
