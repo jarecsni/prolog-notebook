@@ -56,8 +56,10 @@ test('once a day, and the rest of the day from what it remembered', async () => 
   assert.equal(asked, 2, 'the day turned over');
 });
 
-test('--check-update asks anyway, and answers either way', async () => {
+test('a forced check asks anyway, and answers either way', async () => {
   // The one case where "you are on the latest" is worth saying: the reader asked.
+  // `upgrade` is what forces it now — the flag that used to is gone (869etgxn3) — and
+  // this is the behaviour that made removing it safe.
   const store = memory({ checked: Date.now(), latest: '0.3.1' });
   const notice = await updateNotice({
     version: '0.3.1', force: true, store, latest: async () => '0.3.1', env: {},

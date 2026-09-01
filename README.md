@@ -157,13 +157,12 @@ Each option belongs to a command, and typing one under the wrong command tells y
 | `--port <n>` | `view` | what it listens on. Default 8777, and it takes another if that one is busy |
 | `--no-open` | `view` | print the URL instead of opening a browser |
 
-Three work anywhere, because they are about the tool rather than about a notebook:
+Two are about the tool rather than about a notebook:
 
 | flag | |
 |---|---|
-| `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright |
-| `--check-update` | ask npm whether a newer one exists, and say so either way — forced, whatever the daily check thinks, and answered even down a pipe |
-| `-h`, `--help` | help for the command you named, or all of them if you named none |
+| `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright. On its own — it is a command, not a modifier |
+| `-h`, `--help` | help for the command you named, or the summary if you named none. This one really does work anywhere |
 
 ```sh
 prolog-notebook upgrade      # fetch the latest
@@ -178,8 +177,10 @@ When it does real work it asks npm, at most once a day, whether there is a newer
 says nothing unless there is. Never for `--help` or `--version`, never under `--quiet`, never
 when `CI` or `NO_UPDATE_NOTIFIER` is set, and never blocking the run. A registry it cannot
 reach is reported once a day rather than on every command — silence there would be
-indistinguishable from *you are up to date*. Ask outright with `--check-update` and it answers
-either way.
+indistinguishable from *you are up to date*.
+
+To ask outright, run `prolog-notebook upgrade`: it checks whatever the daily timer thinks, says
+where you stand either way, and fetches a new version only if there is one.
 
 When it finds something newer **and you are at a terminal**, it offers to fetch it *before*
 doing the work — and if you say yes it upgrades, then runs your command on the new version.

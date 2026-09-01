@@ -118,17 +118,26 @@ const ALIASES = { exec: 'execute', run: 'execute' };
 const commandNamed = (arg) => (COMMANDS[arg] ? arg : ALIASES[arg] ?? null);
 
 /**
- * What works anywhere, and one line saying what --help has just done.
+ * THE TWO THAT ARE NOT COMMANDS, on the summary and nowhere else.
  *
- * The flag is contextual and that line was not: `-h, --help  this` was written
- * before a command could be asked about itself and nobody revisited it, so the
- * summary sat there promising the summary (869ery5hj). Each screen says which
- * of the two it is.
+ * There used to be three, under a heading that said "Anywhere", and only one of
+ * them was:
+ *
+ *   --check-update  gone. It forced the update check that the tool performs on
+ *                   its own anyway, and `upgrade` already answers the question
+ *                   outright — printing the verdict either way and acting only
+ *                   when there is something to act on. A flag carried by every
+ *                   command to force something that happens by itself is a
+ *                   sentence in five help screens buying nothing.
+ *   --version       no longer anywhere: it is its own whole command, and
+ *                   `build --version` was a way of asking that never made sense.
+ *   -h, --help      genuinely anywhere, and the only one that ever was.
+ *
+ * So no heading. Two lines beginning with dashes are not going to be mistaken
+ * for commands, and a heading that has to be qualified is worse than none.
  */
-const anywhere = (help) => `Anywhere
-  --check-update  ask npm whether a newer one exists, and say so either way
-  --version       version, engine and copyright
-  -h, --help      ${help}
+const GLOBALS = `  --version   version, engine and copyright — on its own
+  -h, --help  this, or one command's: prolog-notebook build --help
 `;
 
 /**
@@ -195,7 +204,7 @@ const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
 ${Object.keys(COMMANDS).map(commandLine).join('\n')}
 
-${anywhere("this, or one command's: prolog-notebook build --help")}`;
+${GLOBALS}`;
 
 /**
  * JUST THE COMMAND ASKED ABOUT (869erqra0).
@@ -204,12 +213,17 @@ ${anywhere("this, or one command's: prolog-notebook build --help")}`;
  * prolog-notebook cmd --help I want only help on that cmd." Printing everything
  * makes the reader find their command again in a page they did not ask for.
  *
- * What works anywhere stays, because it is true of the command they asked about
- * as much as of any other.
+ * NOTHING GLOBAL DOWN HERE ANY MORE. It used to end with the three that worked
+ * anywhere; two of those are gone, and the survivor is `--help` — which the
+ * reader has just used, on a screen that exists because they used it. Telling
+ * them it is available is the one piece of help nobody in this position needs.
  */
 function helpFor(name) {
   const { note } = COMMANDS[name];
-  return `${commandHelp(name)}\n\n${anywhere('this')}${note ? `\n${note}` : ''}`;
+  // The block that used to sit here was also, incidentally, what ended the screen
+  // with a newline and held the note off the last option. Its going is not a
+  // reason for the page to run into the prompt.
+  return `${commandHelp(name)}\n${note ? `\n${note}` : ''}`;
 }
 
 /**
@@ -331,13 +345,12 @@ function canAsk() {
  * @returns {Promise<number|null>} an exit code when the command has been handed
  *   to a newer version, null to carry on here.
  */
-async function upgradeFirst({ quiet = false, asked = false } = {}) {
-  // ASKED OUTRIGHT ALWAYS ANSWERS (869erqra0). A terminal is needed to OFFER the
-  // upgrade, never to report one: `--check-update` down a pipe used to check
-  // nothing and say nothing, which is indistinguishable from "you are up to
-  // date" — the one thing this must never look like.
-  if (!asked && (!canAsk() || quiet)) return null;
-  const ahead = await updateNotice({ version: VERSION, force: asked })
+async function upgradeFirst({ quiet = false } = {}) {
+  // A terminal is needed to OFFER an upgrade, and there is no longer a flag that
+  // forces the question: `upgrade` is the way to ask outright, and it answers
+  // either way rather than going quiet on a pipe.
+  if (!canAsk() || quiet) return null;
+  const ahead = await updateNotice({ version: VERSION })
     .catch(() => ({ message: null, newer: null }));
   if (ahead.message) process.stderr.write(`${ahead.message}\n`);
   // The notice is printed above whatever happens next; only the question needs
@@ -382,24 +395,23 @@ async function main(argv) {
     return 0;
   }
   if (args.includes('--version') || args.includes('-V')) {
+    // ON ITS OWN, OR NOT AT ALL. `--version` asks what this installation is; it
+    // is not a way of running a command, and `build chapter.md --version` was a
+    // sentence with two verbs in it. Refusing says which of the two was meant far
+    // better than picking one silently.
+    if (args.length > 1) {
+      process.stderr.write('--version is a command of its own: prolog-notebook --version\n');
+      return 2;
+    }
     // No update check here, deliberately: --version and --help are what someone
     // types at an install that is not working, and they stay instant and offline.
     process.stdout.write(await version());
     return 0;
   }
 
-  // Asked for explicitly. On its own it is the whole command; alongside `run` it
-  // forces the check that would otherwise wait for the day to turn over.
-  const asked = args.includes('--check-update');
-  if (asked && args.filter((a) => !a.startsWith('-')).length === 0) {
-    const { message, newer } = await updateNotice({ version: VERSION, force: true });
-    if (message) process.stderr.write(`${message}\n`);
-    return newer ? (await offerUpgrade(newer)) ?? 0 : 0;
-  }
-
   const command = args.shift();
-  if (command === 'view' || command === 'build') return page(command, args, asked);
-  if (command === 'clear') return clear(args, asked);
+  if (command === 'view' || command === 'build') return page(command, args);
+  if (command === 'clear') return clear(args);
   if (command === 'upgrade') {
     const { message, newer } = await updateNotice({ version: VERSION, force: true });
     if (message) process.stderr.write(`${message}\n`);
@@ -429,7 +441,6 @@ async function main(argv) {
       options.limit = value;
     } else if (arg === '--stdout') options.stdout = true;
     else if (arg === '--quiet') options.quiet = true;
-    else if (arg === '--check-update') { /* handled above, and not a file */ }
     else if (arg.startsWith('-')) {
       process.stderr.write(unknownOption(arg, 'execute'));
       return 2;
@@ -442,25 +453,24 @@ async function main(argv) {
   }
   if (!options.quiet) process.stderr.write(`${RUNAWAY_WARNING}\n`);
 
-  const jump = await upgradeFirst({ quiet: options.quiet, asked });
+  const jump = await upgradeFirst({ quiet: options.quiet });
   if (jump !== null) return jump;
   // Whatever upgradeFirst has just reported must not be reported again below.
-  // Asked outright, it always reports now, terminal or not.
-  checked = asked || (canAsk() && !options.quiet);
+  checked = canAsk() && !options.quiet;
 
   // STARTED NOW, READ AT THE END. The registry is somebody else's machine on
   // somebody else's network, and none of that should stand between the reader
   // and their answers — so the question is asked while the work happens and the
   // answer is collected once it is done.
   //
-  // Not asked at all under --quiet, unless it was asked for outright: --quiet
-  // means "report only failures", and news about a newer version is not one. Not
-  // starting the request is better than starting it and discarding the answer.
-  // The other half: nobody to ask, so the question is asked ALONGSIDE the work
-  // and reported at the end. A terminal has had its offer already.
-  const update = checked || (options.quiet && !asked)
+  // Not asked at all under --quiet: that means "report only failures", and news
+  // about a newer version is not one. Not starting the request is better than
+  // starting it and discarding the answer. The other half: nobody to ask, so the
+  // question is asked ALONGSIDE the work and reported at the end. A terminal has
+  // had its offer already.
+  const update = checked || options.quiet
     ? Promise.resolve({ message: null, newer: null })
-    : updateNotice({ version: VERSION, force: asked }).catch(() => ({ message: null, newer: null }));
+    : updateNotice({ version: VERSION }).catch(() => ({ message: null, newer: null }));
 
   // One engine for the whole invocation, restarted between files. A notebook is
   // a world of its own — one cell is one virtual file, and two chapters may
@@ -496,14 +506,12 @@ async function main(argv) {
  * No engine, no network and no update check: this is a text operation on a file
  * the reader already has.
  */
-async function clear(args, asked = false) {
+async function clear(args) {
   const options = { stdout: false, quiet: false };
   const files = [];
   for (const arg of args) {
     if (arg === '--stdout') options.stdout = true;
     else if (arg === '--quiet') options.quiet = true;
-    // Handled by the caller, and not a file.
-    else if (arg === '--check-update') { /* global */ }
     else if (arg.startsWith('-')) {
       process.stderr.write(unknownOption(arg, 'clear'));
       return 2;
@@ -518,7 +526,7 @@ async function clear(args, asked = false) {
   // put `view` and `build` through it and this command shipped afterwards, so it
   // never looked. Emptying somebody's notebook is as real as work gets here, and
   // before the work is the only point at which a newer version changes anything.
-  const jump = await upgradeFirst({ quiet: options.quiet, asked });
+  const jump = await upgradeFirst({ quiet: options.quiet });
   if (jump !== null) return jump;
 
   let status = 0;
@@ -557,7 +565,7 @@ async function clear(args, asked = false) {
  * whole reason a built page is readable before any engine arrives. Use `run` to
  * put them there.
  */
-async function page(command, args, asked = false) {
+async function page(command, args) {
   const options = { out: null, port: 8777, open: true };
   const files = [];
   while (args.length) {
@@ -580,8 +588,6 @@ async function page(command, args, asked = false) {
         return 2;
       }
     } else if (arg === '--no-open') options.open = false;
-    // Handled by the caller, and not a file.
-    else if (arg === '--check-update') { /* global */ }
     else if (arg.startsWith('-')) {
       process.stderr.write(unknownOption(arg, command));
       return 2;
@@ -595,7 +601,7 @@ async function page(command, args, asked = false) {
   // The same offer the execute path makes, and for the same reason: a server about to
   // start, or a directory about to be written, is work that a newer version
   // should be doing.
-  const jump = await upgradeFirst({ asked });
+  const jump = await upgradeFirst();
   if (jump !== null) return jump;
 
   const file = files[0];
