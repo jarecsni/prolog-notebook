@@ -524,7 +524,18 @@ function mountPageBar(root, options, bus, programs, queries) {
       // COUNTED FROM THE PAGE, which is the only count that stays true for both
       // kinds of chapter: one published with its answers in it, and one still
       // being written where every output on screen is the reader's own.
-      outputsState.textContent = gone.length > 0
+      //
+      // AND "CLEARED" IS SAID ONLY WHILE IT IS A STATE RATHER THAN A MEMORY, which
+      // is the same `restorable` test that governs the button — one condition for
+      // the whole row rather than one for each half.
+      //
+      // Clearing answers a chapter shipped leaves the page somewhere it can come
+      // back from, and the row says so. Clearing a run of the reader's own leaves
+      // it exactly where it started: nothing to see, nothing to restore, nothing
+      // that distinguishes it from a chapter never run. Saying "1 output cleared"
+      // there reports history to somebody asking about now, and invites a question
+      // — how do I get it back — that has no answer.
+      outputsState.textContent = gone.length > 0 && restorable > 0
         ? `${plural(gone.length, 'output')} cleared`
         : left.length > 0
           ? `${plural(left.length, 'output')} on this page`

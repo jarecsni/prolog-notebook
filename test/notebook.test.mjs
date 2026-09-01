@@ -814,7 +814,6 @@ test('a chapter with no saved answers can still clear the ones you made', async 
   page.pressPage('clear-all');
   await page.settle(1);
   assert.deepEqual(page.out('q-auto'), []);
-  assert.equal(page.panel().outputs, '1 output cleared');
   // NOTHING OF THE CHAPTER'S TO RESTORE — it never had any — so the button must
   // not offer to put it back. The Captain, on the first version of this: "it
   // shows the incorrect 'Restore output' - disabled … dont show restore when
@@ -830,9 +829,12 @@ test('a chapter with no saved answers can still clear the ones you made', async 
   assert.equal(page.panel().outputsButton, 'Clear all outputs');
   assert.equal(page.panel().outputsDisabled, true);
 
-  // And the count still says what happened, because that part was never a lie:
-  // the reader's own output is gone, and that is why the page looks empty.
-  assert.equal(page.panel().outputs, '1 output cleared');
+  // AND THE ROW READS AS THE PAGE IT IS, not as the thing that happened to it.
+  // "1 output cleared" is a fact about history; the row's job is what is true now,
+  // and now is indistinguishable from a chapter nobody has run — so it says the
+  // same words it opened with, and the reader's next move is Run, not a search
+  // for the way back.
+  assert.equal(page.panel().outputs, 'No outputs yet');
 });
 
 test('a chapter that shipped answers still offers them back', async () => {
@@ -841,6 +843,9 @@ test('a chapter that shipped answers still offers them back', async () => {
   const { page } = reactive(REACTIVE);
   page.pressPage('clear-all');
   await page.settle(1);
+  // Here "cleared" IS the state and not a memory: the chapter's answers are one
+  // press away, so the row names a place the reader can come back from.
+  assert.match(page.panel().outputs, /outputs? cleared$/);
   assert.equal(page.panel().outputsButton, 'Restore outputs');
   assert.equal(page.panel().outputsDisabled, false, 'there is something to put back');
 
