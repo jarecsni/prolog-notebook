@@ -150,6 +150,28 @@ test('naming a chapter builds that chapter, and leaves the others alone', async 
   assert.match(await readFile(page(root, ''), 'utf8'), /<a href="b\/">Two<\/a>/);
 });
 
+test('a chapter already bound through a sub-book is not bound again', async () => {
+  const root = await project({
+    [SPINE]: spine(`# Studies\n\n- [Bratko](bratko/${SPINE})\n`),
+    [`bratko/${SPINE}`]: spine('# B\n\n- [A](a.prolog.md)\n- [B](b.prolog.md)\n'),
+    'bratko/a.prolog.md': NOTEBOOK('One'),
+    'bratko/b.prolog.md': NOTEBOOK('Two'),
+  });
+  // TWO WAYS THIS WENT WRONG, both from standing inside the sub-book:
+  //
+  // 1. findSpine walked up and found BRATKO'S spine, so the chapter was
+  //    published at /a/ rather than /bratko/a/ — a page the full build puts
+  //    somewhere else entirely.
+  // 2. bind() only looked at the root spine's own text, saw no (bratko/a.prolog.md)
+  //    in it, and appended one — giving the chapter a SECOND page at the top of
+  //    the site, from a build the author thought was about one chapter.
+  const { stderr } = await run(['build', 'a.prolog.md'], join(root, 'bratko'));
+  assert.doesNotMatch(stderr, /added/, 'it is already in this book');
+  assert.ok(existsSync(page(root, 'bratko/a')), 'where the book puts it');
+  assert.ok(!existsSync(join(root, SITE, 'a')), 'and nowhere else');
+  assert.doesNotMatch(await readFile(join(root, SPINE), 'utf8'), /a\.prolog\.md/);
+});
+
 test('one chapter in two books is two pages, from one name', async () => {
   const root = await project({
     [SPINE]: spine(`# S\n\n- [As read](a/${SPINE})\n- [As taught](b/${SPINE})\n`),

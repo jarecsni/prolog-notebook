@@ -114,6 +114,35 @@ test('it serves what was built, and nothing else at all', async () => {
   }
 });
 
+test('a directory is its index, and a missing slash is a redirect', async () => {
+  // A BOOK IS A TREE OF DIRECTORIES (869eu5tn7), so this now has to answer for
+  // /bratko/ as well as for /bratko/index.html.
+  const files = new Map([
+    ['index.html', { text: '<h1>shelf</h1>' }],
+    ['bratko/index.html', { text: '<h1>book</h1>' }],
+    ['bratko/cut/index.html', { text: '<h1>chapter</h1>' }],
+  ]);
+  const server = await serve(files, { port: 0 });
+  try {
+    const get = (path) => fetch(new URL(path, server.url), { redirect: 'manual' });
+    assert.match(await (await get('/bratko/')).text(), /book/);
+    assert.match(await (await get('/bratko/cut/')).text(), /chapter/);
+    assert.match((await get('/bratko/')).headers.get('content-type'), /text\/html/);
+
+    // REDIRECTED RATHER THAN SERVED. Handing the page back at /bratko would
+    // leave the browser resolving every `../` one level too high, so the chapter
+    // would render and its stylesheet, runtime and engine would all 404.
+    const bare = await get('/bratko');
+    assert.equal(bare.status, 301);
+    assert.equal(bare.headers.get('location'), '/bratko/');
+
+    assert.equal((await get('/nowhere/')).status, 404);
+    assert.equal((await get('/bratko/cut')).status, 301);
+  } finally {
+    await server.close();
+  }
+});
+
 test('a page being written must not be cached', async () => {
   const server = await serve(built(), { port: 0 });
   try {

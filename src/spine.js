@@ -21,7 +21,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path';
 import { NotebookError, frontMatterOf } from './format.js';
-import { pageName } from './site.js';
+import { findSite, pageName } from './site.js';
 
 /** One name per book, so a book is identified by its directory. */
 export const SPINE = 'prolog-notebook-index.md';
@@ -268,22 +268,19 @@ export function navigationOf(root) {
 /**
  * The spine governing a notebook, or null.
  *
- * The same walk site.js does, and deliberately the same shape: a spine beside a
- * site is the author's own statement of where their project begins, which makes
- * it a better clue than either of the ones we infer.
+ * THE SPINE BESIDE THE SITE, never the nearest one walking up. That distinction
+ * is the whole rule: a site has exactly one spine, and every other spine in the
+ * project is a SUB-BOOK, reached only by being linked from it.
+ *
+ * Walking up would find the wrong one. Standing at the project root and building
+ * bratko/lists.prolog.md, the nearest spine is Bratko's own — so the chapter
+ * would be published at /lists/ rather than /bratko/lists/, quietly duplicating
+ * a page the full build puts somewhere else. A file's book is not a property of
+ * where it sits on disk any more than its URL is (§3).
  */
 export function findSpine(from) {
-  const start = resolvePath(from);
-  let dir = existsSync(start) && statSync(start).isDirectory() ? start : dirname(start);
-  for (;;) {
-    const candidate = join(dir, SPINE);
-    if (existsSync(candidate)) return candidate;
-    const up = dirname(dir);
-    // All the way to the filesystem root, as site.js walks — but with no
-    // fallback: a site can be invented from a working directory, a book cannot.
-    if (up === dir) return null;
-    dir = up;
-  }
+  const spine = join(dirname(findSite(from)), SPINE);
+  return existsSync(spine) ? spine : null;
 }
 
 // ------------------------------------------------------------------ writing

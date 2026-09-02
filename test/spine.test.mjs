@@ -159,14 +159,20 @@ test('a link to something that is not a notebook is just a link', () => {
   assert.equal(book.blocks.filter((b) => b.kind === 'book').length, 0);
 });
 
-test('it finds the book a chapter belongs to', () => {
+test('it finds the book a chapter belongs to — the site\'s, not the nearest', () => {
   const where = project({
-    [SPINE]: spine('# S\n\n- [Lists](notes/lists.prolog.md)\n'),
-    'notes/lists.prolog.md': CHAPTER,
+    '.git/HEAD': 'ref: refs/heads/main\n',
+    [SPINE]: spine(`# S\n\n- [Bratko](bratko/${SPINE})\n`),
+    [`bratko/${SPINE}`]: spine('# B\n\n- [Lists](lists.prolog.md)\n'),
+    'bratko/lists.prolog.md': CHAPTER,
   });
-  assert.equal(findSpine(join(where, 'notes/lists.prolog.md')), join(where, SPINE));
-  assert.equal(findSpine(join(where, 'notes')), join(where, SPINE));
-  assert.equal(findSpine(tmpdir()), null);
+  // A SITE HAS EXACTLY ONE SPINE. Bratko's is a sub-book, reached by being linked
+  // from the site's — never by standing next to it. Walking up would find it
+  // first and publish its chapter at /lists/ instead of /bratko/lists/,
+  // duplicating a page the full build puts somewhere else.
+  assert.equal(findSpine(join(where, 'bratko/lists.prolog.md')), join(where, SPINE));
+  assert.equal(findSpine(join(where, 'bratko')), join(where, SPINE));
+  assert.equal(findSpine(join(tmpdir(), 'nothing-here')), null);
 });
 
 test('a seeded spine is a spine, and gains entries without being rearranged', () => {
