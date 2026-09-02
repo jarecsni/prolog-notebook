@@ -18,11 +18,12 @@ import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
 import { buildFiles, livePages, titleOf } from '../src/build.js';
 import {
-  SITE, blocksFromDirectory, findSite, indexHtml, isShared, pageName, pagesIn, prefixFor,
-  projectSite, reconcile, shownAs, sourceOf,
+  SITE, blocksFromDirectory, findSite, indexHtml, isShared, linkFrom, pageName, pagesIn,
+  prefixFor, projectSite, reconcile, shownAs, sourceOf,
 } from '../src/site.js';
 import {
-  SPINE, booksOf, chaptersOf, contentsOf, findSpine, resolveSpine, seedSpine, withEntry,
+  SPINE, booksOf, chaptersOf, contentsOf, findSpine, navigationOf, resolveSpine, seedSpine,
+  withEntry,
 } from '../src/spine.js';
 import { NOBODY, pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
 import { openInBrowser, serve } from '../src/serve.js';
@@ -858,6 +859,10 @@ async function buildSite(files, options) {
     }
   }
 
+  // WHERE EACH PAGE SITS, from the tree rather than from the page (869eun9qa).
+  // A chapter built with no book gets none of this, and looks exactly as it did.
+  const nav = book ? navigationOf(book) : new Map();
+
   let shared = 0;
   const failed = [];
   const wrote = new Map();
@@ -867,6 +872,7 @@ async function buildSite(files, options) {
     const files_ = buildFiles(read.notebook, read.source, {
       filename: basename(chapter.source),
       prefix: prefixFor(chapter.url),
+      nav: wayOut(chapter, nav.get(chapter.url)),
     });
     for (const [name, entry] of files_) {
       // The runtime, the engine and the stylesheet are the site's; the page is
@@ -896,7 +902,10 @@ async function buildSite(files, options) {
       const chapter = sourceOf(site, other);
       if (!chapter) { stranded.push(other); continue; }
       const files_ = buildFiles(parse(chapter.source), chapter.source, {
-        filename: chapter.filename, prefix: prefixFor(other),
+        filename: chapter.filename,
+        prefix: prefixFor(other),
+        nav: wayOut({ url: other, trail: bound.find((c) => c.url === other)?.trail },
+          nav.get(other)),
       });
       for (const [name, entry] of files_) {
         if (isShared(name)) continue;
@@ -923,7 +932,10 @@ async function buildSite(files, options) {
     const target = join(site, one.url, 'index.html');
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, indexHtml({
-      title: one.title ?? undefined, blocks, prefix: prefixFor(one.url),
+      title: one.title ?? undefined,
+      blocks,
+      prefix: prefixFor(one.url),
+      trail: (one.trail ?? []).map((a) => ({ title: a.title, href: linkFrom(one.url, a.url) })),
     }));
   }
 
@@ -983,6 +995,27 @@ async function buildSite(files, options) {
   process.stderr.write(`Host ${shownAs(site)} over HTTP — opening it from disk`
     + ' will not run.\n');
   return 0;
+}
+
+/**
+ * One chapter's navigation, with every URL made relative to that chapter.
+ *
+ * RELATIVE, because a project site is served from a subdirectory — GitHub Pages
+ * puts it at /<repo>/ — so an absolute link would leave the site entirely.
+ */
+function wayOut(chapter, around) {
+  if (!chapter.trail) return null;
+  const to = (entry) => (entry
+    ? { title: entry.title, href: linkFrom(chapter.url, entry.url) }
+    : null);
+  return {
+    trail: chapter.trail.map((a) => ({ title: a.title, href: linkFrom(chapter.url, a.url) })),
+    prev: to(around?.prev),
+    next: to(around?.next),
+    // Named "Contents" rather than by the book, because the crumb directly above
+    // already says which book, and repeating it reads as a different place.
+    up: around?.up ? { title: 'Contents', href: linkFrom(chapter.url, around.up.url) } : null,
+  };
 }
 
 /** A first guess at what a book is called: the project's own directory. */

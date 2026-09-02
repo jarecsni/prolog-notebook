@@ -366,6 +366,13 @@ prose. A link to another spine is a sub-book, published beneath its parent, so o
 can hold several books; it cannot hold several *sites*, because GitHub Pages serves one per
 repository. The whole format is [docs/binding.md §3](binding.md).
 
+**A bound chapter knows where it sits.** It gets a breadcrumb of the books above it, cards at
+the foot naming the chapters either side, a link back to its contents, and `←`/`→` keys —
+which stand down whenever a query box or a prediction has focus. The card titles are the ones
+you wrote in the spine, not the chapter's H1, because those are the words the reader clicked.
+A chapter built with no book gets none of this, and your markdown is untouched either way:
+navigation is matter the binder puts *around* a chapter, never inside it.
+
 `--root` writes to the project's site even when a nearer one would have won the walk, and
 `--out <dir>` puts it wherever you say. Every build prints where it went, because writing
 outside the directory you named is not something a tool should do quietly.

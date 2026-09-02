@@ -106,7 +106,7 @@ export const NOJEKYLL = '.nojekyll';
  *
  * @param {{frontMatter: Map<string,string>, cells: object[]}} notebook parsed
  * @param {string} source the notebook's own bytes, for the download
- * @param {{filename?: string, src?: URL, engine?: URL, prefix?: string}} [options]
+ * @param {{filename?: string, src?: URL, engine?: URL, prefix?: string, nav?: object}} [options]
  *   `src` is the directory holding the runtime modules and `engine` the
  *   directory holding swipl-wasm's bundle — arguments rather than constants so a
  *   test can point them anywhere and an installed package can find its own.
@@ -123,10 +123,11 @@ export function buildFiles(notebook, source, options = {}) {
     engine = ENGINE_HOME,
     prefix = './',
     engineVersion = ENGINE_VERSION,
+    nav = null,
   } = options;
 
   const files = new Map();
-  files.set('index.html', { text: page(notebook, prefix) });
+  files.set('index.html', { text: page(notebook, prefix, nav) });
   files.set('app.js', { text: app(source, filename, prefix) });
   files.set('notebook.css', { copy: new URL('notebook.css', src) });
   for (const module of RUNTIME) files.set(`lib/${module}`, { copy: new URL(module, src) });
@@ -247,7 +248,7 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-function page(notebook, prefix) {
+function page(notebook, prefix, nav) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -278,12 +279,91 @@ function page(notebook, prefix) {
   directory over HTTP, or run <code>prolog-notebook view</code> on the notebook
   itself. The chapter is readable either way; only the buttons need this.
 </div>
-${renderNotebook(notebook)}
+${crumbs(nav)}${renderNotebook(notebook)}${chapterNav(nav)}
 </main>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js"></script>${keys(nav)}
 </body>
 </html>
 `;
+}
+
+/**
+ * WHERE THIS PAGE SITS, and how to get out of it (869eun9qa).
+ *
+ * A published chapter used to have no links on it at all: somebody arriving from
+ * a search result was in a dead end, with nothing but URL-trimming to get them to
+ * the contents. This is the way out.
+ *
+ * GENERATED MATTER, NOT NOTEBOOK CONTENT. binding.md §1 is emphatic that a binder
+ * does not reach into a chapter — it emits its own pages around it — and the
+ * precedent for merging one of those into the chapter's own page is the kicker,
+ * which is there "because a separate cover page on the web is a click in the
+ * way". The same argument applies twice over to navigation. So the chapter file
+ * is untouched, and a chapter built with no book gets none of this.
+ */
+function crumbs(nav) {
+  if (!nav?.trail?.length) return '';
+  const links = nav.trail
+    .map((a) => `<a href="${escapeHtml(a.href)}">${escapeHtml(a.title)}</a>`)
+    .join('<span aria-hidden="true">\u203a</span>');
+  return `<nav class="crumbs" aria-label="Breadcrumb">${links}</nav>\n`;
+}
+
+/**
+ * The foot of a chapter: what comes before it, what comes after, and its contents.
+ *
+ * THE TITLE IS THE CONTROL, NOT THE ARROW. A bare pair of chevrons makes a reader
+ * click a glyph and find out afterwards where they went; naming the destination
+ * lets them decide before they move.
+ *
+ * A MISSING NEIGHBOUR IS ABSENT, NOT DISABLED. At the first chapter there is no
+ * card on the left. A disabled control claims "this could happen, but not now",
+ * and at chapter one there is no previous chapter — not now, not ever.
+ *
+ * The names come from the SPINE rather than from each chapter's H1: the reader
+ * clicked those words in the contents, and a book is allowed to rename a chapter
+ * for its own table of contents (§3).
+ */
+function chapterNav(nav) {
+  if (!nav) return '';
+  const card = (entry, rel, label) => (entry
+    ? `<a class="${rel}" rel="${rel}" href="${escapeHtml(entry.href)}">`
+      + `<span class="dir">${label}</span>`
+      + `<span class="name">${escapeHtml(entry.title)}</span></a>`
+    : '');
+  const cards = card(nav.prev, 'prev', '\u2190 Previous') + card(nav.next, 'next', 'Next \u2192');
+  const up = nav.up
+    ? `<p class="up"><a href="${escapeHtml(nav.up.href)}">${escapeHtml(nav.up.title)}</a></p>`
+    : '';
+  if (!cards && !up) return '';
+  return `\n<nav class="chapter-nav${nav.prev ? '' : ' only-next'}" aria-label="Chapter">`
+    + `${cards}</nav>\n${up}`;
+}
+
+/**
+ * The arrow keys, and the one place they must do nothing.
+ *
+ * INLINE AND NOT A MODULE, so it works on the page that shows the boot warning:
+ * being unable to run the engine is exactly when a reader wants to leave.
+ *
+ * IT READS THE LINKS RATHER THAN CARRYING ITS OWN COPY of the URLs, so there is
+ * one place a destination is written down. And it stands down whenever a cell or
+ * a prediction box has focus — on this page of all pages, eating cursor movement
+ * would be maddening.
+ */
+function keys(nav) {
+  if (!nav?.prev && !nav?.next) return '';
+  return `
+<script>
+addEventListener('keydown', function (e) {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+  var el = document.activeElement;
+  if (el && (el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName))) return;
+  var rel = e.key === 'ArrowLeft' ? 'prev' : e.key === 'ArrowRight' ? 'next' : null;
+  var link = rel && document.querySelector('.chapter-nav a[rel=' + rel + ']');
+  if (link) { e.preventDefault(); location.href = link.href; }
+});
+</script>`;
 }
 
 /**

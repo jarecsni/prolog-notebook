@@ -228,9 +228,11 @@ export function pagesIn(dir) {
  * the palette, the dark mode and the typography, and cannot drift from the pages
  * it lists.
  *
- * @param {{title?: string, blocks?: object[], prefix?: string}} book
+ * @param {{title?: string, blocks?: object[], prefix?: string, trail?: object[]}} book
  */
-export function indexHtml({ title = 'Prolog notebooks', blocks = [], prefix = './' } = {}) {
+export function indexHtml({
+  title = 'Prolog notebooks', blocks = [], prefix = './', trail = [],
+} = {}) {
   // PREFACE IS WHAT COMES BEFORE THE FIRST ENTRY. After that, prose belongs to
   // the section it sits in — the rule has to be positional, because a heading
   // introducing the first part necessarily precedes every entry under it.
@@ -293,13 +295,33 @@ export function indexHtml({ title = 'Prolog notebooks', blocks = [], prefix = '.
 </head>
 <body>
 <main>
-<h1>${escapeHtml(title)}</h1>
+${crumbsHtml(trail)}<h1>${escapeHtml(title)}</h1>
 ${preface.map((b) => `<p>${escapeHtml(b.text)}</p>`).join('\n')}
 ${body}
 </main>
 </body>
 </html>
 `;
+}
+
+/**
+ * One page's link to another, both given as site-relative URLs.
+ *
+ * RELATIVE, NEVER ABSOLUTE. A project site is served from a subdirectory —
+ * /prolog-studies/ on GitHub Pages — so a link beginning with / leaves the site
+ * altogether. Relative links also mean the directory works from a file server, a
+ * zip somebody unpacked, or any host at any path.
+ */
+export function linkFrom(from = '', to = '') {
+  const here = from.split('/').filter(Boolean);
+  const there = to.split('/').filter(Boolean);
+  let same = 0;
+  while (same < here.length && same < there.length && here[same] === there[same]) same += 1;
+  const up = '../'.repeat(here.length - same);
+  const down = there.slice(same).map(encodeURIComponent).join('/');
+  // Somewhere above with nothing to descend into still needs a path: './' is this
+  // directory, and an empty href is the current page.
+  return `${up}${down}${down ? '/' : ''}` || './';
 }
 
 /**
@@ -313,6 +335,20 @@ ${body}
 export function prefixFor(url = '') {
   const depth = url.split('/').filter(Boolean).length;
   return depth === 0 ? './' : '../'.repeat(depth);
+}
+
+/**
+ * A sub-book's way back up (869eun9qa).
+ *
+ * The class comes from the chapter stylesheet this page already links, so the
+ * contents page and the chapters cannot end up with two different breadcrumbs.
+ */
+function crumbsHtml(trail) {
+  if (!trail.length) return '';
+  const links = trail
+    .map((a) => `<a href="${escapeHtml(a.href)}">${escapeHtml(a.title)}</a>`)
+    .join('<span aria-hidden="true">\u203a</span>');
+  return `<nav class="crumbs" aria-label="Breadcrumb">${links}</nav>\n`;
 }
 
 /** Chapters at any depth, for the count a book shows beside its name. */
