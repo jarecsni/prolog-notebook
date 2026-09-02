@@ -204,3 +204,117 @@ test('a site that has never had a spine keeps the behaviour it had', async () =>
   const index = await readFile(join(out, 'index.html'), 'utf8');
   assert.ok(index.indexOf('href="a/"') < index.indexOf('href="b/"'), 'alphabetical, as before');
 });
+
+// ---------------------------------------------------------------- navigation
+//
+// A reader can get out of a chapter (869eun9qa). Generated matter that the binder
+// puts AROUND a chapter, so the notebook is untouched and a chapter built with no
+// book has none of it.
+
+test('every chapter says where it sits and where to go next', async () => {
+  const root = await project({
+    [SPINE]: spine(`# Prolog Studies\n\n- [Bratko](bratko/${SPINE})\n`),
+    [`bratko/${SPINE}`]: spine(`# B
+
+## Part I
+- [Terms and unification](terms.prolog.md)
+- [Splitting a list](lists.prolog.md)
+
+## Part II
+- [Cut and commit](cut.prolog.md)
+`),
+    'bratko/terms.prolog.md': NOTEBOOK('Terms'),
+    'bratko/lists.prolog.md': NOTEBOOK('Lists'),
+    'bratko/cut.prolog.md': NOTEBOOK('Cut'),
+  });
+  await run(['build'], root);
+  const read = (url) => readFile(page(root, url), 'utf8');
+
+  // THE BREADCRUMB, naming each ancestor as ITS binder named it and linking
+  // relatively — a project site is served from /<repo>/, so an absolute link
+  // would leave the site altogether.
+  const middle = await read('bratko/lists');
+  assert.match(middle, /<nav class="crumbs"[^>]*>.*<a href="\.\.\/\.\.\/">Prolog Studies<\/a>/);
+  assert.match(middle, /<a href="\.\.\/">Bratko<\/a>/);
+
+  // THE TITLE IS THE CONTROL, and it is the SPINE's title: a book may rename a
+  // chapter for its own table of contents, and the reader clicked those words.
+  assert.match(middle, /rel="prev" href="\.\.\/terms\/">.*Terms and unification/s);
+  assert.match(middle, /rel="next" href="\.\.\/cut\/">.*Cut and commit/s);
+  assert.doesNotMatch(middle, /<h1>Terms<\/h1>/, 'the H1 is the page\'s own title, not the card\'s');
+
+  // A MISSING NEIGHBOUR IS ABSENT, NOT DISABLED. At chapter one there is no
+  // previous chapter — not now, not ever — so there is no control claiming there
+  // could be.
+  const first = await read('bratko/terms');
+  assert.doesNotMatch(first, /rel="prev"/);
+  assert.match(first, /rel="next" href="\.\.\/lists\//);
+  assert.match(first, /class="chapter-nav only-next"/);
+  // Nothing greyed out INSIDE the navigation — the page has plenty of disabled
+  // cell buttons, and that is the point of the distinction.
+  assert.doesNotMatch(/<nav class="chapter-nav[^]*?<\/nav>/.exec(first)[0], /disabled/);
+
+  const last = await read('bratko/cut');
+  assert.match(last, /rel="prev" href="\.\.\/lists\//);
+  assert.doesNotMatch(last, /rel="next"/);
+
+  // And the way up, from every one of them.
+  for (const url of ['bratko/terms', 'bratko/lists', 'bratko/cut']) {
+    assert.match(await read(url), /<p class="up"><a href="\.\.\/">Contents<\/a><\/p>/);
+  }
+  // The book's own contents page says where IT sits.
+  assert.match(await read('bratko'), /<nav class="crumbs"[^>]*><a href="\.\.\/">Prolog Studies/);
+  // The site's front page has nothing above it to point at.
+  assert.doesNotMatch(await read(''), /class="crumbs"/);
+});
+
+test('prev and next stop at their own book\'s edge', async () => {
+  const root = await project({
+    [SPINE]: spine(`# Shelf\n\n- [One](a/${SPINE})\n- [Two](b/${SPINE})\n`),
+    [`a/${SPINE}`]: spine('# A\n\n- [Last of A](x.prolog.md)\n'),
+    'a/x.prolog.md': NOTEBOOK('X'),
+    [`b/${SPINE}`]: spine('# B\n\n- [First of B](y.prolog.md)\n'),
+    'b/y.prolog.md': NOTEBOOK('Y'),
+  });
+  await run(['build'], root);
+  // Running off the end of one book into the next would tell a reader they are in
+  // one long book when they are standing at a shelf. At the edge, up is the
+  // honest answer.
+  const end = await readFile(page(root, 'a/x'), 'utf8');
+  assert.doesNotMatch(end, /rel="next"/);
+  assert.doesNotMatch(end, /rel="prev"/);
+  assert.match(end, /<p class="up">/);
+});
+
+test('a chapter with no book is left exactly as it was', async () => {
+  const root = await project({ 'a.prolog.md': NOTEBOOK('Alone') });
+  const out = await mkdtemp(join(tmpdir(), 'prolog-notebook-out-'));
+  await run(['build', 'a.prolog.md', '--out', out], root);
+  const html = await readFile(join(out, 'a/index.html'), 'utf8');
+  // No spine, no book, nothing to be a breadcrumb OF — and no inline script,
+  // because there is nowhere for the arrow keys to go.
+  assert.doesNotMatch(html, /class="crumbs"|class="chapter-nav"|class="up"/);
+  assert.doesNotMatch(html, /addEventListener\('keydown'/);
+});
+
+test('the arrow keys stand down wherever somebody is typing', async () => {
+  const root = await project({
+    [SPINE]: spine('# S\n\n- [One](a.prolog.md)\n- [Two](b.prolog.md)\n'),
+    'a.prolog.md': NOTEBOOK('One'),
+    'b.prolog.md': NOTEBOOK('Two'),
+  });
+  await run(['build'], root);
+  const html = await readFile(page(root, 'a'), 'utf8');
+
+  // Inline and not a module, so it works on the page that shows the boot warning:
+  // being unable to run the engine is exactly when a reader wants to leave.
+  assert.match(html, /<script>\naddEventListener\('keydown'/);
+  assert.doesNotMatch(html, /<script type="module">\naddEventListener/);
+  // Every modifier, and every kind of text entry on this page — a query box, a
+  // program cell, a prediction. Eating cursor movement here would be maddening.
+  assert.match(html, /e\.metaKey \|\| e\.ctrlKey \|\| e\.altKey \|\| e\.shiftKey/);
+  assert.match(html, /isContentEditable \|\| \/\^\(input\|textarea\|select\)\$\/i\.test/);
+  // It reads the links rather than carrying its own copy of the URLs, so a
+  // destination is written down once.
+  assert.match(html, /querySelector\('\.chapter-nav a\[rel=' \+ rel \+ '\]'\)/);
+});

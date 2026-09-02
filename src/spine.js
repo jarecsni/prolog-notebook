@@ -237,6 +237,32 @@ export function booksOf(book) {
   return [book, ...book.blocks.filter((b) => b.kind === 'book').flatMap(booksOf)];
 }
 
+/**
+ * Where a reader can go from each chapter: the one before, the one after, and up.
+ *
+ * PREV AND NEXT STOP AT THEIR OWN BOOK'S EDGE. Running off the end of Bratko into
+ * Clocksin & Mellish would tell a reader they are in one long book when they are
+ * standing at a shelf; at the edge, `up` is the honest answer instead.
+ *
+ * Keyed by URL rather than by source file, because a chapter bound into two books
+ * is two pages with two different neighbours — which is the binder premise doing
+ * something useful rather than something awkward.
+ *
+ * @returns {Map<string, {prev: object|null, next: object|null, up: object}>}
+ */
+export function navigationOf(root) {
+  const nav = new Map();
+  for (const book of booksOf(root)) {
+    const own = book.blocks.filter((b) => b.kind === 'chapter');
+    own.forEach((chapter, i) => nav.set(chapter.url, {
+      prev: own[i - 1] ?? null,
+      next: own[i + 1] ?? null,
+      up: book,
+    }));
+  }
+  return nav;
+}
+
 // ------------------------------------------------------------------ finding
 
 /**

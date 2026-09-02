@@ -51,6 +51,32 @@ A site knows what it should contain, and says so in a file you write.
   cannot hold several sites: GitHub Pages serves exactly one per repository. Two chapters called
   `lists.prolog.md` now coexist, because their books do.
 
+- **A reader can get out of a chapter.** A published chapter had *no links on it at all* —
+  somebody arriving from a search result was in a dead end with nothing but URL-trimming to
+  get them to your contents. Every chapter in a book now carries a breadcrumb of the books
+  above it, cards at the foot naming the chapters either side, and a way back to its contents:
+
+  ```
+  PROLOG STUDIES › BRATKO — PROGRAMMING FOR AI
+
+  ┌──────────────────────────┬──────────────────────────┐
+  │ ← PREVIOUS               │                  NEXT →  │
+  │ Terms and unification    │      Cut and commit      │
+  └──────────────────────────┴──────────────────────────┘
+                        Contents
+  ```
+
+  The title is the control rather than the arrow, so you know where you are going before you
+  go. A missing neighbour is **absent, not greyed out** — at chapter one there is no previous
+  chapter, not now and not ever. The names are the spine's, because those are the words you
+  clicked in the contents. **← and → move between chapters**, and stand down whenever a query
+  box, a program cell or a prediction has focus.
+
+  Prev and next stop at their own book's edge: running off the end of Bratko into Clocksin &
+  Mellish would tell a reader they are in one long book when they are standing at a shelf.
+  It is all static HTML except the keys, so it works with scripting off, and a chapter built
+  without a book has none of it — the notebook file is untouched either way.
+
 - **A chapter can be taken out of a site.** Remove its entry, run `build`, and the page goes,
   with a count said out loud. Until there was a spine this was impossible — the site was the
   only record of what the site contained, so nothing could ever be known to be surplus.
