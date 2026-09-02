@@ -445,9 +445,12 @@ test('the command reports what it removed, and refuses to guess', async () => {
   assert.equal(await readFile(file, 'utf8'), untouched);
   assert.doesNotMatch(stdout, /```text output/);
 
+  // BARE IS VALID USAGE NOW — it means the whole book (869eu5tn7) — so with no
+  // book to act on this fails at 1 rather than 2: the invocation was fine, the
+  // project has no contents file. It says which file that is.
   const noFile = await run('node', [CLI, 'clear']).catch((e) => e);
-  assert.equal(noFile.code, 2);
-  assert.match(noFile.stderr, /clear needs at least one file/);
+  assert.equal(noFile.code, 1);
+  assert.match(noFile.stderr, /No book here — prolog-notebook-index\.md/);
 });
 
 test('clear then execute is the chapter it started as', async () => {
@@ -552,15 +555,21 @@ test('the bare screen names the commands and leaves their switches to them', asy
     /^ {4}<file\(s\)> {7}space separated list of Prolog Notebook files \(\.md\)$/m);
   assert.match(clear, /^ {4}--stdout {8}/m);
   // Options before operands, as POSIX has it and as every tool the reader has
-  // already met prints it. `(s)` marks the commands that take several, and only
-  // those: it is legible without having read a man page, which the conventional
-  // ellipsis is not.
-  // Bracketed because they may be left out, and the operand is not because it may
-  // not — the same convention saying the two are different.
+  // already met prints it. `(s)` is legible without having read a man page,
+  // which the conventional ellipsis is not. Bracketed because options may be
+  // left out, and the operand is not bracketed because it may not — the same
+  // convention saying the two are different.
+  //
+  // EVERY COMMAND THAT TAKES FILES TAKES <file(s)> (869eu5tn7). `build` and
+  // `view` used to say <file>, which recorded an accident rather than a rule:
+  // both were always loops. One shape across the whole tool, and one sentence
+  // for what the operand means — name files and it acts on those, name none and
+  // it acts on the whole book.
   assert.match(clear, /prolog-notebook clear \[<options>\] <file\(s\)>/);
-  const build = (await run('node', [CLI, 'build', '--help'])).stdout;
-  assert.match(build, /prolog-notebook build \[<options>\] <file>/);
-  assert.doesNotMatch(build, /\(s\)/);
+  for (const command of ['build', 'view', 'execute']) {
+    const help = (await run('node', [CLI, command, '--help'])).stdout;
+    assert.match(help, new RegExp(`prolog-notebook ${command} \\[<options>\\] <file\\(s\\)>`));
+  }
   assert.doesNotMatch((await run('node', [CLI, 'upgrade', '--help'])).stdout, /<options>/);
 
   // THE POINT: no per-command switch appears here. The two at the foot are not
@@ -591,7 +600,7 @@ test('a command asked for help answers about itself, and nothing else', async ()
   // Printing everything makes the reader find their command again in a page they
   // did not ask for.
   const { stdout } = await run('node', [CLI, 'build', '--help']);
-  assert.match(stdout, /prolog-notebook build \[<options>\] <file>/);
+  assert.match(stdout, /prolog-notebook build \[<options>\] <file\(s\)>/);
   assert.match(stdout, /--out <dir>/);
   for (const other of ['view <file', 'execute <file', 'clear <file', 'upgrade  ']) {
     assert.doesNotMatch(stdout, new RegExp(other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));

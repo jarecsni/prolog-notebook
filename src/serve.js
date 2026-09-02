@@ -62,13 +62,28 @@ export async function serve(pages, { port = 8777, host = '127.0.0.1' } = {}) {
     // Only GET, and only the names this process generated: the path never
     // reaches the filesystem, so there is nothing for a `..` to escape into.
     const name = decodeURIComponent(new URL(request.url, 'http://x').pathname).replace(/^\//, '');
-    const entry = files().get(name === '' ? 'index.html' : name);
-    if (request.method !== 'GET' || !entry) {
+    const site = files();
+    // A DIRECTORY IS ITS index.html, now that this serves a whole book rather
+    // than one page (869eu5tn7): /bratko/ is the key `bratko/index.html`.
+    const entry = site.get(name === '' || name.endsWith('/') ? `${name}index.html` : name);
+    if (request.method !== 'GET') {
+      response.writeHead(404, { 'content-type': 'text/plain' }).end('not found\n');
+      return;
+    }
+    // REDIRECTED RATHER THAN SERVED, when the slash is missing. Handing back
+    // /bratko/index.html at /bratko would leave the browser resolving every
+    // `../` one level too high, so the page would load and its stylesheet,
+    // runtime and engine would not.
+    if (!entry && site.has(`${name}/index.html`)) {
+      response.writeHead(301, { location: `/${name}/` }).end();
+      return;
+    }
+    if (!entry) {
       response.writeHead(404, { 'content-type': 'text/plain' }).end('not found\n');
       return;
     }
     response.writeHead(200, {
-      'content-type': contentType(name || 'index.html'),
+      'content-type': contentType(name.endsWith('/') || name === '' ? 'index.html' : name),
       // A page being written is a page that changes under the reader.
       'cache-control': 'no-store',
     });

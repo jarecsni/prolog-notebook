@@ -78,6 +78,23 @@ engine shared at the root, and an index listing every chapter you have built. Th
 fetched only when a reader presses Run. No bundler, no build step of your own, nothing to
 configure.
 
+**One rule for every command: the operand is a filter.** Name files and a command acts on
+those; name none and it acts on the whole book.
+
+|  | `<file(s)>` | bare |
+|---|---|---|
+| `view` | opens on that chapter | the whole site, index and all |
+| `execute` | those chapters | every chapter in the book |
+| `clear` | those chapters | every chapter (asks first) |
+| `build` | those chapters into the site | the whole book, in order |
+| `publish` | — | the site |
+
+So `prolog-notebook view` reads your whole book in a browser, live from your sources and with
+no build step at all — reorder the contents and reload, and the contents page and the
+prev/next cards follow. `prolog-notebook execute` fills in every answer before you publish.
+`--built` serves the site as it stands instead: the rehearsal for the one command you cannot
+take back.
+
 That first build also writes **`prolog-notebook-index.md`** beside the site — the one file that
 says what the site holds:
 
@@ -189,9 +206,10 @@ Each option belongs to a command, and typing one under the wrong command tells y
 | `--out <dir>` | `build` | where the site is. Default: the nearest `prolog-notebook-site`, else one at the project root |
 | `--root` | `build` | write to the project's `prolog-notebook-site`, skipping any nearer one |
 | `--dry-run` | `publish` | say what would go and where, push nothing |
-| `--yes` | `publish` | do not ask first — for CI, where there is nobody to ask |
+| `--yes` | `publish`, `clear` | do not ask first — for CI, where there is nobody to ask |
 | `--port <n>` | `view` | what it listens on. Default 8777, and it takes another if that one is busy |
 | `--no-open` | `view` | print the URL instead of opening a browser |
+| `--built` | `view` | serve the site as built, rather than your sources as they are |
 
 Two are about the tool rather than about a notebook:
 

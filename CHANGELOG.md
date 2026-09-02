@@ -51,6 +51,34 @@ A site knows what it should contain, and says so in a file you write.
   cannot hold several sites: GitHub Pages serves exactly one per repository. Two chapters called
   `lists.prolog.md` now coexist, because their books do.
 
+- **One rule for every command: the operand is a filter.** Name files and a command acts on
+  those; name none and it acts on the whole book.
+
+  |            | `<file(s)>`                   | bare                          |
+  |------------|-------------------------------|-------------------------------|
+  | `view`     | opens on that chapter         | the whole site, index and all |
+  | `execute`  | those chapters                | every chapter in the book     |
+  | `clear`    | those chapters                | every chapter (asks first)    |
+  | `build`    | those chapters into the site  | the whole book, in order      |
+  | `publish`  | —                             | the site                      |
+
+  `view` and `build` used to say `<file>` while `execute` and `clear` said `<file(s)>`, which
+  recorded an accident rather than a rule — both were always loops. `execute` with no
+  arguments is the gesture for *fill in every answer before I publish*. `clear` with no
+  arguments asks first, and refuses rather than hanging when there is nobody to ask.
+
+  `publish` is the only command with no operand at all, and for a reason it already prints:
+  GitHub Pages serves one site per repository, so there is no subset to name.
+
+- **`prolog-notebook view` now serves your whole book**, live from your sources, with no build
+  step at all. Reorder the contents and reload: the contents page *and* the prev/next cards
+  follow, because both are properties of the book rather than of a page. **`--built`** serves
+  `prolog-notebook-site` as it stands instead — the rehearsal for the one irreversible
+  command, showing exactly the bytes `publish` would push.
+
+  `view` and `build` now assemble a site through the same code, so what you preview and what
+  you publish cannot drift apart.
+
 - **A reader can get out of a chapter.** A published chapter had *no links on it at all* —
   somebody arriving from a search result was in a dead end with nothing but URL-trimming to
   get them to your contents. Every chapter in a book now carries a breadcrumb of the books
@@ -97,6 +125,13 @@ A site knows what it should contain, and says so in a file you write.
   be regenerated from files you do track.
 
 ### Fixed
+
+- **A chapter bound through a sub-book is no longer published twice.** Standing inside
+  `bratko/` and running `build a.prolog.md` found *Bratko's* spine rather than the site's, and
+  then appended the chapter to the site's spine because that file did not mention it directly
+  — so one build of one chapter produced a page at `/a/` as well as the `/bratko/a/` the full
+  build makes. A site has exactly one spine, beside it; every other spine is a sub-book,
+  reached only by being linked from it.
 
 - **A book that contains itself is reported by name** rather than overflowing the stack, and a
   spine naming a notebook that is not there says which spine and which line.
