@@ -22,10 +22,14 @@ npm i -g prolog-notebook
 
 | | |
 | --- | --- |
-| `prolog-notebook execute <file>` | run every query and write the answers into the file |
-| `prolog-notebook view <file>` | read it in a browser, cells live |
-| `prolog-notebook clear <file>` | take the answers back out |
-| `prolog-notebook build <file>` | write a static directory you can host or send |
+| `prolog-notebook execute <file(s)>` | run every query and write the answers into the file |
+| `prolog-notebook view <file(s)>` | read it in a browser, cells live |
+| `prolog-notebook clear <file(s)>` | take the answers back out |
+| `prolog-notebook build <file(s)>` | write a static directory you can host or send |
+
+**The operand is a filter.** Name files and a command acts on those; name none and it acts on
+the whole book — so `view` with no arguments reads the lot, and `execute` with no arguments
+fills in every answer you have. `clear` with no arguments asks before emptying a book.
 
 Write prose and cells in your editor → `execute` to fill in the answers → `view` to read it as
 a reader will → `build` when it is ready. `clear` is there when you want the chapter back
