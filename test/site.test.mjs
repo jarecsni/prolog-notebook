@@ -147,15 +147,16 @@ test('the index is regenerated from the directory on every build', async () => {
   await run(['build', 'b.prolog.md'], { cwd: root });
 
   const index = await readFile(join(root, SITE, 'index.html'), 'utf8');
-  // Titles come from each page's own <title>, which came from its H1 — so there
-  // is no manifest to keep in step and no second place for a title to be wrong.
+  // Titles are the spine's link text, seeded from each chapter's own H1 — so a
+  // chapter is right the moment it is bound, and renaming it in the contents is
+  // the binder's business afterwards (869eu5tg1).
   assert.match(index, /<a href="a\/">Splitting a list<\/a>/);
   assert.match(index, /<a href="b\/">Where does the fence go\?<\/a>/);
-  // Alphabetical by directory, which is the site's opinion to hold: a chapter
-  // never states its own position.
+  // In the order they were bound, which is now the author's to change: it used to
+  // be alphabetical because there was nowhere for a real order to live.
   assert.ok(index.indexOf('href="a/"') < index.indexOf('href="b/"'));
   // It borrows the chapter stylesheet, so it cannot drift from the pages it lists.
-  assert.match(index, /<link rel="stylesheet" href="notebook\.css">/);
+  assert.match(index, /<link rel="stylesheet" href="\.\/notebook\.css">/);
 });
 
 test('the index counts pages, and nothing else in the directory', async () => {
@@ -175,9 +176,12 @@ test('the index counts pages, and nothing else in the directory', async () => {
 });
 
 test('an index with nothing in it says so rather than showing an empty list', () => {
-  assert.match(indexHtml([]), /No notebooks here yet/);
+  assert.match(indexHtml(), /No notebooks here yet/);
   // A title with markup in it is a title, not markup.
-  assert.match(indexHtml([{ name: 'x', title: '<script>ha</script>' }]), /&lt;script&gt;/);
+  assert.match(
+    indexHtml({ blocks: [{ kind: 'chapter', title: '<script>ha</script>', href: 'x/' }] }),
+    /&lt;script&gt;/,
+  );
 });
 
 test('--root skips a nearer site, and --out says where outright', async () => {

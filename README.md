@@ -78,10 +78,44 @@ engine shared at the root, and an index listing every chapter you have built. Th
 fetched only when a reader presses Run. No bundler, no build step of your own, nothing to
 configure.
 
-Build a second chapter from anywhere in the project and it joins the same site — `build` walks
+That first build also writes **`prolog-notebook-index.md`** beside the site — the one file that
+says what the site holds:
+
+```markdown
+---
+format: prolog-notebook-book/1
+---
+
+# Prolog Studies
+
+Working through the classics, one chapter at a time.
+
+## Part I — Foundations
+- [Splitting a list](splitting.prolog.md)
+```
+
+Track it; it is yours. Reorder the entries, rename a chapter for your table of contents, group
+them under headings — the contents page is a rendering of this file, so what you write is what
+readers see. Then **`prolog-notebook build`, with no arguments, builds the whole book**, in your
+order, and drops any page whose entry you have removed. About 55 ms a chapter, so rebuilding
+everything is the normal gesture rather than an occasion.
+
+A link to another one of these files is a **sub-book**, to any depth:
+
+```markdown
+- [Bratko — Programming for AI](bratko/prolog-notebook-index.md)
+- [Clocksin & Mellish](cm/prolog-notebook-index.md)
+```
+
+Each gets its own contents page and its chapters are published beneath it — `/bratko/lists/`.
+That is how one repository holds several books, which matters because it cannot hold several
+sites: GitHub Pages serves exactly one per repository.
+
+Build a chapter by name from anywhere in the project and it joins the same site — `build` walks
 up for an existing `prolog-notebook-site`, then for a `.git`, so chapters that live in
-different folders still publish as one thing. `--root` skips a nearer site and writes to the
-project's; `--out <dir>` puts it wherever you say.
+different folders still publish as one thing, and a chapter the book does not yet list is added
+to it. `--root` skips a nearer site and writes to the project's; `--out <dir>` puts it wherever
+you say.
 
 A site has exactly one runtime and one engine, so the second post costs its own page rather than
 another 6.2 MB. When you upgrade the tool, the next build brings the whole site with it and says

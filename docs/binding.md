@@ -1,7 +1,12 @@
 # Books, notebooks and binding
 
-Status: **v0.1 spec, agreed 2026-08-10.** Nothing here is implemented yet. It is written
-before the code because [docs/format.md](format.md) was, and that worked.
+Status: **v0.1 spec, agreed 2026-08-10; §3 implemented in 0.9.0.** The rest is still written
+before the code, because [docs/format.md](format.md) was and that worked.
+
+What is real: the spine file, the entry rule, sub-books, the URL rule, and one contents page
+per book (869eu5tg1). What is not: covers, numbering, the predicate cross-reference,
+`matter`, `--edition`, and cross-notebook references (869efz3dg). A spine written today is
+read by the binder later — that is the point of settling the grammar first.
 
 A **notebook** is the unit of authorship, execution, publication and sale. A **book** is a
 *binder*: an ordered set of references to notebooks, plus the matter that only exists
@@ -65,20 +70,55 @@ Notebooks written while reading C&M. Each one runs in the browser.
 ```
 
 - **Entry rule**: every markdown link whose target ends in `.prolog.md`, **in document
-  order**, is a spine entry. Prose may link to anything else freely. A duplicate target is
-  an error; a target that does not resolve is an error.
+  order**, is a spine entry — a **chapter**. A link to a `.md` that carries this file's own
+  `format` key is a **sub-book**: books hold books, to any depth, and that is one clause on
+  top of the rule rather than a second mechanism. Prose may link to anything else freely, and
+  a link to a `.md` that is neither is left as prose. A duplicate target within one spine is
+  an error; a target that does not resolve is an error; and a book that contains itself,
+  directly or transitively, is an error naming the loop.
+
+  The same notebook bound into two *different* books is not an error — it is §1's whole
+  premise, and it produces two pages at two URLs.
 - **The link text is the entry's title in the TOC and navigation.** The notebook's own `# H1`
   remains the title of the page itself. They may differ — a binder is allowed to rename a
   chapter for its own table of contents.
-- **Everything that is not an entry link is preface**, kept verbatim and rendered above the
-  contents on the book's front page.
+- **Prose before the first entry is preface**, kept verbatim and rendered above the contents
+  on the book's front page. From the first entry on, headings and entries **are** the
+  contents, and prose between them is commentary belonging to the section it sits in. The
+  distinction has to be positional: a `## Part I` introducing the first entries necessarily
+  precedes every one of them, and is plainly contents rather than preface.
 - Front matter is the same restricted subset as a notebook ([format §2](format.md)): flat
   `key: value`, no YAML dependency. `format: prolog-notebook-book/1` is required and is what
-  identifies the file; the name `book.md` is convention only.
+  identifies the file; the name `book.md` is convention only. **One name is not convention**:
+  `prolog-notebook-index.md` beside a `prolog-notebook-site/` is *the site's own spine*, found
+  by walking up rather than named as an argument. A repository serves exactly one Pages site,
+  so it has exactly one of these; any other spine is passed by name.
+- **A chapter's URL is its position in the binder, never its position on disk.** A chapter's
+  segment is its filename, a book's segment is its directory name, and its path is the chain
+  of books that contain it — so `notes/lists.prolog.md` at the top of the site's spine is
+  served at `/lists/`, and the same file bound into `bratko/` is served at `/bratko/lists/`.
+  Moving the source does not move the page; binding it elsewhere does, which is the author
+  saying so. Two entries in one book that would land on the same URL are an error, rather
+  than one of them silently overwriting the other.
 - **There is no `title` key.** The first `# H1` is the title, as in a notebook.
 - `matter` lists the generated sections this binder wants, in the order they are produced
   (§4). Omit it for the default `title, toc, covers, xref`; `matter: none` for a bare
   binder that is only its chapters.
+
+A shelf, rather than a book, is the same file one level up — and the reason a repository can
+hold Bratko and Clocksin & Mellish without holding two sites, which it cannot:
+
+```markdown
+---
+format: prolog-notebook-book/1
+---
+
+# Prolog Studies
+
+## The classics
+- [Bratko — Programming for AI](bratko/prolog-notebook-index.md)
+- [Clocksin & Mellish](cm/prolog-notebook-index.md)
+```
 
 Entries may be a URL rather than a relative path, once notebooks are hosted. Resolution goes
 through the injectable filesystem, never Node's `fs` — see [platform-seams.md](platform-seams.md).

@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.9.0] — 2026-09-02
+
+A site knows what it should contain, and says so in a file you write.
+
+### Added
+
+- **`prolog-notebook-index.md` — the spine.** One markdown file, beside your
+  `prolog-notebook-site/`, saying which chapters the site holds and in what order:
+
+  ```markdown
+  ---
+  format: prolog-notebook-book/1
+  ---
+
+  # Prolog Studies
+
+  Working through the classics, one chapter at a time.
+
+  ## Part I — Foundations
+  - [Terms and unification](notes/terms.prolog.md)
+  - [Lists](notes/lists.prolog.md)
+  ```
+
+  It reads on GitHub with no build step, because it is the same restricted front matter and the
+  same markdown the notebooks are. The `# H1` is the site's title, prose before the first entry
+  is its preface, and your headings become the groups in the contents page — which is now a
+  rendering of this file rather than a listing of a directory. It implements
+  [docs/binding.md §3](docs/binding.md), so the file you write today is the binder you get when
+  covers, numbering and the cross-reference arrive.
+
+  **`build` writes it for you** the first time it creates a site, named after your project, and
+  never writes over it again. Naming a chapter it does not list appends one entry and says so —
+  nothing is ever reordered, and your prose is never touched.
+
+- **`prolog-notebook build`, with no arguments, builds the whole book** — every chapter the
+  spine names, in your order, with every contents page regenerated. About 55 ms a chapter once
+  the engine is in place, so a twenty-chapter site rebuilds in a second. `build <file>` still
+  builds one chapter, and is still all you need if you have one notebook and no spine.
+
+- **Books hold books.** A link to another spine is a sub-book, to any depth:
+
+  ```markdown
+  - [Bratko — Programming for AI](bratko/prolog-notebook-index.md)
+  - [Clocksin & Mellish](cm/prolog-notebook-index.md)
+  ```
+
+  Each gets its own contents page, at its own path, and its chapters are published beneath it —
+  `/bratko/lists/`. That is how one repository holds several books, which matters because it
+  cannot hold several sites: GitHub Pages serves exactly one per repository. Two chapters called
+  `lists.prolog.md` now coexist, because their books do.
+
+- **A chapter can be taken out of a site.** Remove its entry, run `build`, and the page goes,
+  with a count said out loud. Until there was a spine this was impossible — the site was the
+  only record of what the site contained, so nothing could ever be known to be surplus.
+
+### Changed
+
+- **A chapter's URL is its position in the binder, never its position on disk.** Its segment is
+  its filename, a book's segment is its directory name, and its path is the chain of books that
+  contain it. Moving `notes/lists.prolog.md` to `chapters/` does not move `/lists/`; binding it
+  into a sub-book does, because that is you saying where it belongs. Two entries in one book
+  that would land on the same URL are now refused rather than one quietly overwriting the other.
+
+- **The contents page shows what a book holds** — your headings, your order, your preface, and a
+  chapter count beside each sub-book.
+
+- The site directory is worth putting in `.gitignore`, and now genuinely is: 6 of its 6.2 MB is
+  the engine, git keeps every version of a binary whole, and the spine means the whole thing can
+  be regenerated from files you do track.
+
+### Fixed
+
+- **A book that contains itself is reported by name** rather than overflowing the stack, and a
+  spine naming a notebook that is not there says which spine and which line.
+
+Nothing here is retrospective: a project with no spine builds exactly as it did in 0.8.
+
 ## [0.8.0] — 2026-09-01
 
 Two fewer flags, and a help screen with nothing on it that is not true.

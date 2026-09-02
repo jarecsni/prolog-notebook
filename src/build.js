@@ -230,8 +230,11 @@ function notice(message) {
  * Written into the HTML at build time rather than set by script on load: it is
  * the browser tab, the bookmark and the thing a link preview shows, and none of
  * those wait for JavaScript.
+ *
+ * Exported because a seeded spine names its first chapter with it (869eu5tg1),
+ * and two answers to "what is this chapter called" would drift.
  */
-function titleOf(notebook) {
+export function titleOf(notebook) {
   for (const cell of notebook.cells) {
     if (cell.kind !== 'markdown') continue;
     const heading = /^#\s+(.+)$/m.exec(cell.source);

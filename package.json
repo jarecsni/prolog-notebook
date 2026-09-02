@@ -1,6 +1,6 @@
 {
   "name": "prolog-notebook",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Jupyter-style notebooks for Prolog. Runs in the browser, installs nothing.",
   "type": "module",
   "main": "./src/node.js",

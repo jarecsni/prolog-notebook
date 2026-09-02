@@ -4,8 +4,10 @@
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
 import { createRequire } from 'node:module';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import {
+  copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync,
+} from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { parse, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
@@ -14,11 +16,14 @@ import { updateNotice } from '../src/update.js';
 import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 import { clearedSource, exportSource } from '../src/export.js';
 import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
-import { buildFiles, livePages } from '../src/build.js';
+import { buildFiles, livePages, titleOf } from '../src/build.js';
 import {
-  SITE, findSite, indexHtml, isShared, pageName, pagesIn, projectSite, reconcile, shownAs,
-  sourceOf,
+  SITE, blocksFromDirectory, findSite, indexHtml, isShared, pageName, pagesIn, prefixFor,
+  projectSite, reconcile, shownAs, sourceOf,
 } from '../src/site.js';
+import {
+  SPINE, booksOf, chaptersOf, contentsOf, findSpine, resolveSpine, seedSpine, withEntry,
+} from '../src/spine.js';
 import { NOBODY, pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
@@ -705,7 +710,7 @@ async function page(command, args) {
       return 2;
     } else files.push(arg);
   }
-  if (files.length !== 1) {
+  if (command === 'view' && files.length !== 1) {
     process.stderr.write(`${command} takes exactly one notebook\n`);
     return 2;
   }
@@ -716,6 +721,8 @@ async function page(command, args) {
   const jump = await upgradeFirst();
   if (jump !== null) return jump;
 
+  if (command === 'build') return buildSite(files, options);
+
   const file = files[0];
   // ASKED AGAIN ON EVERY REQUEST, and built again only when the bytes have moved
   // (869erpuhk). `build` takes the first answer and writes it; `view` keeps the
@@ -723,142 +730,16 @@ async function page(command, args) {
   // when the server started.
   const pages = livePages(() => readFileSync(file, 'utf8'), {
     filename: basename(file),
-    // A built page is one page of a site and reaches the shared runtime with
-    // `../`; `view` serves a single page at the root, where it is `./`.
-    prefix: command === 'build' ? '../' : './',
+    // `view` serves a single page at the root of its own server, where the
+    // shared runtime is `./`. A built page is one page of a site and climbs.
+    prefix: './',
     onError: (e) => process.stderr.write(`${file}: ${e.message}\n`),
   });
-  let built;
   try {
-    built = pages();
+    pages();
   } catch (e) {
     process.stderr.write(`${file}: ${e.message}\n`);
     return 1;
-  }
-
-  if (command === 'build') {
-    // A DEFAULT AND TWO OVERRIDES, rather than three ways of saying the same
-    // thing (869etpd4c). The walk is the answer almost always; --root is for when
-    // a nearer site is in the way and the project's is wanted; --out is for
-    // somewhere else entirely, and says where.
-    //
-    // `--here` used to sit between them, writing a site beside the notebook. It
-    // was a shorthand for `--out ./prolog-notebook-site` that cost a second site
-    // in the project — which then won the walk for every later build in that
-    // subtree, and needed another flag to escape. And publish only ever pushes
-    // the ROOT site, so its whole effect had become putting a chapter where the
-    // next command would not look.
-    if (options.out && options.root) {
-      // Both name a destination, and one of them would have to be ignored. A flag
-      // read and thrown away looks like it worked (869erqra0).
-      process.stderr.write('--root and --out both say where to write. Pick one.\n');
-      return 2;
-    }
-    const site = options.out ? resolve(options.out)
-      : options.root ? projectSite(file)
-        : findSite(file);
-    const existed = existsSync(site);
-    const page = pageName(file);
-
-    // WHAT WROTE THIS SITE, AND WHAT IS WRITING NOW (869erqwkp). A site has
-    // exactly one runtime, so this decides whether the shared files are already
-    // the right ones, need replacing, or are newer than us.
-    const state = reconcile(site);
-    if (state.verdict === 'older') {
-      process.stderr.write(`${shownAs(site)} was built by prolog-notebook `
-        + `${state.have.runtime ?? '?'} with engine ${state.have.engine ?? '?'};`
-        + ` you are running ${state.ours.runtime} with ${state.ours.engine}.\n`
-        // Overwriting would downgrade every page in the site, none of which the
-        // author named. Refusing is the only move that breaks nothing.
-        + 'Run `prolog-notebook upgrade`, or build somewhere else with --out.\n');
-      return 1;
-    }
-    // The ordinary loop writes 52 KB: the page, and nothing else.
-    const writeShared = state.verdict !== 'same';
-
-    let own = 0;
-    let shared = 0;
-    for (const [name, entry] of built) {
-      // The runtime, the engine and the stylesheet are the site's; the page is
-      // the page's. One copy each, however many chapters.
-      if (isShared(name) && !writeShared) continue;
-      const target = isShared(name) ? join(site, name) : join(site, page, name);
-      if (isShared(name)) shared += 1; else own += 1;
-      mkdirSync(dirname(target), { recursive: true });
-      if (entry.text !== undefined) writeFileSync(target, entry.text);
-      else copyFileSync(entry.copy, target);
-    }
-
-    // EVERY OTHER PAGE COMES WITH US. A page generated by an older tool imports
-    // symbols from a lib/ that has just moved under it, so leaving it alone is
-    // not the cautious option — it is the one that breaks it. Each page holds the
-    // chapter it was built from, so the site can rebuild itself.
-    const regenerated = [];
-    const stranded = [];
-    if (state.verdict === 'newer') {
-      for (const other of pagesIn(site)) {
-        if (other.name === page) continue;
-        const chapter = sourceOf(site, other.name);
-        if (!chapter) { stranded.push(other.name); continue; }
-        const files = buildFiles(parse(chapter.source), chapter.source, {
-          filename: chapter.filename, prefix: '../',
-        });
-        for (const [name, entry] of files) {
-          if (isShared(name)) continue;
-          const target = join(site, other.name, name);
-          mkdirSync(dirname(target), { recursive: true });
-          if (entry.text !== undefined) writeFileSync(target, entry.text);
-          else copyFileSync(entry.copy, target);
-        }
-        regenerated.push(other.name);
-      }
-    }
-
-    // REGENERATED FROM THE DIRECTORY, EVERY TIME. The site is the only thing that
-    // knows what the site contains — builds happen one chapter at a time, from
-    // different folders, days apart (869erptbr).
-    const listed = pagesIn(site);
-    writeFileSync(join(site, 'index.html'), indexHtml(listed));
-
-    // SAY WHERE IT WENT. This is the one command that writes outside the
-    // directory it was pointed at, and doing that in silence is spooky.
-    if (!existed) {
-      process.stderr.write(`created ${shownAs(site)}/ — you may want it in .gitignore\n`);
-    }
-    // COUNTED APART, because they answer different questions: how big is this
-    // chapter, and what does the site cost. "13 files" of a two-file page was
-    // true of the write and false about the page.
-    process.stderr.write(`${own} files → ${shownAs(join(site, page))}/`
-      + (writeShared ? ` (${shared} shared with the site)\n` : ' (runtime and engine already'
-        + ' there)\n'));
-
-    // SAID OUT LOUD, because a build aimed at one file has just rewritten others.
-    // One line naming what moved and how many pages came with it, the way a
-    // lockfile update reads.
-    if (state.verdict === 'newer' && state.runtimeMoved) {
-      process.stderr.write(`runtime ${state.have.runtime ?? 'unknown'} → ${state.ours.runtime}`
-        + ` · ${regenerated.length} page${regenerated.length === 1 ? '' : 's'} regenerated\n`);
-    }
-    if (state.verdict === 'newer' && state.engineMoved) {
-      // What regeneration cannot fix: the pages' code is current, their saved
-      // answers came out of the old engine and still live in the author's file.
-      process.stderr.write(`engine ${state.have.engine ?? 'unknown'} → ${state.ours.engine}`
-        + ' · re-run `execute` on your chapters\n');
-    }
-    if (stranded.length) {
-      process.stderr.write(`could not regenerate ${stranded.join(', ')} — no chapter beside `
-        + `${stranded.length === 1 ? 'it' : 'them'}. Build from the notebook again.\n`);
-    }
-    process.stderr.write(`${shownAs(join(site, 'index.html'))} lists `
-      + `${listed.length} notebook${listed.length === 1 ? '' : 's'}\n`);
-    // SAID HERE BECAUSE THIS IS WHERE IT IS ACTED ON. The obvious next move is to
-    // double-click index.html, and that is the one thing that cannot work:
-    // browsers refuse ES modules over file:// and the engine cannot be fetched
-    // there either (869erqq1u). The page says so too, but by then somebody is
-    // already looking at a chapter whose buttons do nothing.
-    process.stderr.write(`Host ${shownAs(site)} over HTTP — opening it from disk`
-      + ' will not run.\n');
-    return 0;
   }
 
   const server = await serve(pages, { port: options.port });
@@ -874,6 +755,309 @@ async function page(command, args) {
   if (options.open) openInBrowser(server.url);
   // Deliberately never resolves: the server is the command.
   return new Promise(() => {});
+}
+
+/**
+ * The book onto the site (869eu5tg1).
+ *
+ * BARE MEANS THE WHOLE BOOK, NAMED MEANS THOSE CHAPTERS. The spine says what the
+ * site contains and in what order, so a full build is now a thing that can exist
+ * at all: before it, the only record of the set was the site itself, and a fresh
+ * clone could only ever rebuild the one chapter its author happened to name.
+ *
+ * Measured at 55 ms a chapter once the engine is in place, which is why the full
+ * build is the default gesture rather than an occasional chore.
+ */
+async function buildSite(files, options) {
+  if (options.out && options.root) {
+    // Both name a destination, and one of them would have to be ignored. A flag
+    // read and thrown away looks like it worked (869erqra0).
+    process.stderr.write('--root and --out both say where to write. Pick one.\n');
+    return 2;
+  }
+
+  const from = files[0] ?? join(process.cwd(), SPINE);
+  let spineFile = findSpine(from);
+  // A DEFAULT AND TWO OVERRIDES (869etpd4c): the walk is the answer almost
+  // always, --root reaches past a nearer site to the project's, --out says where.
+  const site = options.out ? resolve(options.out)
+    : options.root ? projectSite(spineFile ?? from)
+      : findSite(spineFile ?? from);
+  const existed = existsSync(site);
+
+  // WITHOUT A SPINE THERE IS NO BOOK TO BUILD, and no way to guess one that is
+  // not worse than asking: sweeping every .prolog.md under the project would
+  // publish somebody's drafts the first time they ran it.
+  if (!spineFile && files.length === 0) {
+    process.stderr.write(`No book here — ${SPINE} is what says which chapters a site holds.\n`
+      + 'Build a chapter by name and one will be written for you:'
+      + ' prolog-notebook build <file>\n');
+    return 1;
+  }
+
+  let created = null;
+  let added = [];
+  if (files.length > 0) {
+    const first = readNotebook(files[0]);
+    if (first === null) return 1;
+    // WRITTEN FOR THE AUTHOR, NOT LEFT AS A CHORE — but never into somewhere they
+    // only named in passing. `--out` is a one-off build to a directory of its
+    // own, and a tracked file at its parent is not what was asked for.
+    if (!spineFile && !options.out) {
+      spineFile = join(dirname(site), SPINE);
+      writeFileSync(spineFile, seedSpine({
+        // NAMED FOR THE PROJECT, NOT FOR ITS FIRST CHAPTER. A book called "Where
+        // does the fence go?" because that happened to be built first is a worse
+        // guess than the directory the author already named themselves.
+        title: projectName(dirname(spineFile)),
+        entries: [{ title: titleOf(first.notebook), target: relative(dirname(spineFile), files[0]) }],
+      }));
+      created = spineFile;
+    }
+    if (spineFile) added = bind(spineFile, files);
+  }
+
+  let book = null;
+  if (spineFile) {
+    try {
+      book = resolveSpine(spineFile);
+    } catch (e) {
+      process.stderr.write(`${e.message}\n`);
+      return 1;
+    }
+  }
+
+  // WHAT WROTE THIS SITE, AND WHAT IS WRITING NOW (869erqwkp). A site has
+  // exactly one runtime, so this decides whether the shared files are already
+  // the right ones, need replacing, or are newer than us.
+  const state = reconcile(site);
+  if (state.verdict === 'older') {
+    process.stderr.write(`${shownAs(site)} was built by prolog-notebook `
+      + `${state.have.runtime ?? '?'} with engine ${state.have.engine ?? '?'};`
+      + ` you are running ${state.ours.runtime} with ${state.ours.engine}.\n`
+      // Overwriting would downgrade every page in the site, none of which the
+      // author named. Refusing is the only move that breaks nothing.
+      + 'Run `prolog-notebook upgrade`, or build somewhere else with --out.\n');
+    return 1;
+  }
+  let writeShared = state.verdict !== 'same';
+
+  // WHICH PAGES. Named files build where the book binds them — and a chapter
+  // bound into two books is two pages, so one name can mean two. Bare builds
+  // everything, which is also what a runtime upgrade needs (869erqwkp).
+  const bound = book ? chaptersOf(book) : [];
+  let pages = bound;
+  if (files.length > 0) {
+    const wanted = new Set(files.map((f) => resolve(f)));
+    pages = bound.filter((c) => wanted.has(c.source));
+    // Not in the book at all — no spine, or --out somewhere of its own. It still
+    // gets a page, at the top of whatever site was named.
+    for (const file of files) {
+      if (pages.some((c) => c.source === resolve(file))) continue;
+      pages.push({ source: resolve(file), name: pageName(file), url: `${pageName(file)}/` });
+    }
+  }
+
+  let shared = 0;
+  const failed = [];
+  const wrote = new Map();
+  for (const chapter of pages) {
+    const read = readNotebook(chapter.source);
+    if (read === null) { failed.push(chapter.source); continue; }
+    const files_ = buildFiles(read.notebook, read.source, {
+      filename: basename(chapter.source),
+      prefix: prefixFor(chapter.url),
+    });
+    for (const [name, entry] of files_) {
+      // The runtime, the engine and the stylesheet are the site's; the page is
+      // the page's. One copy each, however many chapters.
+      if (isShared(name)) {
+        if (!writeShared) continue;
+        shared += 1;
+      } else wrote.set(chapter.url, (wrote.get(chapter.url) ?? 0) + 1);
+      const target = isShared(name) ? join(site, name) : join(site, chapter.url, name);
+      mkdirSync(dirname(target), { recursive: true });
+      if (entry.text !== undefined) writeFileSync(target, entry.text);
+      else copyFileSync(entry.copy, target);
+    }
+    writeShared = false;
+  }
+  if (failed.length) return 1;
+
+  // EVERY OTHER PAGE COMES WITH US. A page generated by an older tool imports
+  // symbols from a lib/ that has just moved under it, so leaving it alone is not
+  // the cautious option — it is the one that breaks it.
+  const regenerated = [];
+  const stranded = [];
+  if (state.verdict === 'newer') {
+    const done = new Set(pages.map((c) => c.url));
+    for (const other of builtPages(site)) {
+      if (done.has(other)) continue;
+      const chapter = sourceOf(site, other);
+      if (!chapter) { stranded.push(other); continue; }
+      const files_ = buildFiles(parse(chapter.source), chapter.source, {
+        filename: chapter.filename, prefix: prefixFor(other),
+      });
+      for (const [name, entry] of files_) {
+        if (isShared(name)) continue;
+        const target = join(site, other, name);
+        mkdirSync(dirname(target), { recursive: true });
+        if (entry.text !== undefined) writeFileSync(target, entry.text);
+        else copyFileSync(entry.copy, target);
+      }
+      regenerated.push(other);
+    }
+  }
+
+  // A CHAPTER TAKEN OUT OF THE BOOK LEAVES THE SITE, and only on a full build:
+  // an author who named one chapter has not asked about the others. Until there
+  // was a spine this was impossible — the site was the only record of itself, so
+  // nothing could be known to be surplus.
+  const dropped = book && files.length === 0 ? prune(site, book) : [];
+
+  // ONE CONTENTS PAGE PER BOOK, rewritten every time, because it is a rendering
+  // of the spine rather than a file anybody maintains.
+  const indexes = book ? booksOf(book) : [{ url: '', title: null, blocks: null }];
+  for (const one of indexes) {
+    const blocks = one.blocks ? contentsOf(one) : blocksFromDirectory(pagesIn(site));
+    const target = join(site, one.url, 'index.html');
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, indexHtml({
+      title: one.title ?? undefined, blocks, prefix: prefixFor(one.url),
+    }));
+  }
+
+  // SAY WHERE IT WENT. This is the one command that writes outside the directory
+  // it was pointed at, and doing that in silence is spooky.
+  if (!existed) {
+    process.stderr.write(`created ${shownAs(site)}/ — you may want it in .gitignore\n`);
+  }
+  if (created) {
+    process.stderr.write(`created ${shownAs(created)} — the contents of your site.`
+      + ' Reorder it, rename chapters, group them under headings.\n');
+  }
+  for (const entry of added) {
+    process.stderr.write(`added ${entry} to ${shownAs(spineFile)}\n`);
+  }
+
+  // ONE LINE FOR A BOOK, the chapter's own line when a chapter was named: twenty
+  // announce lines is a wall, and a full build is meant to be run often.
+  if (files.length === 0) {
+    process.stderr.write(`${pages.length} chapter${pages.length === 1 ? '' : 's'} → `
+      + `${shownAs(site)}/${shared ? ` (${shared} shared files)` : ''}\n`);
+  } else {
+    for (const chapter of pages) {
+      process.stderr.write(`${wrote.get(chapter.url) ?? 0} files → `
+        + `${shownAs(join(site, chapter.url))}/`
+        + (shared ? ` (${shared} shared with the site)\n` : ' (runtime and engine already'
+          + ' there)\n'));
+    }
+  }
+  if (dropped.length) {
+    process.stderr.write(`${dropped.length} page${dropped.length === 1 ? '' : 's'} no longer in `
+      + `the book removed: ${dropped.join(', ')}\n`);
+  }
+
+  // SAID OUT LOUD, because a build aimed at one file has just rewritten others.
+  if (state.verdict === 'newer' && state.runtimeMoved) {
+    process.stderr.write(`runtime ${state.have.runtime ?? 'unknown'} → ${state.ours.runtime}`
+      + ` · ${regenerated.length} page${regenerated.length === 1 ? '' : 's'} regenerated\n`);
+  }
+  if (state.verdict === 'newer' && state.engineMoved) {
+    // What regeneration cannot fix: the pages' code is current, their saved
+    // answers came out of the old engine and still live in the author's file.
+    process.stderr.write(`engine ${state.have.engine ?? 'unknown'} → ${state.ours.engine}`
+      + ' · re-run `execute` on your chapters\n');
+  }
+  if (stranded.length) {
+    process.stderr.write(`could not regenerate ${stranded.join(', ')} — no chapter beside `
+      + `${stranded.length === 1 ? 'it' : 'them'}. Build from the notebook again.\n`);
+  }
+  const listed = book ? chaptersOf(book).length : pagesIn(site).length;
+  process.stderr.write(`${shownAs(join(site, 'index.html'))} lists `
+    + `${listed} notebook${listed === 1 ? '' : 's'}\n`);
+  // SAID HERE BECAUSE THIS IS WHERE IT IS ACTED ON. The obvious next move is to
+  // double-click index.html, and that is the one thing that cannot work:
+  // browsers refuse ES modules over file:// and the engine cannot be fetched
+  // there either (869erqq1u).
+  process.stderr.write(`Host ${shownAs(site)} over HTTP — opening it from disk`
+    + ' will not run.\n');
+  return 0;
+}
+
+/** A first guess at what a book is called: the project's own directory. */
+function projectName(dir) {
+  const name = basename(resolve(dir)).replace(/[-_]+/g, ' ').trim();
+  return name ? name[0].toUpperCase() + name.slice(1) : 'Prolog notebooks';
+}
+
+/** Read and parse a chapter, reporting it the way every other command does. */
+function readNotebook(file) {
+  try {
+    const source = readFileSync(file, 'utf8');
+    return { source, notebook: parse(source) };
+  } catch (e) {
+    process.stderr.write(`${file}: ${e.message}\n`);
+    return null;
+  }
+}
+
+/**
+ * Put chapters the book does not name into it, and say so.
+ *
+ * APPENDED, NEVER SORTED IN. The order in that file is the author's opinion and
+ * a tool that rearranges it is one they stop trusting with it.
+ */
+function bind(spineFile, files) {
+  const added = [];
+  let text = readFileSync(spineFile, 'utf8');
+  for (const file of files) {
+    const target = relative(dirname(spineFile), resolve(file)).split(sep).join('/');
+    if (text.includes(`(${target})`)) continue;
+    const read = readNotebook(file);
+    if (read === null) continue;
+    text = withEntry(text, { title: titleOf(read.notebook), target });
+    added.push(target);
+  }
+  if (added.length) writeFileSync(spineFile, text);
+  return added;
+}
+
+/**
+ * Page directories the site holds, at any depth, as site-relative URLs.
+ *
+ * A PAGE IS A DIRECTORY WITH AN app.js IN IT — ours, unmistakably, and written
+ * by nothing else. pagesIn() asks a looser question (does it have an index.html)
+ * because it is deciding what to list; this one decides what may be deleted, and
+ * the site is somebody's directory that may hold things we did not put there.
+ */
+function builtPages(site, at = '') {
+  if (!existsSync(join(site, at))) return [];
+  const found = [];
+  for (const name of readdirSync(join(site, at))) {
+    if (at === '' && isShared(`${name}/`)) continue;
+    const dir = join(site, at, name);
+    if (!statSync(dir).isDirectory()) continue;
+    if (existsSync(join(dir, 'app.js'))) found.push(`${at}${name}/`);
+    else found.push(...builtPages(site, `${at}${name}/`));
+  }
+  return found;
+}
+
+/** Pages the book no longer names, removed. Only ever called on a full build. */
+function prune(site, book) {
+  const keep = new Set(chaptersOf(book).map((c) => c.url));
+  const dropped = builtPages(site).filter((url) => !keep.has(url));
+  for (const url of dropped) rmSync(join(site, url), { recursive: true, force: true });
+  // A book's contents page goes with the last of its chapters; the directory may
+  // still hold somebody else's files, so only the page we wrote is removed.
+  const books = new Set(booksOf(book).map((b) => b.url));
+  for (const url of new Set(dropped.map((u) => u.split('/').slice(0, -2).join('/')))) {
+    const dir = url === '' ? '' : `${url}/`;
+    if (books.has(dir) || dir === '') continue;
+    rmSync(join(site, dir, 'index.html'), { force: true });
+  }
+  return dropped.map((u) => u.replace(/\/$/, ''));
 }
 
 async function runFile(file, session, options) {
