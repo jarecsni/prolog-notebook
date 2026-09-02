@@ -212,22 +212,64 @@ export function pagesIn(dir) {
 }
 
 /**
- * The site's front page, rewritten on every build (869erptbr).
+ * A book's contents page, rewritten on every build (869erptbr, 869eu5tg1).
  *
- * ORDER IS THE SITE'S BUSINESS, NOT THE NOTEBOOK'S. A chapter never states its
- * own position — that is the rule the whole format is built on (binding.md) — so
- * an index is an opinion held by the directory, and alphabetical is the honest
- * placeholder until there is somewhere for a real order to live.
+ * IT IS A RENDERING OF THE SPINE, not a list extracted from it. The author's
+ * headings, their order and their prose are all on the page, because the file
+ * they wrote IS the contents page and anything less would make them keep two
+ * versions of the same opinion.
+ *
+ * Order used to be alphabetical, which the comment here called "the honest
+ * placeholder until there is somewhere for a real order to live". There is now.
+ * A site with no spine still gets one of these, built from the directory, which
+ * is what keeps every 0.8 site working untouched.
  *
  * It borrows the chapter stylesheet rather than carrying its own, so it inherits
  * the palette, the dark mode and the typography, and cannot drift from the pages
  * it lists.
+ *
+ * @param {{title?: string, blocks?: object[], prefix?: string}} book
  */
-export function indexHtml(pages, { title = 'Prolog notebooks' } = {}) {
-  const items = pages.length
-    ? pages.map((p) => `<li><a href="${encodeURIComponent(p.name)}/">${escapeHtml(p.title)}</a></li>`)
-      .join('\n')
-    : '<li class="empty">No notebooks here yet.</li>';
+export function indexHtml({ title = 'Prolog notebooks', blocks = [], prefix = './' } = {}) {
+  // PREFACE IS WHAT COMES BEFORE THE FIRST ENTRY. After that, prose belongs to
+  // the section it sits in — the rule has to be positional, because a heading
+  // introducing the first part necessarily precedes every entry under it.
+  const first = blocks.findIndex((b) => b.kind === 'chapter' || b.kind === 'book');
+  const cut = first === -1 ? blocks.length : first;
+  const preface = blocks.slice(0, cut).filter((b) => b.kind === 'prose');
+  const contents = [...blocks.slice(0, cut).filter((b) => b.kind !== 'prose'), ...blocks.slice(cut)];
+
+  const items = [];
+  let open = false;
+  const shut = () => { if (open) items.push('</ul>'); open = false; };
+  const list = () => { if (!open) items.push('<ul class="contents">'); open = true; };
+
+  for (const block of contents) {
+    if (block.kind === 'heading') {
+      shut();
+      const level = Math.min(Math.max(block.level, 2), 6);
+      items.push(`<h${level}>${escapeHtml(block.text)}</h${level}>`);
+      continue;
+    }
+    if (block.kind === 'prose') {
+      shut();
+      items.push(`<p class="aside">${escapeHtml(block.text)}</p>`);
+      continue;
+    }
+    list();
+    // A book reads as a book: it says how much is inside, because "Bratko" and
+    // "Bratko, 12 chapters" are different promises to somebody deciding where to
+    // start.
+    const count = block.kind === 'book' ? countIn(block) : 0;
+    items.push(`<li${block.kind === 'book' ? ' class="book"' : ''}>`
+      + `<a href="${block.href}">${escapeHtml(block.title)}</a>`
+      + (count ? `<span class="count">${count} chapter${count === 1 ? '' : 's'}</span>` : '')
+      + '</li>');
+  }
+  shut();
+  const body = items.length ? items.join('\n')
+    : '<ul class="contents"><li class="empty">No notebooks here yet.</li></ul>';
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -235,26 +277,61 @@ export function indexHtml(pages, { title = 'Prolog notebooks' } = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <link rel="icon" href="data:image/svg+xml,${FAVICON}">
-<link rel="stylesheet" href="notebook.css">
+<link rel="stylesheet" href="${prefix}notebook.css">
 <style>
-  .contents { list-style: none; padding: 0; margin: 2.5rem 0 0; }
-  .contents li { border-top: 1px solid var(--rule); }
+  .contents { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+  .contents li { border-top: 1px solid var(--rule); display: flex; align-items: baseline; gap: 1rem; }
   .contents li:last-child { border-bottom: 1px solid var(--rule); }
-  .contents a { display: block; padding: 1rem .2rem; text-decoration: none; color: inherit; }
+  .contents a { display: block; padding: 1rem .2rem; text-decoration: none; color: inherit; flex: 1; }
   .contents a:hover { color: var(--accent); }
+  .contents .count { opacity: .55; font-size: .85em; padding-right: .2rem; }
   .contents .empty { padding: 1rem .2rem; opacity: .6; font-style: italic; }
+  main > h2, main > h3 { margin: 2.5rem 0 0; }
+  main > h2:first-of-type, main > h3:first-of-type { margin-top: 2rem; }
+  p.aside { opacity: .75; }
 </style>
 </head>
 <body>
 <main>
 <h1>${escapeHtml(title)}</h1>
-<ul class="contents">
-${items}
-</ul>
+${preface.map((b) => `<p>${escapeHtml(b.text)}</p>`).join('\n')}
+${body}
 </main>
 </body>
 </html>
 `;
+}
+
+/**
+ * How a page at this URL reaches the shared files at the site root.
+ *
+ * The runtime, the engine and the stylesheet live once at the top (869erqwkp),
+ * so every page needs to climb back to them — one level from /lists/, two from
+ * /bratko/lists/. Books nest without limit, so this counts rather than choosing
+ * between './' and '../'.
+ */
+export function prefixFor(url = '') {
+  const depth = url.split('/').filter(Boolean).length;
+  return depth === 0 ? './' : '../'.repeat(depth);
+}
+
+/** Chapters at any depth, for the count a book shows beside its name. */
+function countIn(book) {
+  return (book.blocks ?? []).reduce((n, b) => n
+    + (b.kind === 'chapter' ? 1 : b.kind === 'book' ? countIn(b) : 0), 0);
+}
+
+/**
+ * The blocks a site with no spine has: its directories, alphabetically.
+ *
+ * EVERY 0.8 SITE STILL BUILDS. Nothing about the spine is retrospective, so a
+ * project that has never had one keeps the behaviour it has always had, and the
+ * same renderer draws both.
+ */
+export function blocksFromDirectory(pages) {
+  return pages.map((p) => ({
+    kind: 'chapter', title: p.title, name: p.name, href: `${encodeURIComponent(p.name)}/`,
+  }));
 }
 
 /**

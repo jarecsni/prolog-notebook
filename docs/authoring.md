@@ -333,10 +333,38 @@ it and email it.
 **One site, however many chapters.** `build` does not write beside the notebook you gave it. It
 walks up looking for an existing `prolog-notebook-site`, then for a `.git`, and writes there —
 so a second chapter from a different folder joins the first rather than starting a site of its
-own, and the runtime and the engine are written once for all of them. The index is regenerated
-from the directory every time, with each chapter's title taken from its own H1. Order is
-alphabetical for now: a chapter never states its position, so an index is the site's opinion
-rather than the notebook's.
+own, and the runtime and the engine are written once for all of them.
+
+**And the site knows what it should contain.** The first build writes
+`prolog-notebook-index.md` beside it — the *spine* — and that file, not the directory, is what
+a site is:
+
+```markdown
+---
+format: prolog-notebook-book/1
+---
+
+# Prolog Studies
+
+Working through the classics, one chapter at a time.
+
+## Part I — Foundations
+- [Terms and unification](notes/terms.prolog.md)
+- [Splitting a list](notes/lists.prolog.md)
+```
+
+Track it, and edit it freely: the order is yours, the headings become the groups on the
+contents page, the prose above the first entry is its preface, and the link text is what
+readers see even where it differs from the chapter's own H1 — a book is allowed to rename a
+chapter for its table of contents. A chapter never states its own position, so where it sits
+is the book's opinion to hold, and this is where it holds it.
+
+Then `prolog-notebook build`, with no arguments, builds **the whole book** in that order, and
+removes any page whose entry you have deleted. Naming a chapter still builds just that one, and
+adds it to the spine if it is not there yet — appended, never sorted in, and never near your
+prose. A link to another spine is a sub-book, published beneath its parent, so one repository
+can hold several books; it cannot hold several *sites*, because GitHub Pages serves one per
+repository. The whole format is [docs/binding.md §3](binding.md).
 
 `--root` writes to the project's site even when a nearer one would have won the walk, and
 `--out <dir>` puts it wherever you say. Every build prints where it went, because writing

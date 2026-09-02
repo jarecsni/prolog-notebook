@@ -171,6 +171,25 @@ function parseFrontMatter(state) {
   throw new NotebookError('front matter is not closed', 1);
 }
 
+/**
+ * Front matter and where the body starts, for a file that is NOT a notebook.
+ *
+ * The spine (binding.md §3) carries the same restricted subset as a notebook —
+ * that is the whole reason it needs no YAML dependency either — so it reads it
+ * with the same parser rather than a second one that can drift from this.
+ *
+ * The line offset comes back because a spine reports errors against the line the
+ * author wrote, and the front matter is the part it has to skip to count them.
+ *
+ * @returns {{frontMatter: Map<string, string>, lines: string[], start: number}}
+ */
+export function frontMatterOf(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const state = { lines, i: 0 };
+  const frontMatter = parseFrontMatter(state);
+  return { frontMatter, lines, start: state.i };
+}
+
 /** Read a fenced block starting at state.i. Leaves state.i after the closing fence. */
 function readFence(state) {
   const open = /^(`{3,})(.*)$/.exec(state.lines[state.i]);
