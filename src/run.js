@@ -39,8 +39,9 @@ export const DEFAULT_LIMIT = 100;
  * @param {{frontMatter: Map<string, string>, cells: object[]}} notebook
  * @param {{consult: Function, query: Function}} session
  * @param {{limit?: number, onCell?: (event: object) => void}} [options]
- *   `onCell` hears each cell as it finishes, so a CLI can report progress
- *   without this module knowing what a terminal is.
+ *   `onCell` hears each cell begin and finish, so a CLI can report progress
+ *   without this module knowing what a terminal is — and so something watching
+ *   for a runaway goal can name the cell that stopped answering.
  * @returns {Promise<{edits: Map<string, object>, failures: object[], warnings: object[]}>}
  */
 export async function runNotebook(notebook, session, options = {}) {
@@ -50,6 +51,11 @@ export async function runNotebook(notebook, session, options = {}) {
   const warnings = [];
 
   for (const cell of notebook.cells) {
+    if (cell.kind !== 'program' && cell.kind !== 'query') continue;
+    // ANNOUNCED BEFORE IT RUNS, not only after (869ejgyax). A cell that never
+    // finishes is exactly the one worth naming, and it can only be named by
+    // something that heard it start.
+    onCell({ kind: 'begin', id: cell.id, of: cell.kind, goal: cell.goal ?? null });
     if (cell.kind === 'program') {
       const result = await session.consult(cell.source, cell.id);
       for (const message of result.messages ?? []) {
@@ -66,7 +72,6 @@ export async function runNotebook(notebook, session, options = {}) {
       onCell({ kind: 'program', id: cell.id, ok: result.ok, error: result.error ?? null });
       continue;
     }
-    if (cell.kind !== 'query') continue;
 
     const run = await runQuery(session, cell.goal, limit);
     edits.set(cell.id, { output: solutionSequence(run) });

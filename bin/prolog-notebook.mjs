@@ -16,7 +16,8 @@ import { banner, VERSION } from '../src/version.js';
 import { updateNotice } from '../src/update.js';
 import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 import { clearedSource, exportSource } from '../src/export.js';
-import { runNotebook, DEFAULT_LIMIT } from '../src/run.js';
+import { DEFAULT_LIMIT } from '../src/run.js';
+import { Guarded, DEFAULT_TIMEOUT } from '../src/guard.js';
 import { buildFiles, livePages, sharedFiles, titleOf } from '../src/build.js';
 import {
   SITE, blocksFromDirectory, findSite, indexHtml, isEngine, isShared, pageName, pagesIn,
@@ -108,6 +109,7 @@ const COMMANDS = {
     blurb: 'run every query, write the answers in',
     options: [
       ['--limit <n>', `solutions to take from one query before stopping (default ${DEFAULT_LIMIT})`],
+      ['--timeout <s>', `seconds a cell may say nothing before it is abandoned (default ${DEFAULT_TIMEOUT}, 0 waits)`],
       ['--stdout', 'print the result instead of writing the file'],
       ['--quiet', 'report only failures'],
     ],
@@ -277,13 +279,6 @@ function unknownOption(arg, command) {
     ? `${arg} belongs to ${home}, not to ${command}\n`
     : `unknown option "${arg}"\n`;
 }
-
-/**
- * A runaway goal hangs this process — the engine is in-process here, so there is
- * no thread left to notice (869ejgyax). Stated rather than implied, because the
- * moment this runs a file someone else wrote it stops being an annoyance.
- */
-const RUNAWAY_WARNING = 'note: a non-terminating goal will hang this command; it has no timeout yet (869ejgyax)';
 
 /**
  * Who this is, and — the part that is not on anyone's disk — which Prolog it
@@ -459,7 +454,9 @@ async function main(argv) {
     return 2;
   }
 
-  const options = { limit: DEFAULT_LIMIT, stdout: false, quiet: false };
+  const options = {
+    limit: DEFAULT_LIMIT, timeout: DEFAULT_TIMEOUT, stdout: false, quiet: false,
+  };
   // Whether the offer has already been made, before the work started.
   let checked = false;
   const files = [];
@@ -472,6 +469,13 @@ async function main(argv) {
         return 2;
       }
       options.limit = value;
+    } else if (arg === '--timeout') {
+      const value = Number(args.shift());
+      if (!Number.isInteger(value) || value < 0) {
+        process.stderr.write('--timeout takes a whole number of seconds, or 0 to wait\n');
+        return 2;
+      }
+      options.timeout = value;
     } else if (arg === '--stdout') options.stdout = true;
     else if (arg === '--quiet') options.quiet = true;
     else if (arg.startsWith('-')) {
@@ -490,7 +494,6 @@ async function main(argv) {
     if (chapters === null) return 1;
     files.push(...chapters);
   }
-  if (!options.quiet) process.stderr.write(`${RUNAWAY_WARNING}\n`);
 
   const jump = await upgradeFirst({ quiet: options.quiet });
   if (jump !== null) return jump;
@@ -511,19 +514,19 @@ async function main(argv) {
     ? Promise.resolve({ message: null, newer: null })
     : updateNotice({ version: VERSION }).catch(() => ({ message: null, newer: null }));
 
-  // One engine for the whole invocation, restarted between files. A notebook is
-  // a world of its own — one cell is one virtual file, and two chapters may
-  // define the same predicate — so carrying clauses across would let a file pass
-  // because of what the file before it happened to load.
-  const { createSession } = await engine();
-  const session = await createSession();
+  // ONE ENGINE FOR THE WHOLE INVOCATION, IN A THREAD WE CAN KILL (869ejgyax).
+  // A notebook is a world of its own — one cell is one virtual file, and two
+  // chapters may define the same predicate — so the runner resets between files
+  // and nothing crosses (869euun4p).
+  const runner = new Guarded({ limit: options.limit, seconds: options.timeout });
   let status = 0;
 
-  for (const file of files) {
-    // reset(), NOT restart(): restart replays the consult log, which still holds
-    // the chapter before this one (869euun4p).
-    await session.reset();
-    status = Math.max(status, await runFile(file, session, options));
+  try {
+    for (const file of files) {
+      status = Math.max(status, await runFile(file, runner, options));
+    }
+  } finally {
+    await runner.close();
   }
 
   // stderr, always: `execute --stdout` is a notebook going down a pipe, and a version
@@ -1367,7 +1370,7 @@ function prune(site, book) {
   return dropped.map((u) => u.replace(/\/$/, ''));
 }
 
-async function runFile(file, session, options) {
+async function runFile(file, runner, options) {
   const name = basename(file);
   let notebook;
   let source;
@@ -1381,10 +1384,9 @@ async function runFile(file, session, options) {
     return 1;
   }
 
-  const { edits, failures, warnings } = await runNotebook(notebook, session, {
-    limit: options.limit,
-    onCell: (event) => {
-      if (options.quiet) return;
+  const { edits, failures, warnings, hung } = await runner.run(source, (event) => {
+    {
+      if (options.quiet || event.kind === 'begin') return;
       if (event.kind === 'program') {
         process.stderr.write(`  ${event.ok ? '✓' : '✗'} ${event.id}\n`);
         return;
@@ -1394,10 +1396,21 @@ async function runFile(file, session, options) {
         : `${event.solutions.length} solution${event.solutions.length === 1 ? '' : 's'}`
           + (event.truncated ? ` (stopped at ${options.limit}, not exhausted)` : '');
       process.stderr.write(`  ${event.error ? '✗' : '✓'} ${event.id} — ${answers}\n`);
-    },
+    }
   });
 
   for (const warning of warnings) process.stderr.write(`  ! ${warning.id}: ${warning.text}\n`);
+
+  // A GOAL THAT NEVER CAME BACK. Nothing is written, for the same reason a failed
+  // program cell writes nothing: the answers that DID arrive are fine, but the
+  // cell that hung would keep whatever stale answer it already had, and a file
+  // that is part fresh and part stale is worse than one that was not touched.
+  if (hung) {
+    process.stderr.write(`${file}: ${hung.id} did not finish within ${options.timeout}s`
+      + `${hung.goal ? ` — ?- ${hung.goal}` : ''}\n`);
+    process.stderr.write(`${name}: not written. Fix the goal, or raise --timeout.\n`);
+    return 1;
+  }
 
   if (failures.length) {
     // NOTHING IS WRITTEN when a program cell failed to load. Every answer below

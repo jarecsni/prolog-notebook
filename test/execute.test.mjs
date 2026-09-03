@@ -182,10 +182,10 @@ test('the command fills a file in place, and says so', async () => {
   const filled = await readFile(file, 'utf8');
   assert.match(filled, /```text output for="q-split" input-hash="[0-9a-f]{16}"/);
 
-  // Said out loud on every run: this process has no defence against a goal that
-  // does not terminate (869ejgyax), and the moment it runs a file someone else
-  // wrote that stops being an annoyance.
-  assert.match(stderr, /no timeout yet/);
+  // It used to say so on every run — "a non-terminating goal will hang this
+  // command; it has no timeout yet". It has one now (869ejgyax), so the note is
+  // gone rather than left standing as a false thing said on every run.
+  assert.doesNotMatch(stderr, /no timeout|will hang/);
 
   const again = await run('node', [CLI, 'execute', file]);
   assert.match(again.stderr, /unchanged/);
@@ -493,6 +493,49 @@ secret(X)
   assert.doesNotMatch(answered, /X = 42/, 'it borrowed the chapter before it');
   // The truth, which is also what a reader running this chapter alone would see.
   assert.match(answered, /Unknown procedure: secret\/1/);
+});
+
+test('a goal that never comes back is abandoned, and nothing is written', async () => {
+  // `loop :- loop.` HAS THE THREAD AND WILL NOT GIVE IT BACK. The browser has
+  // always been safe — the engine is in a Worker and Stop terminates it — and
+  // Node was not: the engine ran in the only thread there was, so a deadline
+  // timer could not fire and the process had to be killed by hand.
+  const file = await temp('loop.prolog.md', `---
+format: prolog-notebook/1
+---
+
+# Runaway
+
+\`\`\`prolog program id="p-1"
+loop :- loop.
+fine(1).
+\`\`\`
+
+\`\`\`prolog query id="q-ok"
+fine(X)
+\`\`\`
+
+\`\`\`prolog query id="q-loop"
+loop
+\`\`\`
+`);
+  const before = await readFile(file, 'utf8');
+
+  const started = Date.now();
+  const run1 = await run('node', [CLI, 'execute', '--timeout', '3', file]).catch((e) => e);
+  const took = (Date.now() - started) / 1000;
+
+  assert.equal(run1.code, 1);
+  assert.ok(took < 25, `it came back, in ${took.toFixed(1)}s`);
+  // NAMED, because the deadline is on progress and every cell announces itself
+  // before it runs — so the one that went quiet is known.
+  assert.match(run1.stderr, /q-loop did not finish within 3s — \?- loop/);
+  assert.match(run1.stderr, /not written\. Fix the goal, or raise --timeout\./);
+
+  // NOTHING WRITTEN. The answers that did arrive are fine, but the cell that hung
+  // would keep whatever stale answer it already had, and a file that is part
+  // fresh and part stale is worse than one that was not touched.
+  assert.equal(await readFile(file, 'utf8'), before);
 });
 
 test('clear then execute is the chapter it started as', async () => {

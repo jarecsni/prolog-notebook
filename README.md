@@ -209,6 +209,7 @@ Each option belongs to a command, and typing one under the wrong command tells y
 |---|---|---|
 | `--title <text>` | `new` | the chapter's heading. Default: from the filename |
 | `--limit <n>` | `execute` | solutions to take from one query before stopping. Default 100. |
+| `--timeout <s>` | `execute` | seconds a cell may say nothing before it is abandoned. Default 30; `0` waits |
 | `--stdout` | `execute`, `clear` | print the result instead of writing the file |
 | `--quiet` | `execute`, `clear` | report only failures |
 | `--out <dir>` | `build` | where the site is. Default: the nearest `prolog-notebook-site`, else one at the project root |
