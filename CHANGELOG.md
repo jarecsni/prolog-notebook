@@ -4,6 +4,29 @@
 
 ### Added
 
+- **A goal that never comes back no longer hangs the command.** `loop :- loop.` had the only
+  thread there was, so a deadline timer could not fire and the process had to be killed by
+  hand. The engine now runs in a thread the CLI can terminate — the same answer the browser has
+  always had, where Stop kills the Worker:
+
+  ```
+  $ prolog-notebook execute --timeout 3 loop.prolog.md
+    ✓ p-1
+    ✓ q-ok — 1 solution
+  loop.prolog.md: q-loop did not finish within 3s — ?- loop
+  loop.prolog.md: not written. Fix the goal, or raise --timeout.
+  ```
+
+  **The deadline is on progress, not on total time**, so a chapter of fifty slow cells never
+  trips it while a single cell that has said nothing for half a minute always does. Every cell
+  announces itself before it runs, which is how the one that went quiet can be named. Nothing
+  is written for that chapter: the answers that did arrive are fine, but the cell that hung
+  would keep whatever stale answer it already had, and a file that is part fresh and part stale
+  is worse than one that was not touched.
+
+  `--timeout <seconds>`, default 30, `0` to wait forever. And `execute` no longer prints
+  *"a non-terminating goal will hang this command; it has no timeout yet"* on every run.
+
 - **`prolog-notebook new <file>`** — a chapter that already has its shape: front matter, a
   heading taken from the filename, a program cell and a query cell, and an entry in your book.
 
