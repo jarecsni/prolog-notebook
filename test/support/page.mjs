@@ -201,6 +201,20 @@ export function pageFor(source, { engine = fakeEngine(), download, published } =
       field.dispatchEvent(new window.Event('input', { bubbles: true }));
     },
 
+    /**
+     * Press a key IN a cell's box, which is where the page's own key handling
+     * lives — Enter, `;` and Cmd-Enter all mean different things there (869euu7t0).
+     */
+    key: (id, key, { meta = false, ctrl = false } = {}) => {
+      const field = cell(id).querySelector('textarea');
+      field.dispatchEvent(new window.KeyboardEvent('keydown', {
+        key, metaKey: meta, ctrlKey: ctrl, bubbles: true, cancelable: true,
+      }));
+    },
+
+    /** The goal as the box holds it, newlines and all. */
+    goal: (id) => cell(id).querySelector('.prompt textarea').value,
+
     /** Type into the prediction box without leaving it. */
     type_predict: (text) => {
       const box = find('.predict textarea');

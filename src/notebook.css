@@ -72,12 +72,30 @@ textarea, input {
   font: 14px/1.55 ui-monospace, "SF Mono", Menlo, monospace;
   color: var(--ink);
   background: #fff;
-  resize: none;
+  /* A READER MAY DRAG IT. Auto-growing gets the height right almost always;
+     `resize: none` made the almost impossible to correct. */
+  resize: vertical;
+  /* Grown by script to fit its content, and capped here rather than in the
+     script so a pasted monster scrolls instead of eating the page. */
+  max-height: 60vh;
+  overflow-y: auto;
 }
 textarea:focus, input:focus { outline: 2px solid #cfd8e8; outline-offset: -2px; }
 
 input { border-bottom: 1px solid var(--rule); }
 .query .prompt { display: flex; align-items: baseline; }
+/* The goal used to be an <input>, which could not wrap, could not grow, and
+   could not be dragged — so a long conjunction lived in a forty-character
+   peephole (869euu7t0). */
+.query .prompt textarea {
+  border-bottom: 1px solid var(--rule);
+  padding-left: .4rem;
+  min-height: 0;
+  /* A goal is short. Eight lines is already a very long conjunction, and a box
+     that could take 60% of the screen when something odd is pasted into it is
+     worse than one that scrolls — the drag handle is there for the exception. */
+  max-height: 11rem;
+}
 .query .prompt span {
   padding-left: .9rem;
   font: 14px ui-monospace, Menlo, monospace;

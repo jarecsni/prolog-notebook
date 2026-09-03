@@ -718,8 +718,41 @@ async function boot(options, bus, status) {
   return session;
 }
 
+/**
+ * A box that is as tall as what is in it (869euu7t0).
+ *
+ * ENTER MAKES ROOM. The Captain: "if you need more space, you get it." A goal
+ * that wraps used to live in a forty-character peephole, and a program cell was
+ * a fixed window over a file you were editing.
+ *
+ * THE READER'S DRAG WINS. Once somebody has taken the resize handle, the height
+ * is theirs and this stops touching it — a box that snapped back after being
+ * dragged would be arguing with them. Detected by the browser having set an
+ * inline height that is not the one we set.
+ *
+ * The cap lives in CSS (max-height) rather than here, so a pasted monster
+ * scrolls inside its own box instead of pushing the page down.
+ */
+function grows(box) {
+  let ours = '';
+  const fit = () => {
+    if (box.dataset.resized === 'true') return;
+    box.style.height = 'auto';
+    ours = `${box.scrollHeight}px`;
+    box.style.height = ours;
+  };
+  box.addEventListener('input', fit);
+  // A drag ends in a mouseup, having set a height of its own.
+  box.addEventListener('mouseup', () => {
+    if (box.style.height && box.style.height !== ours) box.dataset.resized = 'true';
+  });
+  fit();
+  return fit;
+}
+
 function mountProgram(cell, options, bus) {
   const source = cell.querySelector('textarea');
+  grows(source);
   const button = cell.querySelector('[data-act="consult"]') ?? cell.querySelector('button');
   const resetBtn = cell.querySelector('[data-act="reset"]');
   const status = cell.querySelector('.status');
@@ -925,8 +958,19 @@ function mountProgram(cell, options, bus) {
   };
 }
 
+/**
+ * The goal, as the parser would read it back.
+ *
+ * "A goal may span lines; the lines are joined with a space" (format.js). The
+ * box may hold them apart for legibility — that is what 869euu7t0 is for — but
+ * what RUNS, what is hashed and what is written back is the one-line form, so a
+ * reader who breaks a long conjunction over two lines has not thereby edited it
+ * or made their saved answers stale.
+ */
+const goalOf = (box) => box.value.split('\n').map((l) => l.trim()).filter(Boolean).join(' ');
+
 function mountQuery(cell, options, bus, { above = [], below = [], prediction = null } = {}) {
-  const input = cell.querySelector('input');
+  const input = cell.querySelector('.prompt textarea');
   const runBtn = cell.querySelector('[data-act="run"]');
   const nextBtn = cell.querySelector('[data-act="next"]');
   const allBtn = cell.querySelector('[data-act="all"]');
@@ -938,7 +982,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
   // The chapter's own query and the chapter's own answers, kept together because
   // they only mean anything together (docs/modes.md §3). Same caveat as a program
   // cell: correct until a scratchpad restores the reader's version before mount.
-  const published = { goal: input.value, out: out.innerHTML };
+  const published = { goal: goalOf(input), out: out.innerHTML };
 
   let query = null;
   let session = null;
@@ -989,7 +1033,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
    */
   const editedFromFile = () => mine
     || (cleared && published.out !== '')
-    || input.value !== published.goal;
+    || goalOf(input) !== published.goal;
 
   // The author's own spoiler mark (format §5). It is a starting state rather than
   // a lock: the reader can always press show, because withholding the answer from
@@ -1040,7 +1084,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     // Comparing the whole context ignores cells BELOW without this having to know
     // which cell is which: they were never part of it.
     if (ran.context !== context()) return 'program changed since this ran';
-    if (input.value.trim().replace(/\.$/, '') !== ran.goal) return 'query edited since this ran';
+    if (goalOf(input).replace(/\.$/, '') !== ran.goal) return 'query edited since this ran';
     return null;
   };
 
@@ -1278,7 +1322,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     exhausted = false;
     setHidden(false);
     count = 0;
-    const goal = input.value.trim().replace(/\.$/, '');
+    const goal = goalOf(input).replace(/\.$/, '');
     if (!goal) return;
     const at = clock();
     // WHOSE ANSWERS THESE ARE is the one claim an output has always made, and an
@@ -1475,7 +1519,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
    */
   const restore = ({ goal = true } = {}) => {
     query?.close();
-    if (goal) input.value = published.goal;
+    if (goal) { input.value = published.goal; fit(); }
     out.innerHTML = published.out;
     mine = false;
     cleared = false;
@@ -1529,12 +1573,32 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
 
   input.addEventListener('input', refresh);
 
+  const fit = grows(input);
+
+  // TYPE `;` THE WAY YOU WOULD AT A TOPLEVEL — but not into the goal, where it
+  // is a disjunction. It used to be bound on the box itself and preventDefault'd
+  // unconditionally, so `member(X, [1,2]) ; true` could not be typed at all.
+  cell.addEventListener('keydown', (e) => {
+    if (e.key !== ';' || e.target === input) return;
+    const el = e.target;
+    if (el?.isContentEditable || /^(input|textarea|select)$/i.test(el?.tagName ?? '')) return;
+    e.preventDefault();
+    if (!nextBtn.disabled) step();
+  });
+
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') runBtn.click();
-    if (e.key === ';') {
+    // ENTER MAKES A LINE, as it does in every other box on the page and in
+    // Jupyter. Running is the button, and the keyboard way to it is the one
+    // every notebook uses.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      if (!nextBtn.disabled) step();
+      runBtn.click();
     }
+    // `;` USED TO BE SWALLOWED HERE, unconditionally, which meant a disjunction
+    // could not be typed into a goal at all — `member(X, [1,2]) ; true` was
+    // unreachable in the box built for typing goals. The idiom it served, typing
+    // a semicolon the way you would at a toplevel, now lives where the arrow
+    // keys live: on the page, standing down wherever somebody is typing.
   });
 
   if (held) {
@@ -1588,7 +1652,7 @@ function mountQuery(cell, options, bus, { above = [], below = [], prediction = n
     setHidden,
     isHidden: () => hidden,
     isEdited: editedFromFile,
-    goal: () => input.value,
+    goal: () => goalOf(input),
     /** Is there an output on screen at all — the chapter's or the reader's? */
     hasOutput: () => !cleared && (mine || published.out !== ''),
     isCleared: () => cleared,

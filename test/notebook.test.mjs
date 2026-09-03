@@ -28,6 +28,45 @@ const ANSWERS = {
 
 const chapter = (options = {}) => pageFor(CHAPTER, { engine: fakeEngine({ answers: ANSWERS }), ...options });
 
+// ------------------------------------------------------------- the goal box
+
+test('Enter makes room in a goal, and does not run it', async () => {
+  const page = await chapter();
+  // ENTER MAKES A LINE. The Captain: "if you need more space, you get it."
+  // Running is the button, and Cmd-Enter for a keyboard.
+  const saved = page.out('q-is-son');
+  page.key('q-is-son', 'Enter');
+  assert.deepEqual(page.out('q-is-son'), saved, 'nothing ran: still the chapter\'s answers');
+
+  page.key('q-is-son', 'Enter', { meta: true });
+  await page.settle();
+  assert.ok(page.out('q-is-son').some((l) => l.includes('X = edward')));
+  assert.match(page.status('q-is-son'), /ran/);
+});
+
+test('a semicolon can be typed into a goal, because it is a disjunction', async () => {
+  const page = await chapter();
+  // IT USED TO BE SWALLOWED, unconditionally, by the handler that made `;` step
+  // to the next solution — so `member(X, [1,2]) ; true` could not be typed into
+  // the box built for typing goals.
+  const saved = page.out('q-is-son');
+  page.key('q-is-son', ';');
+  assert.deepEqual(page.out('q-is-son'), saved, 'nothing stepped');
+});
+
+test('breaking a long goal over lines is not editing it', async () => {
+  const page = await chapter();
+  // "A goal may span lines; the lines are joined with a space" — the format has
+  // always said so, and the box can now do it. A reader who wraps a conjunction
+  // for legibility has not changed the goal, so nothing may claim they have and
+  // nothing may call the saved answers stale.
+  page.type('q-son-b', 'son_b(X)');
+  const before = page.status('q-son-b');
+  page.type('q-son-b', 'son_b(\n  X\n)');
+  assert.equal(page.status('q-son-b'), before, 'the same goal, laid out differently');
+  assert.equal(page.goal('q-son-b'), 'son_b(\n  X\n)', 'and the box keeps the layout');
+});
+
 // ------------------------------------------------ the page's answers control
 
 test('the answers control counts what is on screen, not what is in the file', async () => {
