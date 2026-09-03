@@ -443,6 +443,10 @@ chapter for a definitely-empty one. `execute` is how you re-run them when you wa
   than failing silently. The prose and the answers are readable either way.
 - **The engine is fetched on the first Run, never on load.** Your chapter is readable in full
   before any of it arrives.
+- A goal that never terminates is **abandoned after 30 seconds of silence**, named, and the
+  file is left untouched — `--timeout` changes the wait, `--timeout 0` removes it. The deadline
+  is on progress rather than on total time, so a chapter of fifty slow cells never trips it.
+
 - `build` ships **whatever the file has**. `execute` then `build` publishes a worked chapter;
   `clear` then `build` publishes one that has never been run.
 
