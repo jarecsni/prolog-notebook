@@ -90,8 +90,20 @@ export function pageName(file) {
  * A six-chapter site was six copies of a 6.2 MB engine.
  */
 export function isShared(name) {
-  return name.startsWith('lib/') || name.startsWith('swipl/')
+  return name.startsWith('lib/') || isEngine(name)
     || name === 'notebook.css' || name === NOJEKYLL;
+}
+
+/**
+ * The 6.2 MB one, which is the only shared file worth being careful about.
+ *
+ * Everything else the site shares is a couple of hundred kilobytes altogether, so
+ * it can be compared byte for byte on every build; the engine cannot, and does
+ * not need to be — it is somebody else's dependency, and its version really does
+ * move with its bytes (869etggpr).
+ */
+export function isEngine(name) {
+  return name.startsWith('swipl/');
 }
 
 /**

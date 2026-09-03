@@ -8,11 +8,11 @@
 // KEYED BY SITE-RELATIVE PATH — `bratko/cut/index.html`, `lib/notebook.js` — so
 // the map IS the site. buildFiles names files relative to the page that owns
 // them; this is where a page learns where it sits.
-import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { buildFiles, sharedFiles } from './build.js';
 import { parse } from './format.js';
-import { indexHtml, isShared, linkFrom, prefixFor } from './site.js';
+import { indexHtml, isEngine, isShared, linkFrom, prefixFor } from './site.js';
 import { booksOf, chaptersOf, contentsOf, navigationOf } from './spine.js';
 
 /**
@@ -75,6 +75,47 @@ export function siteFiles(book, { only = null, read = defaultRead } = {}) {
     });
   }
   return files;
+}
+
+/**
+ * Whether a file already on disk is the one we would write.
+ *
+ * Byte for byte, because nothing else is honest: a size is a coincidence away
+ * from being wrong and an mtime says when somebody touched a file rather than
+ * what is in it.
+ */
+export function unchanged(target, entry) {
+  if (!existsSync(target)) return false;
+  const have = readFileSync(target);
+  return entry.text !== undefined
+    ? have.equals(Buffer.from(entry.text))
+    : have.equals(readFileSync(entry.copy));
+}
+
+/**
+ * Whether the runtime in this site is the one we would put there (869etggpr).
+ *
+ * THE VERSION IS THE KEY, AND WHILE THE RUNTIME IS BEING DEVELOPED THE VERSION
+ * DOES NOT MOVE WHILE THE BYTES DO. Edit src/notebook.js, rebuild, reload, and
+ * the page ran yesterday's code — because the site's lib/version.js said 0.9.0
+ * and so did ours, so the shared files were "already right". Harmless for a
+ * reader, and silent in the worst way for anybody working on the runtime: the
+ * page loads, behaves like yesterday, and the natural conclusion is that the fix
+ * does not work.
+ *
+ * ASKED OF THE BYTES RATHER THAN OF GIT. Comparing a working copy's dirtiness
+ * would make the answer depend on the state of somebody's checkout, which is a
+ * thing tests then have to pretend about. These files come to about 190 KB, so
+ * reading them costs less than a millisecond — and the engine, which would cost
+ * something, keeps its version as its key.
+ */
+export function runtimeStale(site) {
+  if (!existsSync(site)) return false;
+  for (const [name, entry] of sharedFiles()) {
+    if (isEngine(name)) continue;
+    if (!unchanged(join(site, name), entry)) return true;
+  }
+  return false;
 }
 
 function defaultRead(file) {
