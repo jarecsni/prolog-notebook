@@ -10,6 +10,24 @@
 
 ### Fixed
 
+- **One chapter's program no longer answers the next chapter's queries.** Running two files in
+  one `execute` let the first one's clauses reach the second:
+
+  ```
+  one.prolog.md   program: secret(42).
+  two.prolog.md   query:   secret(X)      →  X = 42.
+  ```
+
+  Chapter two has no program cell at all. `execute` restarted the engine between files, and
+  restarting **replays the consult log** — which still held the chapter before it. That is
+  exactly right for its own purpose, putting a reader's consults back after aborting a runaway
+  goal, and exactly wrong between two chapters.
+
+  It wrote wrong answers into the author's file, silently, and they looked right: a chapter
+  that cannot stand on its own got saved answers proving that it could, and the lie only
+  surfaced when a reader opened that chapter alone — the one thing this format exists to make
+  possible. `execute` with no arguments, new in 0.9, made it routine rather than rare.
+
 - **A contents page renders its prose as the markdown it is.** The spine is markdown for the
   same reason a notebook is, but its preface was being escaped and split by line — so
   `**Run**` appeared as asterisks, and one wrapped paragraph rendered as three. Prose is now a

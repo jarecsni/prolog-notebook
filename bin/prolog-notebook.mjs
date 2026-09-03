@@ -510,7 +510,9 @@ async function main(argv) {
   let status = 0;
 
   for (const file of files) {
-    await session.restart();
+    // reset(), NOT restart(): restart replays the consult log, which still holds
+    // the chapter before this one (869euun4p).
+    await session.reset();
     status = Math.max(status, await runFile(file, session, options));
   }
 
