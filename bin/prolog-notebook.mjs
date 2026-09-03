@@ -77,6 +77,15 @@ const FILES = ['<file(s)>', 'space separated list of Prolog Notebook files (.md)
  * reads as a promise that every one works everywhere, and only three of them do.
  */
 const COMMANDS = {
+  new: {
+    takes: [FILES],
+    blurb: 'start a chapter, wired up and in the book',
+    options: [
+      ['--title <text>', "the chapter's heading (default: from the filename)"],
+    ],
+    note: 'It is the one command that needs a name: there is no chapter yet for an operand\n'
+      + 'to filter, and nothing sensible to default to.\n',
+  },
   view: {
     takes: [FILES],
     blurb: 'read it in a browser, cells and all',
@@ -433,6 +442,7 @@ async function main(argv) {
   const command = args.shift();
   if (command === 'view' || command === 'build') return page(command, args);
   if (command === 'clear') return clear(args);
+  if (command === 'new') return newChapter(args);
   if (command === 'publish') return publish(args);
 
   if (command === 'upgrade') {
@@ -770,6 +780,104 @@ async function page(command, args) {
   if (options.open) openInBrowser(at);
   // Deliberately never resolves: the server is the command.
   return new Promise(() => {});
+}
+
+/**
+ * A chapter that already has its shape (869edp5ej).
+ *
+ * Small, and worth more than it looks. At ten chapters the difference between
+ * "every chapter is laid out the same way" and "every chapter was laid out by
+ * hand" is the difference between a book and a pile of files — and the first
+ * thing anybody does otherwise is copy an old chapter and delete its contents,
+ * which carries its ids and its front matter along too.
+ *
+ * IT BINDS WHAT IT MAKES. A chapter nobody has put in the book is a file, and
+ * before the spine existed there was nowhere to put it — which is why this
+ * waited for 869eu5tg1 rather than shipping as a lone file-writer.
+ */
+async function newChapter(args) {
+  const options = { title: null };
+  const files = [];
+  while (args.length) {
+    const arg = args.shift();
+    if (arg === '--title') options.title = args.shift();
+    else if (arg.startsWith('-')) {
+      process.stderr.write(unknownOption(arg, 'new'));
+      return 2;
+    } else files.push(arg);
+  }
+  if (!files.length) {
+    process.stderr.write('new needs a name for the chapter: prolog-notebook new <file>\n');
+    return 2;
+  }
+  if (options.title !== null && files.length > 1) {
+    // One title cannot be the heading of three chapters, and silently giving it
+    // to the first would be a flag read and thrown away (869erqra0).
+    process.stderr.write('--title names one chapter. Make them one at a time.\n');
+    return 2;
+  }
+
+  const made = [];
+  for (const name of files) {
+    const file = name.endsWith('.md') ? name : `${name}.prolog.md`;
+    // NEVER OVER A FILE THAT EXISTS. This writes prose somebody may have spent a
+    // week on, and there is no undo outside git.
+    if (existsSync(file)) {
+      process.stderr.write(`${file} already exists — nothing written\n`);
+      return 1;
+    }
+    mkdirSync(dirname(resolve(file)), { recursive: true });
+    writeFileSync(file, chapterSkeleton(options.title ?? titleFromName(file)));
+    made.push(file);
+    process.stderr.write(`created ${file}\n`);
+  }
+
+  // Into the book, if there is one. No spine is not an error: `build` writes the
+  // first one, and a chapter can exist before a site does.
+  const spineFile = findSpine(made[0]);
+  if (spineFile) {
+    for (const file of made) {
+      const entry = bind(spineFile, file);
+      if (entry) process.stderr.write(`added ${entry} to ${shownAs(spineFile)}\n`);
+    }
+  }
+  process.stderr.write(`Write it, then \`prolog-notebook view ${made[0]}\` to read it back.\n`);
+  return 0;
+}
+
+/** A chapter's heading, from what the author called the file. */
+function titleFromName(file) {
+  const name = basename(file).replace(/\.prolog\.md$/, '').replace(/\.md$/, '')
+    .replace(/[-_]+/g, ' ').trim();
+  return name ? name[0].toUpperCase() + name.slice(1) : 'A Prolog notebook';
+}
+
+/**
+ * The starting shape of a chapter.
+ *
+ * SMALL ON PURPOSE. It has to teach the format by being it — front matter, a
+ * heading, a program cell, a query cell with an id — without being a page of
+ * scaffolding to delete. Everything here is what the parser requires or what a
+ * chapter cannot be without; the handbook is where the rest is explained, and
+ * the command says so rather than writing it into the file.
+ */
+function chapterSkeleton(title) {
+  return `---
+format: prolog-notebook/1
+---
+
+# ${title}
+
+What a reader will be able to do by the end of this chapter.
+
+\`\`\`prolog program id="p-1"
+% The facts and rules the queries below run against.
+\`\`\`
+
+\`\`\`prolog query id="q-1"
+true
+\`\`\`
+`;
 }
 
 /**

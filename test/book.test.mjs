@@ -227,6 +227,50 @@ test('a site that has never had a spine keeps the behaviour it had', async () =>
   assert.ok(index.indexOf('href="a/"') < index.indexOf('href="b/"'), 'alphabetical, as before');
 });
 
+// ------------------------------------------------------- starting a chapter
+
+test('new writes a chapter that parses, and puts it in the book', async () => {
+  const root = await project({
+    [SPINE]: spine('# S\n\n- [First](a.prolog.md)\n'),
+    'a.prolog.md': NOTEBOOK('First'),
+  });
+
+  const { stderr } = await run(['new', 'notes/negation-as-failure'], root);
+  assert.match(stderr, /created notes\/negation-as-failure\.prolog\.md/);
+  // A CHAPTER NOBODY HAS PUT IN THE BOOK IS A FILE. Before the spine there was
+  // nowhere to put it, which is why this waited rather than shipping as a lone
+  // file-writer.
+  assert.match(stderr, new RegExp(`added notes/negation-as-failure\\.prolog\\.md to ${SPINE}`));
+
+  const written = await readFile(join(root, 'notes/negation-as-failure.prolog.md'), 'utf8');
+  // The heading is the name the author gave the file, made readable.
+  assert.match(written, /^# Negation as failure$/m);
+  // And it is a chapter, not a fragment: `build` is the test of that.
+  await run(['build'], root);
+  assert.ok(existsSync(page(root, 'negation-as-failure')));
+});
+
+test('new refuses to write over anything, and takes a title', async () => {
+  const root = await project({ 'a.prolog.md': NOTEBOOK('First') });
+
+  const clash = await run(['new', 'a.prolog.md'], root).catch((e) => e);
+  assert.equal(clash.code, 1);
+  assert.match(clash.stderr, /already exists — nothing written/);
+  // Untouched: this writes prose somebody may have spent a week on, and there is
+  // no undo outside git.
+  assert.equal(await readFile(join(root, 'a.prolog.md'), 'utf8'), NOTEBOOK('First'));
+
+  await run(['new', 'cut', '--title', 'Where does the fence go?'], root);
+  assert.match(await readFile(join(root, 'cut.prolog.md'), 'utf8'),
+    /^# Where does the fence go\?$/m);
+
+  // One title cannot be the heading of three chapters, and giving it silently to
+  // the first would be a flag read and thrown away.
+  const several = await run(['new', 'x', 'y', '--title', 'One'], root).catch((e) => e);
+  assert.equal(several.code, 2);
+  assert.ok(!existsSync(join(root, 'x.prolog.md')), 'and it wrote nothing');
+});
+
 // ---------------------------------------------------------------- navigation
 //
 // A reader can get out of a chapter (869eun9qa). Generated matter that the binder

@@ -22,6 +22,7 @@ npm i -g prolog-notebook
 
 | | |
 | --- | --- |
+| `prolog-notebook new <file(s)>` | start a chapter, wired up and in the book |
 | `prolog-notebook execute <file(s)>` | run every query and write the answers into the file |
 | `prolog-notebook view <file(s)>` | read it in a browser, cells live |
 | `prolog-notebook clear <file(s)>` | take the answers back out |
@@ -31,8 +32,8 @@ npm i -g prolog-notebook
 the whole book — so `view` with no arguments reads the lot, and `execute` with no arguments
 fills in every answer you have. `clear` with no arguments asks before emptying a book.
 
-Write prose and cells in your editor → `execute` to fill in the answers → `view` to read it as
-a reader will → `build` when it is ready. `clear` is there when you want the chapter back
+`new` to start one → write prose and cells in your editor → `execute` to fill in the answers →
+`view` to read it as a reader will → `build` when it is ready. `clear` is there when you want the chapter back
 without its answers.
 
 **Leave `view` running while you write.** Every reload serves the file as it is at that
