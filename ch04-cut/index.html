@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where does the fence go?</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%23faf7f0%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2223%22%20font-family%3D%22ui-monospace%2CMenlo%2Cmonospace%22%20font-size%3D%2219%22%20font-weight%3D%22600%22%20fill%3D%22%238a3b1e%22%20text-anchor%3D%22middle%22%3E%3F-%3C%2Ftext%3E%3C%2Fsvg%3E">
+<link rel="stylesheet" href="../notebook.css">
+</head>
+<body>
+<main>
+<!--
+  FIRST IN THE DOCUMENT, AND IT COSTS A READER NOTHING (869erqq1u). mount()
+  removes this element, and the stylesheet holds it invisible for a second and a
+  half before revealing it — so a page that boots never shows it, and a page that
+  cannot boot says so where somebody staring at a dead button will see it. It
+  used to sit AFTER the chapter, several screens below the fold, which is the one
+  place it could not do its job.
+
+  The delay is CSS rather than a timer, for the obvious reason: script is exactly
+  what is broken when this matters.
+-->
+<div id="boot-warning">
+  <strong>This notebook is not running.</strong>
+  The page loaded but its JavaScript did not. The usual cause is opening
+  <code>index.html</code> straight from disk — browsers refuse ES modules over
+  <code>file://</code>, and the engine cannot be fetched there either. Serve this
+  directory over HTTP, or run <code>prolog-notebook view</code> on the notebook
+  itself. The chapter is readable either way; only the buttons need this.
+</div>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="../">Prolog Notebook</a></nav>
+<div class="kicker">Cut and control</div>
+
+<h1>Where does the fence go?</h1>
+<p><em>You have a rule that answers correctly and says everything twice. The obvious fix
+breaks it completely — and which of the two versions breaks depends on one thing only.</em></p>
+<h2>The database</h2>
+<p>Nothing surprising here: a small family, four facts about who is male, a handful of
+parent links. Everything further down this page runs against it.</p>
+
+<div class="cell program" data-cell="p-family">
+  <div class="bar">program<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="consult" disabled>Consult</button></div>
+  <textarea id="src-p-family" spellcheck="false">male(albert).
+male(edward).
+male(alfred).
+male(george).
+
+female(victoria).
+female(alice).
+female(maud).
+
+father(albert, edward).
+father(albert, alice).
+father(albert, alfred).
+father(edward, george).
+father(edward, maud).
+
+mother(victoria, edward).
+mother(victoria, alice).
+mother(victoria, alfred).
+mother(alexandra, george).
+mother(alexandra, maud).
+
+parent(X, Y) :- father(X, Y) ; mother(X, Y).
+
+% &quot;a son is a male who has a parent&quot;
+is_son(X) :- male(X), parent(_, X).</textarea>
+</div>
+
+<h2>The complaint</h2>
+<p>Ask for every son. Press <strong>Run</strong> for the first answer, then <strong>; next</strong> to walk through
+the rest — exactly as you would type a semicolon at the interpreter's prompt.</p>
+
+<div class="cell query" data-cell="q-is-son">
+  <div class="bar">query<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="run" disabled>Run</button>
+    <button data-act="next" disabled>; next</button>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
+  <div class="prompt"><span>?-</span><input id="goal-q-is-son" value="is_son(X)" spellcheck="false"></div>
+  <div class="out">
+    <div class="line from">the chapter’s saved answers</div>
+    <div class="line echo">?- is_son(X).</div>
+    <div class="line sol">1.  X = edward</div>
+    <div class="line sol">2.  X = edward</div>
+    <div class="line sol">3.  X = alfred</div>
+    <div class="line sol">4.  X = alfred</div>
+    <div class="line sol">5.  X = george</div>
+    <div class="line sol">6.  X = george</div>
+    <div class="line done">no more solutions.</div>
+  </div>
+</div>
+
+<p class="note">edward, then edward again. Nobody has two fathers.</p>
+
+<p>Every son arrives twice. Not a bug in the definition — the definition is correct. Edward
+genuinely is a son, and Prolog genuinely found <em>two proofs</em> of it: one through
+<code>father(albert, edward)</code>, one through <code>mother(victoria, edward)</code>. Prolog reports proofs,
+not conclusions. Two proofs, two answers.</p>
+
+<div class="aside">
+<p><strong>So stop it after the first proof.</strong>
+<code>once(Goal)</code> proves <code>Goal</code> and then throws away every alternative it found along the
+way. It is <code>call(Goal), !</code> in a polite wrapper. Exactly the tool for this — assuming you
+put it in the right place.</p>
+</div>
+
+<h2>Two places to put it</h2>
+<p>Here are the only two sensible placements. Version <strong>A</strong> fences the whole body. Version
+<strong>B</strong> fences only the parent lookup. They differ by two parentheses.</p>
+
+<div class="cell program" data-cell="p-fixes">
+  <div class="bar">program<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="consult" disabled>Consult</button></div>
+  <textarea id="src-p-fixes" spellcheck="false">% A — the fence encloses everything, male(X) included
+son_a(X) :- once(( male(X), parent(_, X) )).
+
+% B — the fence encloses only the parent lookup
+son_b(X) :- male(X), once(parent(_, X)).</textarea>
+</div>
+
+<div class="predict">
+<h3>Sharpen your pencil</h3>
+<p>Both rules are correct for a single yes/no question: <code>son_a(edward)</code> and <code>son_b(edward)</code>
+both succeed. But we are about to ask each one to <em>list every son</em>. Write down how many
+answers you expect from each — then run them.</p>
+<textarea id="predict-1" placeholder="your prediction…" spellcheck="false"></textarea>
+<details>
+<summary>Reveal the answer (run them first!)</summary>
+<p><strong>A gives exactly one son. B gives three, each once.</strong></p>
+<p><code>once</code> discards the choice points created <em>inside</em> it — and it can only reach what is
+inside. In A, <code>male(X)</code> is inside the fence, so the very goal that <em>generates</em>
+candidates is what gets silenced. The body succeeds once, with edward, and there is
+nothing left to retry.</p>
+<p>In B, <code>male(X)</code> sits outside. Backtracking walks it freely — albert, edward, alfred,
+george — and for each one the fenced lookup is proved at most once. Duplicates gone,
+sons intact.</p>
+</details>
+</div>
+
+<div class="cell query" data-cell="q-son-a" data-hold="until-answered" data-rerun="auto">
+  <div class="bar">query<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="run" disabled>Run</button>
+    <button data-act="next" disabled>; next</button>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
+  <div class="prompt"><span>?-</span><input id="goal-q-son-a" value="son_a(X)" spellcheck="false"></div>
+  <div class="out">
+    <div class="line from">the chapter’s saved answers</div>
+    <div class="line echo">?- son_a(X).</div>
+    <div class="line sol">1.  X = edward</div>
+    <div class="line done">no more solutions.</div>
+  </div>
+</div>
+
+<div class="cell query" data-cell="q-son-b" data-hold="until-answered" data-rerun="auto">
+  <div class="bar">query<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="run" disabled>Run</button>
+    <button data-act="next" disabled>; next</button>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
+  <div class="prompt"><span>?-</span><input id="goal-q-son-b" value="son_b(X)" spellcheck="false"></div>
+  <div class="out">
+    <div class="line from">the chapter’s saved answers</div>
+    <div class="line echo">?- son_b(X).</div>
+    <div class="line sol">1.  X = edward</div>
+    <div class="line sol">2.  X = alfred</div>
+    <div class="line sol">3.  X = george</div>
+    <div class="line done">no more solutions.</div>
+  </div>
+</div>
+
+<h2>The rule underneath</h2>
+<p>It is tempting to file this under &quot;A is wrong, B is right&quot; and move on. That would be
+learning the answer instead of the lesson. Look again at <em>why</em> B is safe:</p>
+<p>By the time control reaches the fence in B, <code>male(X)</code> has already bound <code>X</code> to a person.
+The goal inside the fence is therefore asking a yes/no question about edward — it is a
+<strong>test</strong>. Throwing away its second proof costs nothing, because we never cared <em>which</em>
+parent, only <em>whether</em>.</p>
+<p>In A, the fence closes around <code>male(X)</code> while <code>X</code> is still unbound. There the enclosed
+goal is a <strong>generator</strong>, and <code>once</code> strangles it.</p>
+
+<div class="aside">
+<p><strong>Fence a test, never a generator.</strong>
+And notice that &quot;test&quot; and &quot;generator&quot; are not properties of a predicate. They are
+properties of a goal <em>at the moment it is called</em>, decided entirely by what is already
+bound — which is decided entirely by goal order.</p>
+</div>
+
+<p>Which is why the same predicate can be either. Try it: <code>son_b(george)</code> is a test,
+<code>son_b(X)</code> is a generator, and it is the same three lines of Prolog both times.</p>
+
+<div class="cell query" data-cell="q-son-b-george">
+  <div class="bar">query<span class="spacer"></span><span class="status"></span>
+    <button data-act="reset" disabled>reset</button>
+    <button class="primary" data-act="run" disabled>Run</button>
+    <button data-act="next" disabled>; next</button>
+    <button data-act="all" disabled>all</button>
+    <button data-act="stop" disabled>stop</button></div>
+  <div class="prompt"><span>?-</span><input id="goal-q-son-b-george" value="son_b(george)" spellcheck="false"></div>
+  <div class="out">
+    <div class="line from">the chapter’s saved answers</div>
+    <div class="line echo">?- son_b(george).</div>
+    <div class="line sol">1.  true</div>
+    <div class="line done">no more solutions.</div>
+  </div>
+</div>
+
+<div class="bullets">
+<h2>Bullet points</h2>
+<ul>
+<li>Prolog enumerates <strong>proofs</strong>, not answers. Duplicate answers mean duplicate proofs —
+look for the goal that succeeded more than one way.</li>
+<li><code>once(G)</code> is <code>call(G), !</code>. It discards choice points created <em>inside</em> it, and cannot
+touch those created before it.</li>
+<li>Fencing a <strong>test</strong> is free. Fencing a <strong>generator</strong> destroys it.</li>
+<li>Whether a goal is a test or a generator depends on what is bound when it runs, and so
+it depends on goal order. In Prolog, order is not merely about speed.</li>
+<li>There is another way entirely — leave the rule pure and clean up at collection time
+with <code>setof/3</code>. That is the next section's argument.</li>
+</ul>
+</div>
+
+<nav class="chapter-nav only-next" aria-label="Chapter"></nav>
+<p class="up"><a href="../">Contents</a></p>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
