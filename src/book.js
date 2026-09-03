@@ -43,9 +43,10 @@ export function wayOut(chapter, around) {
  * @param {{only?: Set<string>, read?: (file: string) => string}} [options]
  *   `only` limits which chapters are built — naming files on the command line —
  *   while the contents pages are always regenerated, because they describe the
- *   whole book however much of it was asked for.
+ *   whole book however much of it was asked for. `onChapter` is how `build`
+ *   learns what it just built, without parsing everything a second time.
  */
-export function siteFiles(book, { only = null, read = defaultRead } = {}) {
+export function siteFiles(book, { only = null, read = defaultRead, onChapter = null } = {}) {
   const files = new Map();
   for (const [name, entry] of sharedFiles()) files.set(name, entry);
 
@@ -53,6 +54,7 @@ export function siteFiles(book, { only = null, read = defaultRead } = {}) {
   for (const chapter of chaptersOf(book)) {
     if (only && !only.has(chapter.source)) continue;
     const { source, notebook } = read(chapter.source);
+    onChapter?.(chapter, notebook);
     const page = buildFiles(notebook, source, {
       filename: basename(chapter.source),
       prefix: prefixFor(chapter.url),

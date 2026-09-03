@@ -9,7 +9,7 @@ import {
   copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { parse, NotebookError } from '../src/format.js';
+import { parse, tally, NotebookError } from '../src/format.js';
 import { prologVersion } from '../src/engine.js';
 import { buildLine, currentBuild } from '../src/build-info.js';
 import { banner, VERSION } from '../src/version.js';
@@ -930,11 +930,15 @@ async function buildSite(files, options) {
   const wanted = new Set(files.map((f) => resolve(f)));
   const only = whole ? null : wanted;
 
+  // WHAT WAS BUILT, learned while building it rather than by parsing twice.
+  const held = [];
+  const onChapter = (chapter, notebook) => held.push({ url: chapter.url, ...tally(notebook) });
+
   let assembled;
   try {
     assembled = book
-      ? siteFiles(book, { only })
-      : looseFiles(files, site);
+      ? siteFiles(book, { only, onChapter })
+      : looseFiles(files, site, onChapter);
   } catch (e) {
     process.stderr.write(`${e.message}\n`);
     return 1;
@@ -975,7 +979,7 @@ async function buildSite(files, options) {
 
   announce({
     site, existed, created, added, spineFile, book, state, dropped, shared, assembled, mine,
-    moved, named: files.length > 0, pages: pagesBuilt(assembled),
+    moved, held, named: files.length > 0, pages: pagesBuilt(assembled),
   });
   return 0;
 }
@@ -1059,12 +1063,13 @@ async function destination(files, options) {
  * nothing to be a breadcrumb of, and a project that has never had a spine should
  * not acquire one by being built.
  */
-function looseFiles(files, site) {
+function looseFiles(files, site, onChapter) {
   const assembled = new Map();
   for (const [name, entry] of sharedFiles()) assembled.set(name, entry);
   for (const file of files) {
     const read = readNotebook(file);
     if (read === null) throw new Error(`could not build ${file}`);
+    onChapter?.({ url: `${pageName(file)}/` }, read.notebook);
     const page = buildFiles(read.notebook, read.source, {
       filename: basename(file), prefix: '../',
     });
@@ -1090,7 +1095,7 @@ function pagesBuilt(assembled) {
 /** What a build says it did. Kept in one place so a full build is not a wall. */
 function announce({
   site, existed, created, added, spineFile, book, state, dropped, shared, assembled, mine,
-  moved, named, pages,
+  moved, held, named, pages,
 }) {
   // SAY WHERE IT WENT. This is the one command that writes outside the directory
   // it was pointed at, and doing that in silence is spooky.
@@ -1119,6 +1124,32 @@ function announce({
       + (shared ? ` (${shared} shared with the site)\n` : ' (runtime and engine already'
         + ' there)\n'));
   }
+  // WHAT THE CHAPTER CONTAINS, as a fact rather than as advice (869erqqf0). An
+  // author who forgot `execute` sees it; an author who publishes without answers
+  // on purpose — which is the normal thing for a workbook — reads a true
+  // sentence about their own chapter and is not told off.
+  const queries = held.reduce((n, h) => n + h.queries, 0);
+  const answered = held.reduce((n, h) => n + h.answered, 0);
+  if (queries > 0) {
+    const state = answered === 0 ? 'no answers saved'
+      : answered === queries ? 'all answered'
+        : `${answered} answered`;
+    process.stderr.write(`${queries} quer${queries === 1 ? 'y' : 'ies'} · ${state}\n`);
+  }
+
+  // THE ONE REAL WARNING. An output whose input-hash no longer matches the
+  // program above it is answers from code that is no longer in the file —
+  // unambiguously wrong, whoever wrote it and for whatever reason. Everything
+  // else this line could say would be second-guessing an author.
+  const stale = held.filter((h) => h.stale > 0);
+  const staleAnswers = stale.reduce((n, h) => n + h.stale, 0);
+  if (staleAnswers > 0) {
+    process.stderr.write(`${staleAnswers} answer${staleAnswers === 1 ? '' : 's'} `
+      + `${staleAnswers === 1 ? 'was' : 'were'} saved from a program that has since changed`
+      + `${stale.length > 1 || named ? '' : ` (${stale.map((h) => h.url.replace(/\/$/, '')).join(', ')})`}`
+      + ' — re-run `execute`\n');
+  }
+
   if (dropped.length) {
     process.stderr.write(`${dropped.length} page${dropped.length === 1 ? '' : 's'} no longer in `
       + `the book removed: ${dropped.join(', ')}\n`);

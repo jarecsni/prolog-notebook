@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -269,6 +270,55 @@ test('new refuses to write over anything, and takes a title', async () => {
   const several = await run(['new', 'x', 'y', '--title', 'One'], root).catch((e) => e);
   assert.equal(several.code, 2);
   assert.ok(!existsSync(join(root, 'x.prolog.md')), 'and it wrote nothing');
+});
+
+// ------------------------------------------------- what a chapter contains
+
+const ANSWERED = readFileSync(new URL('../notebooks/ch04-cut.prolog.md', import.meta.url), 'utf8');
+
+test('build states what a chapter holds, and does not advise', async () => {
+  const root = await project({
+    [SPINE]: spine('# S\n\n- [Cut](cut.prolog.md)\n'),
+    'cut.prolog.md': ANSWERED,
+  });
+  assert.match((await run(['build'], root)).stderr, /4 queries · all answered/);
+
+  // A CHAPTER WITH NO ANSWERS IS A VALID CHAPTER — an author publishing a
+  // workbook wants exactly that, and the format serves it with `hold` rather
+  // than by omission. So this is a fact, not a warning: no "run execute first",
+  // no advice, nothing that reads as being told off.
+  await run(['clear', '--quiet', 'cut.prolog.md'], root);
+  const { stderr } = await run(['build'], root);
+  assert.match(stderr, /4 queries · no answers saved/);
+  assert.doesNotMatch(stderr, /should|must|first|warning/i);
+});
+
+test('an answer saved from a program that has since changed is a real warning', async () => {
+  const root = await project({
+    [SPINE]: spine('# S\n\n- [Cut](cut.prolog.md)\n'),
+    'cut.prolog.md': ANSWERED,
+  });
+  await run(['build'], root);
+
+  // THE ONE UNAMBIGUOUS DEFECT: these answers came out of code that is no longer
+  // in the file. Nothing about the author's intent can make that right.
+  await writeFile(join(root, 'cut.prolog.md'),
+    ANSWERED.replace('male(albert).', 'male(albert). % changed'));
+  const { stderr } = await run(['build'], root);
+  assert.match(stderr, /4 answers were saved from a program that has since changed/);
+  assert.match(stderr, /re-run `execute`/);
+
+  // And it goes once the answers match the program again.
+  await run(['execute', '--quiet'], root);
+  assert.doesNotMatch((await run(['build'], root)).stderr, /since changed/);
+});
+
+test('a chapter with no queries says nothing about queries', async () => {
+  const root = await project({
+    [SPINE]: spine('# S\n\n- [Prose](prose.prolog.md)\n'),
+    'prose.prolog.md': '---\nformat: prolog-notebook/1\n---\n\n# All prose\n\nNo cells here.\n',
+  });
+  assert.doesNotMatch((await run(['build'], root)).stderr, /quer/);
 });
 
 // ---------------------------------------------------------------- navigation
