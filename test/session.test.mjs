@@ -122,6 +122,26 @@ test('restarting rebuilds the clause store from the cells', async () => {
   assert.deepEqual((await session.query('q(X)').all()).solutions.map((s) => s.X), [1, 2]);
 });
 
+test('resetting keeps nothing at all, which is what a new chapter needs', async () => {
+  const session = await createSession();
+  await session.consult('secret(42).', 'cell-p');
+  assert.equal((await session.query('secret(X)').all()).solutions.length, 1);
+
+  await session.reset();
+
+  // THE DIFFERENCE FROM restart() IS THE WHOLE BUG (869euun4p). restart replays
+  // the log, because aborting a runaway goal has to put the reader's own
+  // consults back. Between two chapters that reinstated the chapter before —
+  // and a chapter with no program cell of its own was answered out of it.
+  const after = await session.query('secret(X)').all();
+  assert.equal(after.solutions.length, 0);
+  assert.match(after.error ?? '', /Unknown procedure/);
+
+  // And the log is empty, so a later restart cannot bring it back either.
+  await session.restart();
+  assert.equal((await session.query('secret(X)').all()).solutions.length, 0);
+});
+
 test('a re-consulted cell replays at its latest text, not its first', async () => {
   const session = await createSession();
   await session.consult('p(1).', 'cell-p');

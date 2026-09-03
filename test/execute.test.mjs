@@ -459,6 +459,42 @@ test('the command reports what it removed, and refuses to guess', async () => {
   assert.match(noFile.stderr, /No book here — prolog-notebook-index\.md/);
 });
 
+test('a chapter is a world of its own, however many run together', async () => {
+  // ONE CHAPTER'S PROGRAM MUST NOT ANSWER THE NEXT CHAPTER'S QUERIES (869euun4p).
+  // It did: `execute` restarted the engine between files, and restarting REPLAYS
+  // the consult log — which still held the chapter before. A chapter that cannot
+  // stand on its own got saved answers proving that it could, and the lie only
+  // showed up when a reader opened it alone in a browser.
+  //
+  // 869eu5tn7 made it routine: `execute` with no arguments runs the whole book.
+  const has = await temp('has.prolog.md', `---
+format: prolog-notebook/1
+---
+
+# Has a program
+
+\`\`\`prolog program id="p-1"
+secret(42).
+\`\`\`
+`);
+  const lacks = await temp('lacks.prolog.md', `---
+format: prolog-notebook/1
+---
+
+# Has none
+
+\`\`\`prolog query id="q-1"
+secret(X)
+\`\`\`
+`);
+
+  await run('node', [CLI, 'execute', '--quiet', has, lacks]).catch((e) => e);
+  const answered = await readFile(lacks, 'utf8');
+  assert.doesNotMatch(answered, /X = 42/, 'it borrowed the chapter before it');
+  // The truth, which is also what a reader running this chapter alone would see.
+  assert.match(answered, /Unknown procedure: secret\/1/);
+});
+
 test('clear then execute is the chapter it started as', async () => {
   // The two are a pair: one empties, the other fills. A round trip that did not
   // land on the same bytes would mean one of them is inventing something.

@@ -186,6 +186,24 @@ export class InProcessSession {
     return this.restart();
   }
 
+  /**
+   * A fresh engine with NOTHING in it (869euun4p).
+   *
+   * The difference from restart() is the whole bug: restart REPLAYS the log,
+   * because aborting a runaway goal must put the reader's own consults back.
+   * Between two chapters that is precisely wrong — the log still holds the
+   * previous chapter, so restarting reinstated it, and a chapter with no program
+   * cell of its own was answered out of the one before it.
+   *
+   * A notebook is a world of its own: one cell is one virtual file, and two
+   * chapters may define the same predicate. Nothing may cross.
+   */
+  async reset() {
+    this.log.clear();
+    this.open = null;
+    this.engine = await this.rebuild();
+  }
+
   async close() {}
 }
 

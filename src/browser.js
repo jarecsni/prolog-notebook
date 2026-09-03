@@ -153,6 +153,22 @@ export class WorkerSession {
     return this.restart();
   }
 
+  /**
+   * A fresh worker with NOTHING in it (869euun4p).
+   *
+   * The counterpart of restart(), and the difference is the point: restart puts
+   * the reader's own consults back, which is what rescuing a page from a runaway
+   * goal needs; this keeps nothing, which is what starting a different notebook
+   * needs. A page only ever holds one notebook, so nothing here calls it — it
+   * exists because the two sessions are one interface, and the CLI needs it.
+   */
+  async reset() {
+    this.log.clear();
+    this.#teardown(new Error('aborted'));
+    this.#open = null;
+    await this.start();
+  }
+
   async close() {
     this.#teardown(new Error('session closed'));
   }
