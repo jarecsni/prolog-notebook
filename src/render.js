@@ -240,7 +240,8 @@ export function renderQuery(cell, options = {}) {
     <button data-act="all" disabled>all</button>
     <button data-act="stop" disabled>stop</button></div>
   <div class="prompt"><span>?-</span>`
-    + `<input id="goal-${escapeHtml(cell.id)}" value="${escapeHtml(cell.goal)}" spellcheck="false"></div>
+    + `<textarea id="goal-${escapeHtml(cell.id)}" rows="1" spellcheck="false">`
+    + `${escapeHtml(cell.goal)}</textarea></div>
   <div class="out">${renderSavedOutput(cell, { stale })}</div>
 </div>`;
 }

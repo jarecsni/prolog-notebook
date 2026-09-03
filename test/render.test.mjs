@@ -164,7 +164,9 @@ test('the program source survives verbatim, angle brackets included', () => {
 test('a query cell carries its goal and its buttons', () => {
   const html = renderQuery(query);
   assert.match(html, /^<div class="cell query" data-cell="q-is-son">/);
-  assert.match(html, /<div class="prompt"><span>\?-<\/span><input id="goal-q-is-son" value="is_son\(X\)" spellcheck="false">/);
+  // A TEXTAREA, NOT AN INPUT (869euu7t0): a goal wraps, grows to fit and can be
+  // dragged. `rows="1"` is the resting size — one line, as it has always looked.
+  assert.match(html, /<div class="prompt"><span>\?-<\/span><textarea id="goal-q-is-son" rows="1" spellcheck="false">is_son\(X\)<\/textarea>/);
   // Stepping is the teaching device, so `; next` is not optional chrome.
   const acts = [...html.matchAll(/data-act="([a-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(acts, ['reset', 'run', 'next', 'all', 'stop']);
@@ -182,9 +184,16 @@ test('both runnable cells carry the same tick and the same way back', () => {
   }
 });
 
-test('a goal containing a quote does not break out of the attribute', () => {
-  const html = renderQuery({ id: 'q-str', goal: 'X = "str", atom_string(A, X)' });
-  assert.match(html, /value="X = &quot;str&quot;, atom_string\(A, X\)"/);
+test('a goal cannot break out of the box it is written into', () => {
+  // It used to be an attribute, so a quote was the danger. It is a textarea now,
+  // so the danger is a closing tag — the same escaping covers both, and this
+  // says which one it is covering.
+  const quoted = renderQuery({ id: 'q-str', goal: 'X = "str", atom_string(A, X)' });
+  assert.match(quoted, /<textarea[^>]*>X = &quot;str&quot;, atom_string\(A, X\)<\/textarea>/);
+
+  const closing = renderQuery({ id: 'q-x', goal: '</textarea><script>ha()</script>' });
+  assert.match(closing, /&lt;\/textarea&gt;&lt;script&gt;/);
+  assert.doesNotMatch(closing, /<script>/);
 });
 
 test('a query with no saved answers has an empty output area', () => {

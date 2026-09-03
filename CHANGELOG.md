@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Every box grows with what is in it, and you can drag it.** A goal was an `<input>`: it could
+  not wrap, could not grow, and could not be resized, so a long conjunction lived in a
+  forty-character peephole. Program cells were a fixed window over the file you were editing.
+  Both now fit their content, cap themselves rather than eating the page, and have a resize
+  handle when the automatic answer is not the one you want.
+
+- **Enter makes room; it no longer runs.** If you need more space, you get it — as in Jupyter,
+  and as in every other box on the page. **Cmd/Ctrl-Enter** runs, and so does the Run button.
+
 ### Added
 
 - **A goal that never comes back no longer hangs the command.** `loop :- loop.` had the only
@@ -66,6 +77,15 @@
   that cannot stand on its own got saved answers proving that it could, and the lie only
   surfaced when a reader opened that chapter alone — the one thing this format exists to make
   possible. `execute` with no arguments, new in 0.9, made it routine rather than rare.
+
+- **A semicolon can be typed into a goal.** `;` is Prolog's disjunction, and the handler that
+  made it step to the next solution swallowed it unconditionally — so `member(X, [1,2]) ; true`
+  could not be typed into the box built for typing goals. The shortcut still works, from
+  anywhere in the cell except the box you are typing the goal into.
+
+- **A goal broken over lines is not an edited goal.** The format has always said "a goal may
+  span lines; the lines are joined with a space", so wrapping a long conjunction for legibility
+  no longer marks the cell edited or its saved answers stale.
 
 - **A contents page renders its prose as the markdown it is.** The spine is markdown for the
   same reason a notebook is, but its preface was being escaped and split by line — so
