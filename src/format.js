@@ -666,3 +666,35 @@ export function hashFor(notebook, queryCell) {
   }
   return inputHash(queryCell.goal, preceding);
 }
+
+/**
+ * What a chapter holds, for `build` to state as a fact (869erqqf0).
+ *
+ * NOT A WARNING, AND THIS IS THE WHOLE POINT. The Captain, rejecting the first
+ * version of this: "an author will want to publish with no saved answers -
+ * normally students dont want to start with answers showing." He is right, and
+ * the format serves it properly with `hold` rather than by omission — so a
+ * chapter with no answers may be an author who forgot `execute` or an author who
+ * meant it, and nothing here can tell which. It reports; it does not advise.
+ *
+ * STALENESS IS THE ONE REAL DEFECT. An output whose input-hash no longer matches
+ * the program above it is answers from a version of the code that is no longer
+ * in the file — unambiguously wrong, whoever wrote it and whyever.
+ *
+ * @returns {{queries: number, answered: number, stale: number}}
+ */
+export function tally(notebook) {
+  let queries = 0;
+  let answered = 0;
+  let stale = 0;
+  for (const cell of notebook.cells) {
+    if (cell.kind !== 'query') continue;
+    queries += 1;
+    // An output block emptied by `clear` is not an answer. It is the shape of
+    // one, left behind so the cell keeps its place in a diff.
+    if (!cell.output?.solutions?.length && !cell.output?.terminator) continue;
+    answered += 1;
+    if (cell.output.inputHash && hashFor(notebook, cell) !== cell.output.inputHash) stale += 1;
+  }
+  return { queries, answered, stale };
+}

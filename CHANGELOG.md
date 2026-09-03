@@ -54,6 +54,26 @@
   delete its contents, which carries its ids and its front matter along too. `--title` when the
   filename is not the heading. It never writes over a file that exists.
 
+
+- **`build` says what a chapter holds.** A plain fact on the normal output, not a warning:
+
+  ```
+  3 files → prolog-notebook-site/lists/ (13 shared with the site)
+  20 queries · no answers saved
+  ```
+
+  An author who forgot `execute` sees it. An author publishing a workbook without answers —
+  which is the normal thing, and what `hold` exists for — reads a true sentence about their
+  own chapter and is not told off. No advice, no "run execute first".
+
+  **The one real warning is staleness.** An answer whose input-hash no longer matches the
+  program above it came out of code that is no longer in the file, which nothing about an
+  author's intent can make right:
+
+  ```
+  4 answers were saved from a program that has since changed (lists) — re-run `execute`
+  ```
+
 - **A live demo**, at [jarecsni.github.io/prolog-notebook](https://jarecsni.github.io/prolog-notebook/),
   linked from the top of the README. Nobody could try this project without cloning it and
   starting a web server, which was a strange thing to ask when the pitch is "installs nothing".
