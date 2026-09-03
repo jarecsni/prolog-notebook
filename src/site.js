@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { ENGINE_VERSION, ENGINE_VERSION_FILE, FAVICON, NOJEKYLL } from './build.js';
 import { VERSION } from './version.js';
+import { renderProse } from './render.js';
 
 /** The one name, wherever it lands. */
 export const SITE = 'prolog-notebook-site';
@@ -267,7 +268,7 @@ export function indexHtml({
     }
     if (block.kind === 'prose') {
       shut();
-      items.push(`<p class="aside">${escapeHtml(block.text)}</p>`);
+      items.push(`<div class="aside">${renderProse(block.text)}</div>`);
       continue;
     }
     list();
@@ -308,7 +309,7 @@ export function indexHtml({
 <body>
 <main>
 ${crumbsHtml(trail)}<h1>${escapeHtml(title)}</h1>
-${preface.map((b) => `<p>${escapeHtml(b.text)}</p>`).join('\n')}
+${preface.map((b) => renderProse(b.text)).join('\n')}
 ${body}
 </main>
 </body>

@@ -2,7 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **A live demo**, at [jarecsni.github.io/prolog-notebook](https://jarecsni.github.io/prolog-notebook/),
+  linked from the top of the README. Nobody could try this project without cloning it and
+  starting a web server, which was a strange thing to ask when the pitch is "installs nothing".
+
 ### Fixed
+
+- **A contents page renders its prose as the markdown it is.** The spine is markdown for the
+  same reason a notebook is, but its preface was being escaped and split by line — so
+  `**Run**` appeared as asterisks, and one wrapped paragraph rendered as three. Prose is now a
+  paragraph, separated by blank lines like every other markdown document, and goes through the
+  same renderer the chapters use.
 
 - **`build` no longer serves a runtime that has moved.** The shared runtime was keyed by
   version — same version, same bytes, don't copy 6.2 MB again — which is true of a published
