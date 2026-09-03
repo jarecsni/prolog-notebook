@@ -4,6 +4,22 @@
 
 ### Added
 
+- **`prolog-notebook new <file>`** — a chapter that already has its shape: front matter, a
+  heading taken from the filename, a program cell and a query cell, and an entry in your book.
+
+  ```
+  $ prolog-notebook new notes/negation-as-failure
+  created notes/negation-as-failure.prolog.md
+  added notes/negation-as-failure.prolog.md to prolog-notebook-index.md
+  Write it, then `prolog-notebook view notes/…` to read it back.
+  ```
+
+  Small, and worth more than it looks: at ten chapters, the difference between *every chapter
+  is laid out the same way* and *every chapter was laid out by hand* is the difference between
+  a book and a pile of files. Otherwise the first thing anybody does is copy an old chapter and
+  delete its contents, which carries its ids and its front matter along too. `--title` when the
+  filename is not the heading. It never writes over a file that exists.
+
 - **A live demo**, at [jarecsni.github.io/prolog-notebook](https://jarecsni.github.io/prolog-notebook/),
   linked from the top of the README. Nobody could try this project without cloning it and
   starting a web server, which was a strange thing to ask when the pitch is "installs nothing".

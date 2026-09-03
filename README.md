@@ -207,6 +207,7 @@ Each option belongs to a command, and typing one under the wrong command tells y
 
 | flag | on | |
 |---|---|---|
+| `--title <text>` | `new` | the chapter's heading. Default: from the filename |
 | `--limit <n>` | `execute` | solutions to take from one query before stopping. Default 100. |
 | `--stdout` | `execute`, `clear` | print the result instead of writing the file |
 | `--quiet` | `execute`, `clear` | report only failures |
