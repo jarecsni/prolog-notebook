@@ -57,12 +57,21 @@ export function parseSpine(text) {
 
   let title = null;
   const blocks = [];
+  // PROSE IS A PARAGRAPH, NOT A LINE. A wrapped sentence is one thought however
+  // many times the author's editor broke it, and rendering each line as its own
+  // paragraph turned a three-line intro into three of them.
+  let prose = [];
+  const flush = () => {
+    if (prose.length) blocks.push({ kind: 'prose', text: prose.join('\n') });
+    prose = [];
+  };
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
-    if (line.trim() === '') continue;
+    if (line.trim() === '') { flush(); continue; }
 
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
+      flush();
       const [, hashes, label] = heading;
       // The first H1 is the title, as in a notebook — there is no `title` key.
       // A second one is just a heading; the author gets what they wrote.
@@ -77,14 +86,16 @@ export function parseSpine(text) {
     const links = [...line.matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)]
       .filter(([, , target]) => /\.md$/i.test(target) && !/^[a-z][a-z0-9+.-]*:/i.test(target));
     if (links.length > 0) {
+      flush();
       for (const [, label, target] of links) {
         blocks.push({ kind: 'link', title: label.trim(), target, line: i + 1 });
       }
       continue;
     }
 
-    blocks.push({ kind: 'prose', text: line });
+    prose.push(line);
   }
+  flush();
   return { title, blocks };
 }
 

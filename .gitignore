@@ -3,3 +3,4 @@ node_modules/
 .claude/walkthroughs/
 src/build-info.json
 .claude/drills/
+prolog-notebook-site/

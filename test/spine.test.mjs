@@ -50,6 +50,24 @@ Working through the classics.
     ['Lists', 'Operators']);
 });
 
+test('a wrapped paragraph is one paragraph', () => {
+  const { blocks } = parseSpine(spine(`# Studies
+
+Working through the classics, one chapter at a time.
+Every page runs SWI-Prolog in your browser.
+
+A second thought entirely.
+
+- [Lists](lists.prolog.md)
+`));
+  // PROSE IS A PARAGRAPH, NOT A LINE. A wrapped sentence is one thought however
+  // many times the author's editor broke it; a blank line is what separates two.
+  const prose = blocks.filter((b) => b.kind === 'prose');
+  assert.equal(prose.length, 2);
+  assert.match(prose[0].text, /classics.*\n.*browser/s);
+  assert.equal(prose[1].text, 'A second thought entirely.');
+});
+
 test('the format key is what identifies a spine, not the filename', () => {
   assert.ok(isSpine(spine('# Book\n')));
   assert.ok(!isSpine('# Just a readme\n'));
@@ -172,7 +190,12 @@ test('it finds the book a chapter belongs to — the site\'s, not the nearest', 
   // duplicating a page the full build puts somewhere else.
   assert.equal(findSpine(join(where, 'bratko/lists.prolog.md')), join(where, SPINE));
   assert.equal(findSpine(join(where, 'bratko')), join(where, SPINE));
-  assert.equal(findSpine(join(tmpdir(), 'nothing-here')), null);
+  // A PROJECT WITH NO BOOK ANSWERS null — and it has to be a project, with a .git
+  // for the walk to stop at. Given a path belonging to nothing, findSite falls
+  // back to the working directory, so the answer would be whatever book the
+  // person running the tests happens to be standing in.
+  const bare = project({ '.git/HEAD': 'ref: refs/heads/main\n', 'a.prolog.md': CHAPTER });
+  assert.equal(findSpine(join(bare, 'a.prolog.md')), null);
 });
 
 test('a seeded spine is a spine, and gains entries without being rearranged', () => {

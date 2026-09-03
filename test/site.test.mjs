@@ -175,6 +175,23 @@ test('the index counts pages, and nothing else in the directory', async () => {
   assert.deepEqual(pagesIn(join(site, 'nowhere')), []);
 });
 
+test('the contents page renders its prose as the markdown it is', () => {
+  const html = indexHtml({
+    title: 'Studies',
+    blocks: [
+      { kind: 'prose', text: 'Press **Run**, then `; next`.\nIt wraps.' },
+      { kind: 'chapter', title: 'Lists', href: 'lists/' },
+    ],
+  });
+  // The spine is markdown for the same reason a notebook is, so its prose has to
+  // MEAN markdown — escaping it left readers looking at asterisks and backticks.
+  assert.match(html, /<strong>Run<\/strong>/);
+  assert.match(html, /<code>; next<\/code>/);
+  assert.doesNotMatch(html, /\*\*Run\*\*/);
+  // And one wrapped paragraph is one <p>, not one per line.
+  assert.equal((html.match(/<p>/g) ?? []).length, 1);
+});
+
 test('an index with nothing in it says so rather than showing an empty list', () => {
   assert.match(indexHtml(), /No notebooks here yet/);
   // A title with markup in it is a title, not markup.

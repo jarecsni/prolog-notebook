@@ -448,7 +448,13 @@ test('the command reports what it removed, and refuses to guess', async () => {
   // BARE IS VALID USAGE NOW — it means the whole book (869eu5tn7) — so with no
   // book to act on this fails at 1 rather than 2: the invocation was fine, the
   // project has no contents file. It says which file that is.
-  const noFile = await run('node', [CLI, 'clear']).catch((e) => e);
+  //
+  // RUN SOMEWHERE WITH NO BOOK, explicitly. Without a cwd this asks the working
+  // directory what book it is in, and once this repository had a spine of its
+  // own that answer was "the one you are developing" — a test that reaches into
+  // the project it is testing.
+  const nowhere = await mkdtemp(join(tmpdir(), 'prolog-notebook-nobook-'));
+  const noFile = await run('node', [CLI, 'clear'], { cwd: nowhere }).catch((e) => e);
   assert.equal(noFile.code, 1);
   assert.match(noFile.stderr, /No book here — prolog-notebook-index\.md/);
 });
