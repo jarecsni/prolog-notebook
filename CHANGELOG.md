@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.0] — 2026-09-04
+
+The authoring loop, end to end — and three things that were quietly wrong.
 
 ### Changed
 
