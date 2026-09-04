@@ -2,7 +2,7 @@
 
 **Jupyter-style notebooks for Prolog. Runs in the browser, installs nothing.**
 
-> **v0.9 — usable, and moving.** A chapter is a markdown file; the CLI runs it, serves it and
+> **v0.10 — usable, and moving.** A chapter is a markdown file; the CLI runs it, serves it and
 > publishes it. Writing one is [the author's handbook](docs/authoring.md). See
 > [Status](#status) for what is not built yet.
 
