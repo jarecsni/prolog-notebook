@@ -63,9 +63,17 @@ const require = createRequire(import.meta.url);
  * the Captain read it as saying less than it does. `(s)` is legible to someone who
  * has never read a man page, and the row below spells it out in words anyway.
  * Nobody types either form, so the cost of being unconventional here is zero.
+ *
+ * TWO FORMS, AND THE BRACKETS ARE THE WHOLE DIFFERENCE (869ewmaxq). The operand
+ * is a filter — name chapters and the command acts on those, name none and it
+ * acts on the whole book — and four commands said none of that, printing a bare
+ * `<file(s)>` that reads as a thing you must supply. The Captain, on `view -h`:
+ * "this help screen doesnt tell that story - <file(s)> seems like a mandatory
+ * argument". `new` is the one that genuinely cannot go bare, and it is the one
+ * that keeps the unbracketed form.
  */
-const FILE = ['<file>', 'Prolog Notebook file (.md)'];
 const FILES = ['<file(s)>', 'space separated list of Prolog Notebook files (.md)'];
+const SOME = ['[<file(s)>]', 'Prolog Notebook files (.md) — name none for the whole book'];
 
 /**
  * THE COMMANDS, AND WHAT EACH ONE TAKES — one table, three readers (869erqra0).
@@ -88,24 +96,31 @@ const COMMANDS = {
       + 'to filter, and nothing sensible to default to.\n',
   },
   view: {
-    takes: [FILES],
+    takes: [SOME],
     blurb: 'read it in a browser, cells and all',
     options: [
       ['--port <n>', 'what it listens on (default 8777)'],
       ['--no-open', 'print the URL instead of opening a browser'],
       ['--built', 'serve the site as built, rather than your sources as they are'],
     ],
+    note: 'With no file it serves the whole book — the contents page, and the links from\n'
+      + 'chapter to chapter — building each page from your sources as you ask for it.\n',
   },
   build: {
-    takes: [FILES],
-    blurb: 'write a page you can host or send',
+    takes: [SOME],
+    blurb: 'write the site you can host or send',
     options: [
       ['--out <dir>', `where the site is (default: the nearest ${SITE})`],
       ['--root', `write to the project's ${SITE}, skipping any nearer one`],
     ],
+    // NAMING THE FILE IS THE WHOLE POINT. Nobody edits a book they were never
+    // told they had, and this is the command that writes it (869ewmaxq).
+    note: `The first build writes ${SPINE} beside the site — what the book\n`
+      + 'holds, in the order it holds it. Reorder it, retitle chapters, group them\n'
+      + 'under headings, link another book into it. Later builds add what you name.\n',
   },
   execute: {
-    takes: [FILES],
+    takes: [SOME],
     blurb: 'run every query, write the answers in',
     options: [
       ['--limit <n>', `solutions to take from one query before stopping (default ${DEFAULT_LIMIT})`],
@@ -118,7 +133,7 @@ const COMMANDS = {
       + "format's way of saying the search was never exhausted. Nothing is invented.\n",
   },
   clear: {
-    takes: [FILES],
+    takes: [SOME],
     blurb: 'take the answers back out',
     options: [
       ['--stdout', 'print the result instead of writing the file'],
@@ -183,9 +198,10 @@ const GLOBALS = `  --version   version, engine and copyright — on its own
  * How the command is called: options before operands, as POSIX has it and as
  * every tool a reader has already met prints it.
  *
- * `[<options>]` IS BRACKETED AND `<file(s)>` IS NOT, which is the same convention
- * saying the two are not alike: brackets mean you may leave it out, and every
- * command here works with no options and none works with no file.
+ * BRACKETS MEAN YOU MAY LEAVE IT OUT, and since 0.9 they belong on both: every
+ * command works with no options, and every command but `new` works with no file.
+ * The operand was bare because once upon a time that was true of it too, and a
+ * shape nobody updated is a shape that says the wrong thing (869ewmaxq).
  *
  * The rows below the line stay operand-first, because that row explains the
  * placeholder in the line above and is no use to anyone underneath five switches.
@@ -232,10 +248,23 @@ function commandHelp(name) {
  * COMMANDS says it travels wherever --limit goes and nowhere else — a rule this
  * screen was breaking.
  */
+/**
+ * THE ONE RULE THAT IS NEITHER A COMMAND NOR A FLAG (869ewmaxq).
+ *
+ * This screen answers WHICH COMMAND, and the sentence under the list answers the
+ * question a reader has next about every one of them at once: what happens when
+ * you type it on its own. It is also the only place the book is named, and being
+ * told a file exists is how anybody finds out it is theirs to edit.
+ */
+const OPERAND = `  Name chapters and a command acts on those; name none and it acts on the whole
+  book — the chapters ${SPINE} lists, which build writes for you.
+`;
+
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
 
 ${Object.keys(COMMANDS).map(commandLine).join('\n')}
 
+${OPERAND}
 ${GLOBALS}`;
 
 /**

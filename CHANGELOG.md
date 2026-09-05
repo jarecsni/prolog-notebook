@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.10.1] — 2026-09-05
+
+The help screens tell the story the tool has told since 0.9.
+
+### Fixed
+
+- **The operand reads as optional, because it is.** `prolog-notebook view -h` printed
+  `view [<options>] <file(s)>`, which says you must name a file — and since 0.9 you need not:
+  the operand is a filter, so naming chapters acts on those and naming none acts on the whole
+  book. `view`, `build`, `execute` and `clear` now print `[<file(s)>]`. `new` keeps the bare
+  form, because it is the one command that genuinely cannot go without a name.
+
+- **The bare screen states the rule, and names the book.** Under the list of commands:
+
+  ```
+    Name chapters and a command acts on those; name none and it acts on the whole
+    book — the chapters prolog-notebook-index.md lists, which build writes for you.
+  ```
+
+  That file was discoverable only by running `build` and noticing what appeared beside the
+  site. Nobody reorders a book they were never told they had.
+
+- **`build --help` says it writes that file**, and that the order in it is yours to change;
+  **`view --help` says the bare form serves the whole book**, contents page and chapter links
+  and all, rather than a longer version of one page. `build`'s one-line summary now says *the
+  site* rather than *a page* — with a book, one build writes all of it.
+
 ## [0.10.0] — 2026-09-04
 
 The authoring loop, end to end — and three things that were quietly wrong.
