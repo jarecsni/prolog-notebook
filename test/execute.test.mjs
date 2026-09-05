@@ -637,7 +637,7 @@ test('the bare screen names the commands and leaves their switches to them', asy
   // the switches under it — one shape to read, not two.
   const clear = (await run('node', [CLI, 'clear', '--help'])).stdout;
   assert.match(clear,
-    /^ {4}<file\(s\)> {7}space separated list of Prolog Notebook files \(\.md\)$/m);
+    /^ {4}\[<file\(s\)>\] {5}Prolog Notebook files \(\.md\) — name none for the whole book$/m);
   assert.match(clear, /^ {4}--stdout {8}/m);
   // Options before operands, as POSIX has it and as every tool the reader has
   // already met prints it. `(s)` is legible without having read a man page,
@@ -650,11 +650,21 @@ test('the bare screen names the commands and leaves their switches to them', asy
   // both were always loops. One shape across the whole tool, and one sentence
   // for what the operand means — name files and it acts on those, name none and
   // it acts on the whole book.
-  assert.match(clear, /prolog-notebook clear \[<options>\] <file\(s\)>/);
+  //
+  // AND IT IS BRACKETED, because that sentence has a second half (869ewmaxq).
+  // The Captain, reading view's: "this help screen doesnt tell that story -
+  // <file(s)> seems like a mandatory argument".
+  assert.match(clear, /prolog-notebook clear \[<options>\] \[<file\(s\)>\]/);
   for (const command of ['build', 'view', 'execute']) {
     const help = (await run('node', [CLI, command, '--help'])).stdout;
-    assert.match(help, new RegExp(`prolog-notebook ${command} \\[<options>\\] <file\\(s\\)>`));
+    assert.match(help,
+      new RegExp(`prolog-notebook ${command} \\[<options>\\] \\[<file\\(s\\)>\\]`));
   }
+  // `new` is the exception and prints the exception's shape: no brackets, because
+  // there is no chapter yet for an operand to filter.
+  const made = (await run('node', [CLI, 'new', '--help'])).stdout;
+  assert.match(made, /prolog-notebook new \[<options>\] <file\(s\)>/);
+  assert.doesNotMatch(made, /\[<file/);
   assert.doesNotMatch((await run('node', [CLI, 'upgrade', '--help'])).stdout, /<options>/);
 
   // THE POINT: no per-command switch appears here. The two at the foot are not
@@ -679,15 +689,39 @@ test('the bare screen names the commands and leaves their switches to them', asy
   assert.match(stdout, /-h, --help {2}this, or one command's: prolog-notebook build --help/);
 });
 
+test('the help tells a reader what a bare command does, and where the book is', async () => {
+  // The Captain, on `view -h`: "this help screen doesnt tell that story -
+  // <file(s)> seems like a mandatory argument - can you review the help screens so
+  // as to ensure a user can discover the basic use cases solely by looking at help
+  // screens" (869ewmaxq). There are two basic uses — one notebook by name, and a
+  // whole book by naming none — and the second was on no screen in the tool.
+  const { stdout } = await run('node', [CLI]);
+  assert.match(stdout, /name none and it acts on the whole\n {2}book/);
+  // NAMED, because nobody edits a file they were never told they had. It is also
+  // the only file here the author owns outright and the tool never rewrites.
+  assert.match(stdout, /prolog-notebook-index\.md/);
+
+  // And the command that writes it says so where somebody about to run it will
+  // read it, rather than leaving a tracked file to appear beside their site.
+  const build = (await run('node', [CLI, 'build', '--help'])).stdout;
+  assert.match(build, /The first build writes prolog-notebook-index\.md/);
+  assert.match(build, /Reorder it/);
+
+  // The bare `view` is the whole reading experience and not a longer page, which
+  // is the fact that decides whether anyone types it.
+  const view = (await run('node', [CLI, 'view', '--help'])).stdout;
+  assert.match(view, /With no file it serves the whole book/);
+});
+
 test('a command asked for help answers about itself, and nothing else', async () => {
   // The Captain, shown all five commands for `build --help`: "not really. If I
   // run prolog-notebook cmd --help I want only help on that cmd" (869erqra0).
   // Printing everything makes the reader find their command again in a page they
   // did not ask for.
   const { stdout } = await run('node', [CLI, 'build', '--help']);
-  assert.match(stdout, /prolog-notebook build \[<options>\] <file\(s\)>/);
+  assert.match(stdout, /prolog-notebook build \[<options>\] \[<file\(s\)>\]/);
   assert.match(stdout, /--out <dir>/);
-  for (const other of ['view <file', 'execute <file', 'clear <file', 'upgrade  ']) {
+  for (const other of ['view [<file', 'execute [<file', 'clear [<file', 'upgrade  ']) {
     assert.doesNotMatch(stdout, new RegExp(other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   // AND NOTHING GLOBAL DOWN HERE. This screen exists because the reader typed
