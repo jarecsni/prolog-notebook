@@ -3,6 +3,7 @@
 // terminal. Everything it does lives in src/run.js and src/export.js, so a VS
 // Code "run all" and a future --check get the same behaviour without going
 // through a shell (869ectt38, 869ectt3e).
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import {
@@ -27,6 +28,7 @@ import {
   SPINE, booksOf, chaptersOf, findSpine, resolveSpine, seedSpine, withEntry,
 } from '../src/spine.js';
 import { liveSite, runtimeStale, siteFiles, unchanged } from '../src/book.js';
+import { GUIDE, guideText, literal } from '../src/guide.js';
 import { NOBODY, pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
 import { openInBrowser, serve } from '../src/serve.js';
 
@@ -73,7 +75,7 @@ const require = createRequire(import.meta.url);
  * that keeps the unbracketed form.
  */
 const FILES = ['<file(s)>', 'space separated list of Prolog Notebook files (.md)'];
-const SOME = ['[<file(s)>]', 'Prolog Notebook files (.md) — name none for the whole book'];
+const SOME = ['[<file(s)>]', 'Prolog Notebook files (.md) — name none for the whole project'];
 
 /**
  * THE COMMANDS, AND WHAT EACH ONE TAKES — one table, three readers (869erqra0).
@@ -86,6 +88,13 @@ const SOME = ['[<file(s)>]', 'Prolog Notebook files (.md) — name none for the 
  * reads as a promise that every one works everywhere, and only three of them do.
  */
 const COMMANDS = {
+  guide: {
+    takes: [],
+    blurb: 'the tour: a project, a book, and the loop',
+    options: [
+      ['--no-pager', 'print it rather than opening a pager'],
+    ],
+  },
   new: {
     takes: [FILES],
     blurb: 'start a chapter, wired up and in the book',
@@ -103,8 +112,9 @@ const COMMANDS = {
       ['--no-open', 'print the URL instead of opening a browser'],
       ['--built', 'serve the site as built, rather than your sources as they are'],
     ],
-    note: 'With no file it serves the whole book — the contents page, and the links from\n'
-      + 'chapter to chapter — building each page from your sources as you ask for it.\n',
+    note: 'With no file it serves the whole book: every chapter in the project, its\n'
+      + 'contents page, and the links from one chapter to the next — each page built\n'
+      + 'from your sources as you ask for it, so there is no build step to be behind.\n',
   },
   build: {
     takes: [SOME],
@@ -138,7 +148,7 @@ const COMMANDS = {
     options: [
       ['--stdout', 'print the result instead of writing the file'],
       ['--quiet', 'report only failures'],
-      ['--yes', 'do not ask before emptying a whole book'],
+      ['--yes', 'do not ask before emptying every chapter'],
     ],
   },
   publish: {
@@ -255,9 +265,17 @@ function commandHelp(name) {
  * question a reader has next about every one of them at once: what happens when
  * you type it on its own. It is also the only place the book is named, and being
  * told a file exists is how anybody finds out it is theirs to edit.
+ *
+ * AND IT SAYS WHAT A BOOK IS BEFORE USING THE WORD. The Captain, on the operand
+ * row this shipped with: "whole book doesnt mean anything - 'project/repo level
+ * notebook'". A term the tool made up, spent on a reader who has met it nowhere,
+ * buys nothing that "every chapter" would not have bought — so the sentence
+ * defines it once, in the place everybody starts, and the rest of the tool is
+ * free to use it.
  */
-const OPERAND = `  Name chapters and a command acts on those; name none and it acts on the whole
-  book — the chapters ${SPINE} lists, which build writes for you.
+const OPERAND = `  A project is one book — the chapters ${SPINE} lists, beside
+  the site at the root of your repository, and written by the first build.
+  Name chapters and a command acts on those; name none and it acts on the book.
 `;
 
 const USAGE = `prolog-notebook — Jupyter-style notebooks for Prolog
@@ -285,6 +303,153 @@ function helpFor(name) {
   // with a newline and held the note off the last option. Its going is not a
   // reason for the page to run into the prompt.
   return `${commandHelp(name)}\n${note ? `\n${note}` : ''}`;
+}
+
+/**
+ * The tour, at a terminal or down a pipe.
+ *
+ * PAGED WHEN THERE IS SOMEBODY READING IT, and not otherwise. Five screens that
+ * scroll past are five screens nobody read, and a pager started against a pipe
+ * is a hang — the same rule the confirmations follow. $PAGER first, because a
+ * reader who set it has already said how they like being shown things.
+ */
+function guide(args) {
+  let paged = true;
+  for (const arg of args) {
+    // Undocumented, and ours: it writes the man page this repository ships, so
+    // the tour and the manual cannot say different things. `npm run man`.
+    if (arg === '--roff') {
+      process.stdout.write(manPage());
+      return 0;
+    }
+    if (arg === '--no-pager') paged = false;
+    else {
+      process.stderr.write(unknownOption(arg, 'guide'));
+      return 2;
+    }
+  }
+  const text = guideText();
+  if (!paged || !process.stdout.isTTY) {
+    process.stdout.write(text);
+    return 0;
+  }
+  const [pager, ...rest] = (process.env.PAGER || 'less -R').split(/\s+/).filter(Boolean);
+  const shown = spawnSync(pager, rest, { input: text, stdio: ['pipe', 'inherit', 'inherit'] });
+  // A pager that is not there is not an error the reader caused, and the text is
+  // what they asked for either way.
+  if (shown.error) process.stdout.write(text);
+  return 0;
+}
+
+/**
+ * roff, escaped. Backslashes first, or the escapes we add are escaped in turn.
+ *
+ * Hyphens become `\-` throughout: in roff a bare `-` is a typographic hyphen that
+ * may be broken across a line, which is wrong for `--built` and wrong for a file
+ * called prolog-notebook-index.md. The dashes and ellipses this project writes in
+ * prose have their own roff names, and a page full of raw UTF-8 renders as
+ * mojibake wherever the locale disagrees.
+ */
+const roff = (text) => String(text)
+  .replace(/\\/g, '\\e')
+  .replace(/—/g, '\\(em')
+  .replace(/–/g, '\\(en')
+  .replace(/…/g, '...')
+  .replace(/·/g, '\\(bu')
+  .replace(/-/g, '\\-');
+
+/** A line of body text, kept off the start of a line where roff reads commands. */
+const roffLine = (line) => (/^[.']/.test(line) ? `\\&${roff(line)}` : roff(line));
+
+/** The date this version was released, from the changelog that announced it. */
+function releaseDate() {
+  try {
+    const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+    const found = log.match(new RegExp(`^## \\[${VERSION.replace(/\\./g, '\\\\.')}\\] — (\\d{4}-\\d\\d-\\d\\d)`, 'm'));
+    return found ? found[1] : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The man page, generated from the same two tables the help screens read.
+ *
+ * The Captain asked for both: "maybe we want something similar to a man page -
+ * available using a command switch or arg?" — and both is only honest if there
+ * is one source. So the sections are the tour, the command list is COMMANDS, and
+ * a flag added to a command appears here without anybody remembering to add it.
+ *
+ * It is committed rather than generated at install time — npm's `man` field
+ * points at a file in the tarball — and a test regenerates it and compares, so a
+ * stale page fails the build rather than shipping.
+ */
+function manPage() {
+  const out = [
+    `.\\" Generated by \`npm run man\`. Edit src/guide.js, not this file.`,
+    `.TH PROLOG\\-NOTEBOOK 1 "${releaseDate()}" "prolog\\-notebook ${VERSION}" "User Commands"`,
+    '.SH NAME',
+    'prolog\\-notebook \\- Jupyter\\-style notebooks for Prolog',
+    '.SH SYNOPSIS',
+    '.B prolog\\-notebook',
+    '.I command',
+    '[\\fIoptions\\fR] [\\fIfile(s)\\fR]',
+    '.SH DESCRIPTION',
+    roffLine('Notebooks for Prolog that a reader can run: a chapter is a markdown file with'),
+    roffLine('prose and Prolog in it, and the pages this builds carry SWI-Prolog compiled to'),
+    roffLine('WebAssembly, so the engine is in the page rather than on a server.'),
+    '.PP',
+    roffLine('The operand is a filter. Name chapters and a command acts on those; name none'),
+    roffLine('and it acts on the whole book — the chapters prolog-notebook-index.md lists.'),
+    '.SH COMMANDS',
+  ];
+  for (const name of Object.keys(COMMANDS)) {
+    const { blurb, options } = COMMANDS[name];
+    out.push('.TP', `.B ${roff(called(name))}`, roffLine(blurb));
+    if (!options.length) continue;
+    out.push('.RS');
+    for (const [what, why] of options) out.push('.TP', `.B ${roff(what)}`, roffLine(why));
+    out.push('.RE');
+  }
+  for (const { title, lines } of GUIDE) {
+    out.push(`.SH "${roff(title.toUpperCase())}"`);
+    let typed = false;
+    for (const line of lines) {
+      if (literal(line) !== typed) {
+        out.push(literal(line) ? '.nf' : '.fi');
+        typed = literal(line);
+      }
+      if (line === '') out.push('.PP');
+      else out.push(roffLine(line));
+    }
+    if (typed) out.push('.fi');
+  }
+  out.push(
+    '.SH FILES',
+    '.TP',
+    '.I prolog\\-notebook\\-index.md',
+    roffLine('The book: which chapters the site holds, and in what order. Yours to edit; the'),
+    roffLine('first build writes it and later builds add to it.'),
+    '.TP',
+    '.I prolog\\-notebook\\-site/',
+    roffLine('The built site. A build artefact — keep it out of git.'),
+    '.SH "EXIT STATUS"',
+    '.TP',
+    '.B 0',
+    roffLine('The work was done.'),
+    '.TP',
+    '.B 1',
+    roffLine('It could not be: a chapter that would not parse, a goal that did not finish, a'),
+    roffLine('project with no book in it.'),
+    '.TP',
+    '.B 2',
+    roffLine('The command line itself was wrong, and nothing was attempted.'),
+    '.SH "SEE ALSO"',
+    roffLine('prolog-notebook guide, for the same tour at a terminal.'),
+    '.PP',
+    roffLine('https://github.com/jarecsni/prolog-notebook'),
+  );
+  return `${out.join('\n')}\n`;
 }
 
 /**
@@ -468,6 +633,7 @@ async function main(argv) {
   if (command === 'clear') return clear(args);
   if (command === 'new') return newChapter(args);
   if (command === 'publish') return publish(args);
+  if (command === 'guide') return guide(args);
 
   if (command === 'upgrade') {
     const { message, newer } = await updateNotice({ version: VERSION, force: true });

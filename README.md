@@ -68,6 +68,9 @@ prolog-notebook execute splitting.prolog.md   # SWI fills the answers in
 prolog-notebook view splitting.prolog.md      # read it, cells live
 ````
 
+`prolog-notebook guide` is the two-minute tour — what a project looks like, the loop, and what
+a bare command does — and `man prolog-notebook` is the same thing where you would expect it.
+
 `execute` runs the chapter and writes the solutions back into the markdown — you never
 hand-write an answer. `view` opens it in your browser: press Run, then `; next`, and watch the
 four splits arrive one at a time. Nothing is installed but the command.
@@ -75,9 +78,12 @@ four splits arrive one at a time. Nothing is installed but the command.
 To send it to somebody, or host it:
 
 ```sh
-prolog-notebook build splitting.prolog.md
-# 2 files → prolog-notebook-site/splitting/ (11 shared with the site)
-# prolog-notebook-site/index.html lists 1 notebook
+$ prolog-notebook build splitting.prolog.md
+created prolog-notebook-site/ — you may want it in .gitignore
+created prolog-notebook-index.md — the contents of your site. Reorder it, rename chapters, …
+3 files → prolog-notebook-site/splitting/ (13 shared with the site)
+1 query · all answered
+prolog-notebook-site/index.html lists 1 notebook
 ```
 
 A plain directory: prerendered HTML with the saved answers in it, the runtime and the 6.2 MB
@@ -86,11 +92,12 @@ fetched only when a reader presses Run. No bundler, no build step of your own, n
 configure.
 
 **One rule for every command: the operand is a filter.** Name files and a command acts on
-those; name none and it acts on the whole book.
+those; name none and it acts on the whole book — every chapter your project holds, which is
+what `prolog-notebook-index.md` above is for.
 
 |  | `<file(s)>` | bare |
 |---|---|---|
-| `view` | opens on that chapter | the whole site, index and all |
+| `view` | opens on that chapter | the whole book, live from your sources |
 | `execute` | those chapters | every chapter in the book |
 | `clear` | those chapters | every chapter (asks first) |
 | `build` | those chapters into the site | the whole book, in order |
@@ -207,6 +214,7 @@ Each option belongs to a command, and typing one under the wrong command tells y
 
 | flag | on | |
 |---|---|---|
+| `--no-pager` | `guide` | print the tour rather than opening a pager |
 | `--title <text>` | `new` | the chapter's heading. Default: from the filename |
 | `--limit <n>` | `execute` | solutions to take from one query before stopping. Default 100. |
 | `--timeout <s>` | `execute` | seconds a cell may say nothing before it is abandoned. Default 30; `0` waits |
@@ -226,6 +234,11 @@ Two are about the tool rather than about a notebook:
 |---|---|
 | `--version` | the tool's version, **the SWI-Prolog version it will run your chapters with**, and the copyright. On its own — it is a command, not a modifier |
 | `-h`, `--help` | help for the command you named, or the summary if you named none. This one really does work anywhere |
+
+Three tiers, and they answer different questions: the bare screen says **which command**, a
+command's own `--help` says **how to call it**, and `prolog-notebook guide` says **what a
+project is** — paged at a terminal, plain down a pipe. The man page is generated from the same
+two tables the help screens read, so `man prolog-notebook` cannot drift from the tool.
 
 ```sh
 prolog-notebook upgrade      # fetch the latest
@@ -268,10 +281,20 @@ prolog-notebook upgrade` after the work instead — a question nobody can answer
 it will do; a dependency of somebody's project it will not touch, and a source checkout is
 git's business. Guessing wrong there breaks a project while trying to help.
 
-It has no defence against a non-terminating goal yet — the engine runs in this process, so
-`loop :- loop.` hangs the command. Say the word `--limit` all you like; a runaway *consult* is
-not a solution count. Fixing it properly means a worker thread, and it is the prerequisite for
-putting this in CI.
+A goal that never comes back no longer hangs the command. `execute` runs the engine in a worker
+thread it can terminate, with a deadline **on progress rather than on total time** — so a
+chapter of fifty slow cells never trips it, and a single cell that has said nothing for half a
+minute always does:
+
+```
+$ prolog-notebook execute --timeout 3 loop.prolog.md
+loop.prolog.md: q-loop did not finish within 3s — ?- loop
+loop.prolog.md: not written. Fix the goal, or raise --timeout.
+```
+
+`--timeout <seconds>`, default 30, `0` to wait forever. Nothing is written for a chapter that
+hung: a file that is part fresh and part stale is worse than one that was not touched. Note that
+`--limit` was never the answer here — a runaway *consult* is not a solution count.
 
 ## Write one
 
@@ -338,9 +361,12 @@ await load('chapter-04-cut.prolog.md');      // parse, render into <main>, wire 
 HTML strings) are exported separately, and neither touches the DOM — the same two modules back
 the browser, the CLI runner and a future VS Code serializer.
 
-Node runs the engine in-process and is deliberately **not** protected: a non-terminating goal
-will hang it. The CLI is not an interactive page, and pretending otherwise would hide the
-difference.
+**As a library, Node runs the engine in your own process and it is deliberately not protected**:
+a non-terminating goal hangs the thread that called it. You own that thread, and hiding the fact
+behind a worker you did not ask for would hide the difference between the two environments. The
+`execute` command does own its thread, so it puts the engine in one it can terminate — see
+`--timeout` above. If you need the same guarantee from the API, run `createSession` in a worker
+of your own.
 
 ### API
 
@@ -397,17 +423,24 @@ Working and tested:
 - program cells and query cells with `Run` / `; next` / `all` / `stop`, per-cell reset, and a
   page that says what the engine is holding
 - `hold` and `rerun="auto"` — the author decides what a reader may see and when it refreshes
-- **the CLI**: `execute` runs a chapter headlessly and writes its answers back, `clear` takes
-  them out again, `view` opens it in a browser, `build` writes a page you can host or send,
-  and it updates itself
+- **three tiers of help**: the command list, a command's own screen, and `prolog-notebook
+  guide` — plus a `man` page generated from the same source, so none of them can drift
+- **the CLI**: `new` starts a chapter, `execute` runs one headlessly and writes its answers
+  back, `clear` takes them out again, `view` serves your sources live, `build` writes the site
+  and `publish` pushes it where a host will serve it — and it updates itself
+- **a project is a book**: `prolog-notebook-index.md` says what the site holds and in what
+  order, sub-books nest to any depth, and every chapter page carries a breadcrumb and
+  prev/next. Name files and a command acts on those; name none and it acts on the book
+- **a goal that never comes back** is abandoned on a deadline and named, because the engine
+  runs in a thread the CLI can terminate
 - **page controls**: hide the saved answers to work a chapter cold, clear them out and restore
   them, and download your own copy — yours or the chapter as published
-- 253 passing tests
+- 340 passing tests
 
 Not built yet:
 
-- `check` — run a chapter in CI and fail the build when its answers have drifted. Needs a
-  timeout first: a test suite that can hang forever is not a test suite.
+- `check` — run a chapter in CI and fail the build when its answers have drifted. The timeout
+  it was waiting on landed in 0.10.0, so this is next.
 - custom elements (`<prolog-program>`, `<prolog-query>`) so notebooks drop into any static site
 - a VS Code notebook controller — VS Code supplies the UI, this supplies the kernel, still no Python
 - persistence, so a reader's edits survive a reload
