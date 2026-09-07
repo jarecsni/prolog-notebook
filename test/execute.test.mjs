@@ -637,7 +637,7 @@ test('the bare screen names the commands and leaves their switches to them', asy
   // the switches under it — one shape to read, not two.
   const clear = (await run('node', [CLI, 'clear', '--help'])).stdout;
   assert.match(clear,
-    /^ {4}\[<file\(s\)>\] {5}Prolog Notebook files \(\.md\) — name none for the whole book$/m);
+    /^ {4}\[<file\(s\)>\] {5}Prolog Notebook files \(\.md\) — name none for the whole project$/m);
   assert.match(clear, /^ {4}--stdout {8}/m);
   // Options before operands, as POSIX has it and as every tool the reader has
   // already met prints it. `(s)` is legible without having read a man page,
@@ -696,10 +696,20 @@ test('the help tells a reader what a bare command does, and where the book is', 
   // screens" (869ewmaxq). There are two basic uses — one notebook by name, and a
   // whole book by naming none — and the second was on no screen in the tool.
   const { stdout } = await run('node', [CLI]);
-  assert.match(stdout, /name none and it acts on the whole\n {2}book/);
+  assert.match(stdout, /name none and it acts on the book/);
   // NAMED, because nobody edits a file they were never told they had. It is also
   // the only file here the author owns outright and the tool never rewrites.
   assert.match(stdout, /prolog-notebook-index\.md/);
+  // AND THE WORD IS DEFINED WHERE IT IS FIRST USED. The Captain, on the row this
+  // shipped with in 0.10.1: "whole book doesnt mean anything - 'project/repo
+  // level notebook'" (869ewp4xd). A book is where the reader's own files are, so
+  // the sentence says where that is before the rest of the tool leans on the term.
+  assert.match(stdout, /A project is one book/);
+  assert.match(stdout, /at the root of your repository/);
+  // The operand row is read on its own, one screen away from that sentence, so it
+  // spends none of the vocabulary the sentence introduces.
+  const view = (await run('node', [CLI, 'view', '--help'])).stdout;
+  assert.match(view, /name none for the whole project$/m);
 
   // And the command that writes it says so where somebody about to run it will
   // read it, rather than leaving a tracked file to appear beside their site.
@@ -709,8 +719,7 @@ test('the help tells a reader what a bare command does, and where the book is', 
 
   // The bare `view` is the whole reading experience and not a longer page, which
   // is the fact that decides whether anyone types it.
-  const view = (await run('node', [CLI, 'view', '--help'])).stdout;
-  assert.match(view, /With no file it serves the whole book/);
+  assert.match(view, /With no file it serves the whole book: every chapter in the project/);
 });
 
 test('a command asked for help answers about itself, and nothing else', async () => {

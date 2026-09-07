@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.10.2] — 2026-09-06
+
+Say what a book is, and tell the story somewhere longer than a help screen.
+
+### Added
+
+- **`prolog-notebook guide`** — the tour, and the third tier of help. The bare screen answers
+  *which command*; a command's own screen answers *how to call it*; neither could answer what a
+  project looks like or why you would type `build` with no arguments. Five sections: a project
+  is one book, the loop, one chapter or all of them, what a reader gets, and what to keep in
+  git. Paged through `$PAGER` at a terminal, printed plainly down a pipe.
+
+- **A man page.** `npm i -g prolog-notebook` then `man prolog-notebook`. It is generated from
+  the same two tables the help screens read — the tour in `src/guide.js` and the command table
+  in the CLI — so a flag added to a command appears in the manual without anybody remembering
+  to add it, and a test regenerates the page and fails when the committed copy has drifted.
+
+### Fixed
+
+- **The help said "the whole book" without ever saying what a book is.** The Captain: *"whole
+  book doesnt mean anything - 'project/repo level notebook'"*. The bare screen now defines it
+  before the rest of the tool leans on the term:
+
+  ```
+    A project is one book — the chapters prolog-notebook-index.md lists, beside
+    the site at the root of your repository, and written by the first build.
+    Name chapters and a command acts on those; name none and it acts on the book.
+  ```
+
+  The operand row spends none of that vocabulary, since it is read one screen away: *name none
+  for the whole project*.
+
+- **The README caught up with 0.10.0.** It still said the CLI had no defence against a
+  non-terminating goal and that a timeout was the prerequisite for CI — both fixed by the
+  worker-thread guard two releases ago. The library in Node is still deliberately unprotected,
+  which is a different sentence and now reads as one. The quick start's build output, the test
+  count and the Status list are all current again.
+
 ## [0.10.1] — 2026-09-05
 
 The help screens tell the story the tool has told since 0.9.
