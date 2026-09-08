@@ -44,10 +44,18 @@ export function contentType(name) {
  *
  * @param {Map<string, {text: string}|{copy: URL}>|(() => Map)} pages what build
  *   produced, or something that produces it — called once per request
- * @param {{port?: number, host?: string}} [options]
- * @returns {Promise<{url: string, port: number, close: () => Promise<void>}>}
+ * @param {{port?: number, host?: string, watch?: boolean}} [options] `watch` adds
+ *   the one route this server has that `build` does not write, and the script
+ *   that listens to it
+ * @returns {Promise<{url: string, port: number, changed: () => void,
+ *   close: () => Promise<void>}>}
  */
-export async function serve(pages, { port = 8777, host = '127.0.0.1' } = {}) {
+export async function serve(pages, { port = 8777, host = '127.0.0.1', watch = false } = {}) {
+  // THE ONE ROUTE THIS PROCESS ANSWERS THAT IS NOT A PAGE. It is still a name
+  // this process generated rather than a path from the filesystem, so the rule
+  // above holds — and it exists only under `view --watch`, so nothing a reader
+  // can reach has ever heard of it.
+  const listeners = new Set();
   const files = typeof pages === 'function' ? pages : () => pages;
   // ASK WHETHER ANYBODY IS THERE, on both stacks, before binding to one of them.
   //
@@ -62,6 +70,19 @@ export async function serve(pages, { port = 8777, host = '127.0.0.1' } = {}) {
     // Only GET, and only the names this process generated: the path never
     // reaches the filesystem, so there is nothing for a `..` to escape into.
     const name = decodeURIComponent(new URL(request.url, 'http://x').pathname).replace(/^\//, '');
+    if (watch && name === RELOAD_PATH) {
+      response.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      });
+      // A comment frame, so a proxy or a browser waiting for the first byte knows
+      // the stream is open rather than merely accepted.
+      response.write(': watching\n\n');
+      listeners.add(response);
+      request.on('close', () => listeners.delete(response));
+      return;
+    }
     const site = files();
     // A DIRECTORY IS ITS index.html, now that this serves a whole book rather
     // than one page (869eu5tn7): /bratko/ is the key `bratko/index.html`.
@@ -82,13 +103,17 @@ export async function serve(pages, { port = 8777, host = '127.0.0.1' } = {}) {
       response.writeHead(404, { 'content-type': 'text/plain' }).end('not found\n');
       return;
     }
+    const type = contentType(name.endsWith('/') || name === '' ? 'index.html' : name);
     response.writeHead(200, {
-      'content-type': contentType(name.endsWith('/') || name === '' ? 'index.html' : name),
+      'content-type': type,
       // A page being written is a page that changes under the reader.
       'cache-control': 'no-store',
     });
     if (entry.text !== undefined) {
-      response.end(entry.text);
+      // The script goes only into pages this server made, and only while
+      // watching, so what `build` writes and what `publish` pushes never carries
+      // a line of it.
+      response.end(watch && type.startsWith('text/html') ? entry.text + RELOAD_SCRIPT : entry.text);
       return;
     }
     createReadStream(entry.copy).on('error', () => response.end()).pipe(response);
@@ -98,9 +123,52 @@ export async function serve(pages, { port = 8777, host = '127.0.0.1' } = {}) {
   return {
     url: `http://${host}:${listening}/`,
     port: listening,
-    close: () => new Promise((resolve) => server.close(resolve)),
+    /** Tell every page this server is holding open to come and get the new one. */
+    changed() {
+      for (const listener of listeners) listener.write('data: changed\n\n');
+    },
+    // AN OPEN STREAM IS AN OPEN CONNECTION, and `server.close()` waits for every
+    // one of them. Without this the command that stops watching never exits.
+    close: () => new Promise((resolve) => {
+      for (const listener of listeners) listener.end();
+      listeners.clear();
+      server.close(resolve);
+    }),
   };
 }
+
+/** Where the page listens. Underscored, and no build ever writes a name like it. */
+export const RELOAD_PATH = '__reload';
+
+/**
+ * What a watched page carries, and nothing else does.
+ *
+ * SCROLL POSITION SURVIVES THE RELOAD, which is the whole difference between a
+ * loop an author uses and one they turn off. The Captain's ticket puts it
+ * plainly: "Writing chapter 6 and being thrown back to the top on every save is
+ * how a tool gets abandoned."
+ *
+ * Stored under the page's own path, so two chapters open in two tabs do not
+ * inherit each other's position, and removed as soon as it is used — a scroll
+ * position restored on a fresh visit tomorrow would be somebody else's idea of
+ * where you were.
+ */
+export const RELOAD_SCRIPT = `<script>
+(() => {
+  const key = 'prolog-notebook:scroll:' + location.pathname;
+  const held = (() => { try { return sessionStorage.getItem(key); } catch { return null; } })();
+  if (held !== null) {
+    try { sessionStorage.removeItem(key); } catch {}
+    addEventListener('load', () => scrollTo(0, Number(held)));
+  }
+  const source = new EventSource('/${RELOAD_PATH}');
+  source.onmessage = () => {
+    try { sessionStorage.setItem(key, String(scrollY)); } catch {}
+    location.reload();
+  };
+})();
+</script>
+`;
 
 /**
  * Take the port asked for, or any port at all.

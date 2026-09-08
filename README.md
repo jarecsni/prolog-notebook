@@ -2,7 +2,7 @@
 
 **Jupyter-style notebooks for Prolog. Runs in the browser, installs nothing.**
 
-> **v0.10 — usable, and moving.** A chapter is a markdown file; the CLI runs it, serves it and
+> **v0.11 — usable, and moving.** A chapter is a markdown file; the CLI runs it, serves it and
 > publishes it. Writing one is [the author's handbook](docs/authoring.md). See
 > [Status](#status) for what is not built yet.
 
@@ -107,7 +107,8 @@ So `prolog-notebook view` reads your whole book in a browser, live from your sou
 no build step at all — reorder the contents and reload, and the contents page and the
 prev/next cards follow. `prolog-notebook execute` fills in every answer before you publish.
 `--built` serves the site as it stands instead: the rehearsal for the one command you cannot
-take back.
+take back. And `--watch` reloads the page when you save, keeping your scroll position, so an
+editor on one side of the screen and a browser on the other behave like one thing.
 
 That first build also writes **`prolog-notebook-index.md`** beside the site — the one file that
 says what the site holds:
@@ -210,6 +211,38 @@ chapter.prolog.md: 4 answers removed
 `clear` empties every output block and touches nothing else; `execute` fills them in again from
 the engine. A chapter with no answers is a valid chapter — one that has not been executed yet.
 
+## Keep it from rotting
+
+A chapter's saved answers are a claim about what SWI prints. Technical books rot because that
+claim quietly stops being true — the library moves, the engine's spelling changes, a clause
+above an answer is edited and never rerun — and nobody notices for two years.
+
+```sh
+prolog-notebook execute --check
+```
+
+Runs everything, writes nothing, and fails when the file no longer says what SWI says. It names
+the line rather than counting them, because in CI nobody can rerun it by hand:
+
+```
+ch04-cut.prolog.md: q-is-son is not what it says it is — ?- is_son(X)
+    saved: X = victoria
+    now:   X = alfred
+```
+
+Two things fail it: an answer that has **moved**, and one that still holds but whose **program
+has changed underneath it** — a file certifying answers against code it no longer contains. A
+query with **no saved answer** is reported and passes, because a workbook edition is a
+deliberate thing and nothing can tell it from an author who forgot to run `execute`. It is
+silent when it passes, so a green pipeline has nothing to read.
+
+This repository runs it on its own book on every pull request:
+
+```yaml
+      - name: Check the book
+        run: npx prolog-notebook execute --check
+```
+
 Each option belongs to a command, and typing one under the wrong command tells you which:
 
 | flag | on | |
@@ -218,6 +251,7 @@ Each option belongs to a command, and typing one under the wrong command tells y
 | `--title <text>` | `new` | the chapter's heading. Default: from the filename |
 | `--limit <n>` | `execute` | solutions to take from one query before stopping. Default 100. |
 | `--timeout <s>` | `execute` | seconds a cell may say nothing before it is abandoned. Default 30; `0` waits |
+| `--check` | `execute` | write nothing; fail if a saved answer is no longer what SWI says |
 | `--stdout` | `execute`, `clear` | print the result instead of writing the file |
 | `--quiet` | `execute`, `clear` | report only failures |
 | `--out <dir>` | `build` | where the site is. Default: the nearest `prolog-notebook-site`, else one at the project root |
@@ -227,6 +261,7 @@ Each option belongs to a command, and typing one under the wrong command tells y
 | `--port <n>` | `view` | what it listens on. Default 8777, and it takes another if that one is busy |
 | `--no-open` | `view` | print the URL instead of opening a browser |
 | `--built` | `view` | serve the site as built, rather than your sources as they are |
+| `--watch` | `view` | reload the page in the browser when a file changes |
 
 Two are about the tool rather than about a notebook:
 
@@ -423,6 +458,10 @@ Working and tested:
 - program cells and query cells with `Run` / `; next` / `all` / `stop`, per-cell reset, and a
   page that says what the engine is holding
 - `hold` and `rerun="auto"` — the author decides what a reader may see and when it refreshes
+- **a book that cannot rot**: `execute --check` fails when a saved answer is no longer what SWI
+  gives, or when the program above it has changed — and this repository runs it on its own
+  chapter in CI
+- **the authoring loop**: `view --watch` reloads the page when you save, keeping your place
 - **three tiers of help**: the command list, a command's own screen, and `prolog-notebook
   guide` — plus a `man` page generated from the same source, so none of them can drift
 - **the CLI**: `new` starts a chapter, `execute` runs one headlessly and writes its answers
@@ -435,12 +474,10 @@ Working and tested:
   runs in a thread the CLI can terminate
 - **page controls**: hide the saved answers to work a chapter cold, clear them out and restore
   them, and download your own copy — yours or the chapter as published
-- 340 passing tests
+- 355 passing tests
 
 Not built yet:
 
-- `check` — run a chapter in CI and fail the build when its answers have drifted. The timeout
-  it was waiting on landed in 0.10.0, so this is next.
 - custom elements (`<prolog-program>`, `<prolog-query>`) so notebooks drop into any static site
 - a VS Code notebook controller — VS Code supplies the UI, this supplies the kernel, still no Python
 - persistence, so a reader's edits survive a reload
