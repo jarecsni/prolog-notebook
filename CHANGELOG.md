@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.11.0] — 2026-09-08
+
+A book that cannot rot, and a loop that keeps up with you.
+
+### Added
+
+- **`execute --check`** — run everything, write nothing, and fail if the file no longer says
+  what SWI says. Technical books rot because their code stops working and nobody notices for
+  two years; this is the thing that notices.
+
+  ```
+  $ prolog-notebook execute --check
+  ch04-cut.prolog.md: q-is-son is not what it says it is — ?- is_son(X)
+      saved: X = victoria
+      now:   X = alfred
+  ch04-cut.prolog.md: 1 of 4 answers no longer holds. Run `prolog-notebook execute` to bring the file up to date.
+  ```
+
+  It names the line rather than counting them: in CI, where nobody can rerun it by hand, that
+  is the difference between a failure you can act on and one you have to reproduce. Two things
+  fail it — an answer that has **moved**, and one that still holds but whose **program has
+  changed underneath it**, which is a file certifying answers against code it no longer
+  contains. A query with **no saved answer** is reported and passes: a workbook edition is a
+  deliberate thing (prolog-studies publishes one) and nothing can tell it from an author who
+  forgot to run `execute`. Silent when it passes, so a green pipeline has nothing to read.
+
+- **This repository checks its own book on every pull request.** `npm run check`, wired into
+  CI beside the test suite. The chapter behind the demo site cannot go stale for longer than
+  one merge.
+
+- **`view --watch`** — save in your editor, and the page you are looking at comes with you.
+  `view` already rebuilt on every request, so the page was never behind the file; this is the
+  part that means you do not have to ask. **Your scroll position survives the reload** — being
+  thrown back to the top of chapter six on every save is how a tool gets abandoned.
+
+  It watches every chapter *and* the spines, because reordering the contents changes every
+  page in the book, and it re-arms itself as the book grows: `new` adds a chapter to the spine
+  while the server is running, and that chapter is watched from then on. Directories are
+  watched rather than files, since editors save by renaming a temporary file over the target —
+  a watch on the file itself works exactly once.
+
+- **`publish` refuses when the site is behind the book.** The failure the spine was built to
+  make detectable: clone a repository, build the chapter you are working on, publish, and the
+  URL loses every other chapter.
+
+  ```
+  $ prolog-notebook publish
+  prolog-notebook-site is behind prolog-notebook-index.md: 1 of 2 chapters has no page.
+    Lists — /second/
+  Run `prolog-notebook build` to build the whole book, then publish.
+  Nothing was pushed; gh-pages still holds whatever was published last.
+  ```
+
+  The check runs before the confirmation, so nobody is asked to approve a publish that was
+  never going to happen, and `--dry-run` reports the same refusal. A project with no spine
+  publishes as it always did — there is nothing to compare against, and that is every project
+  from 0.8.
+
+### Fixed
+
+- **`view --port 0` no longer claims port 0 was busy.** Zero means "any port you like", so the
+  port it took is the answer rather than a substitute for one.
+
 ## [0.10.2] — 2026-09-06
 
 Say what a book is, and tell the story somewhere longer than a help screen.

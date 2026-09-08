@@ -18,6 +18,7 @@ import { updateNotice } from '../src/update.js';
 import { confirm, describeInstall, globalRoot, install, relaunch, upgradePlan } from '../src/upgrade.js';
 import { clearedSource, exportSource } from '../src/export.js';
 import { DEFAULT_LIMIT } from '../src/run.js';
+import { drift } from '../src/check.js';
 import { Guarded, DEFAULT_TIMEOUT } from '../src/guard.js';
 import { buildFiles, livePages, sharedFiles, titleOf } from '../src/build.js';
 import {
@@ -28,6 +29,7 @@ import {
   SPINE, booksOf, chaptersOf, findSpine, resolveSpine, seedSpine, withEntry,
 } from '../src/spine.js';
 import { liveSite, runtimeStale, siteFiles, unchanged } from '../src/book.js';
+import { watchFiles } from '../src/watch.js';
 import { GUIDE, guideText, literal } from '../src/guide.js';
 import { NOBODY, pagesUrl, pushSite, remoteUrl, repository } from '../src/publish.js';
 import { openInBrowser, serve } from '../src/serve.js';
@@ -111,6 +113,7 @@ const COMMANDS = {
       ['--port <n>', 'what it listens on (default 8777)'],
       ['--no-open', 'print the URL instead of opening a browser'],
       ['--built', 'serve the site as built, rather than your sources as they are'],
+      ['--watch', 'reload the page in the browser when a file changes'],
     ],
     note: 'With no file it serves the whole book: every chapter in the project, its\n'
       + 'contents page, and the links from one chapter to the next — each page built\n'
@@ -135,12 +138,17 @@ const COMMANDS = {
     options: [
       ['--limit <n>', `solutions to take from one query before stopping (default ${DEFAULT_LIMIT})`],
       ['--timeout <s>', `seconds a cell may say nothing before it is abandoned (default ${DEFAULT_TIMEOUT}, 0 waits)`],
+      ['--check', 'write nothing; fail if a saved answer is no longer what SWI says'],
       ['--stdout', 'print the result instead of writing the file'],
       ['--quiet', 'report only failures'],
     ],
     // Belongs to --limit, so it goes wherever --limit goes and nowhere else.
     note: 'A query that stops at the limit is written without a terminator, which is the\n'
-      + "format's way of saying the search was never exhausted. Nothing is invented.\n",
+      + "format's way of saying the search was never exhausted. Nothing is invented.\n"
+      + '\n'
+      + '--check is for CI. It fails on an answer that has moved and on one whose program\n'
+      + 'has changed underneath it; a query with no saved answer is reported and passes,\n'
+      + 'because a workbook edition is a deliberate thing and this cannot tell them apart.\n',
   },
   clear: {
     takes: [SOME],
@@ -650,7 +658,7 @@ async function main(argv) {
   }
 
   const options = {
-    limit: DEFAULT_LIMIT, timeout: DEFAULT_TIMEOUT, stdout: false, quiet: false,
+    limit: DEFAULT_LIMIT, timeout: DEFAULT_TIMEOUT, check: false, stdout: false, quiet: false,
   };
   // Whether the offer has already been made, before the work started.
   let checked = false;
@@ -671,12 +679,21 @@ async function main(argv) {
         return 2;
       }
       options.timeout = value;
-    } else if (arg === '--stdout') options.stdout = true;
+    } else if (arg === '--check') options.check = true;
+    else if (arg === '--stdout') options.stdout = true;
     else if (arg === '--quiet') options.quiet = true;
     else if (arg.startsWith('-')) {
       process.stderr.write(unknownOption(arg, 'execute'));
       return 2;
     } else files.push(arg);
+  }
+
+  // Both name what happens to the result and only one of them can, and a flag
+  // read and thrown away looks like it worked (869erqra0). --check is a verdict
+  // on the file as it stands; --stdout is the file as it would be.
+  if (options.check && options.stdout) {
+    process.stderr.write('--check writes nothing and --stdout writes everything. Pick one.\n');
+    return 2;
   }
 
   // BARE MEANS THE WHOLE BOOK. This is the gesture for "fill in every answer
@@ -746,6 +763,53 @@ async function main(argv) {
  * the reader already has.
  */
 /**
+ * The verdict, for the run that writes nothing (869ectt3n).
+ *
+ * IT NAMES THE LINE. "3 answers differ" sends somebody to a diff to find out what
+ * happened; the saved line and the produced one, side by side, say it here — and
+ * in CI, where nobody can rerun it by hand, that is the difference between a
+ * failure you can act on and a failure you have to reproduce.
+ *
+ * SILENT WHEN THERE IS NOTHING TO SAY, under --quiet: the whole point of a check
+ * in a pipeline is that a passing one produces no output to read.
+ */
+function verdict(name, notebook, edits, options) {
+  const { queries, answered, changed, stale, missing } = drift(notebook, edits);
+
+  for (const cell of changed) {
+    process.stderr.write(`${name}: ${cell.id} is not what it says it is`
+      + `${cell.goal ? ` — ?- ${cell.goal}` : ''}\n`
+      + `    saved: ${cell.saved}\n`
+      + `    now:   ${cell.now}\n`);
+  }
+  // A DEFECT OF ITS OWN, even though the answers still match. The file certifies
+  // them against a program it no longer contains, and the next run would quietly
+  // rewrite the hash and take the evidence away.
+  for (const cell of stale) {
+    process.stderr.write(`${name}: ${cell.id} is stale — the answers hold, but the program`
+      + ` above them has changed since they were saved\n`);
+  }
+
+  const wrong = changed.length + stale.length;
+  if (wrong) {
+    process.stderr.write(`${name}: ${wrong} of ${answered} answer`
+      + `${answered === 1 ? '' : 's'} no longer ${wrong === 1 ? 'holds' : 'hold'}.`
+      + ' Run `prolog-notebook execute` to bring the file up to date.\n');
+    return 1;
+  }
+  if (options.quiet) return 0;
+  // REPORTED, NOT WARNED ABOUT (869erqqf0). A chapter with no saved answers may be
+  // an author who forgot `execute` or an author who meant it — prolog-studies
+  // publishes one on purpose — and nothing here can tell which.
+  const unanswered = missing.length ? ` · ${missing.length} with no saved answer` : '';
+  process.stderr.write(answered
+    ? `${name}: ${answered} answer${answered === 1 ? '' : 's'} current${unanswered}\n`
+    : `${name}: ${queries} quer${queries === 1 ? 'y' : 'ies'} · no answers saved —`
+      + ' nothing to compare, and every cell ran\n');
+  return 0;
+}
+
+/**
  * THE SITE ONTO THE BRANCH A HOST WILL SERVE (869ery8ac).
  *
  * ONE REPOSITORY SERVES ONE SITE, which is the fact the whole shape of this
@@ -790,6 +854,47 @@ async function publish(args) {
       + 'Run `prolog-notebook build <file>` to make one, or `build --root <file>` if you\n'
       + 'have been building into a site somewhere below the top of the repository.\n');
     return 1;
+  }
+
+  // THE SITE THE BOOK ASKS FOR, OR NOTHING (869eu5tt0). The failure this exists
+  // to stop is the one the Captain opened the design session with: "imagine one
+  // working on chapters in a book... if the generated site keeps disappearing, we
+  // will end up always publishing the last one chapter." Clone the repository,
+  // build the chapter you are working on, publish — and the URL loses everything
+  // else. The spine is what makes that detectable: it says what the site should
+  // hold, so this can compare and refuse.
+  //
+  // BESIDE THE SITE, not the nearest one. One repository serves one site and one
+  // book sits next to it; a spine below that belongs to a sub-book, which is
+  // reached through its parent and never published on its own.
+  //
+  // No spine, no comparison — and no refusal either. There is nothing to compare
+  // against, and every 0.8 project is that project.
+  const spineFile = join(repo.root, SPINE);
+  if (existsSync(spineFile)) {
+    const book = readBook(spineFile);
+    if (book === false) return 1;
+    const missing = chaptersOf(book)
+      .filter((chapter) => !existsSync(join(site, chapter.url, 'index.html')));
+    if (missing.length) {
+      const held = chaptersOf(book).length - missing.length;
+      process.stderr.write(`${shownAs(site)} is behind ${shownAs(spineFile)}:`
+        + ` ${missing.length} of ${chaptersOf(book).length} chapters ${missing.length === 1
+          ? 'has' : 'have'} no page.\n`);
+      for (const chapter of missing) {
+        process.stderr.write(`  ${chapter.title} — /${chapter.url}\n`);
+      }
+      process.stderr.write('Run `prolog-notebook build` to build the whole book, then publish.\n');
+      // THE CONSOLATION IS PART OF THE MESSAGE. Somebody reading this may have
+      // published a thin site already, and publish commits onto the branch tip
+      // rather than forcing over it, so the good tree is still there to go back
+      // to. Saying so here is cheaper than them finding out.
+      if (held) {
+        process.stderr.write(`Nothing was pushed; ${options.branch} still holds`
+          + ' whatever was published last.\n');
+      }
+      return 1;
+    }
   }
 
   const pages = pagesIn(site);
@@ -947,6 +1052,7 @@ async function page(command, args) {
       }
     } else if (arg === '--no-open') options.open = false;
     else if (arg === '--built') options.built = true;
+    else if (arg === '--watch') options.watch = true;
     else if (arg.startsWith('-')) {
       process.stderr.write(unknownOption(arg, command));
       return 2;
@@ -961,16 +1067,38 @@ async function page(command, args) {
 
   if (command === 'build') return buildSite(files, options);
 
+  // A SNAPSHOT DOES NOT CHANGE. --built reads the site into memory once, on
+  // purpose — it is showing an artefact as it stands — so watching for edits that
+  // could not reach it would be a promise nothing keeps.
+  if (options.watch && options.built) {
+    process.stderr.write('--built serves the site as it stands; there is nothing for'
+      + ' --watch to notice. Drop one.\n');
+    return 2;
+  }
+
   const showing = await viewing(files, options);
   if (typeof showing === 'number') return showing;
 
-  const server = await serve(showing.pages, { port: options.port });
+  const server = await serve(showing.pages, { port: options.port, watch: options.watch });
+  // THE AUTHOR SAVES AND THE PAGE COMES WITH THEM (869edp5c8). The pages are
+  // rebuilt per request either way, so this only ever saves a keystroke — but it
+  // is the keystroke between reading what you wrote and running your editor and
+  // your browser as one thing.
+  const watcher = options.watch
+    ? watchFiles(sourcesOf(files), () => {
+      // ARMED AGAIN FROM THE BOOK, EVERY TIME. The spine is one of the watched
+      // files, so adding a chapter to it is a change — and the chapter it just
+      // named has to be watched from then on, in a directory that may be new.
+      watcher.arm(sourcesOf(files));
+      server.changed();
+    })
+    : null;
   // THE URL IS THIS COMMAND'S OUTPUT. `view` writes no notebook and no data to
   // stdout, so there is nothing for it to corrupt — and a URL on stderr is a URL
   // a wrapper does not see, which is how somebody came to type localhost by hand
   // and land on another server entirely (869ernmvh).
   process.stdout.write(`${server.url}\n`);
-  if (server.port !== options.port) {
+  if (options.port !== 0 && server.port !== options.port) {
     process.stderr.write(`${options.port} was already answering — using ${server.port} instead.\n`);
   }
   const at = `${server.url}${showing.open}`;
@@ -1484,6 +1612,36 @@ function siteOnDisk(site, at = '') {
 }
 
 /**
+ * What a watched view is looking at: every chapter, and every spine that named one.
+ *
+ * THE SPINES ARE SOURCES TOO. Reordering the contents or retitling a chapter
+ * changes every page in the book — the contents page, the breadcrumbs and the
+ * prev/next cards all come from that file — so an author who edits it and sees
+ * nothing move would conclude the watcher is broken.
+ *
+ * It answers again after every change rather than being computed once, because
+ * the set is not fixed: `new` adds a chapter to the spine while the server is
+ * running, and that chapter may live in a directory nothing was watching.
+ */
+function sourcesOf(files) {
+  const named = files.map((file) => resolve(file));
+  const spineFile = findSpine(files[0] ?? join(process.cwd(), SPINE));
+  if (!spineFile) return named;
+  try {
+    const book = resolveSpine(spineFile);
+    const bound = chaptersOf(book);
+    // A chapter nobody bound is served alone, and the book around it is not on
+    // screen — so the book's other files are not what this view is looking at.
+    if (named.length && !named.every((f) => bound.some((c) => c.source === f))) return named;
+    return [...booksOf(book).map((b) => b.file), ...bound.map((c) => c.source)];
+  } catch {
+    // A spine that will not resolve is one the author is in the middle of
+    // editing. Watch what we were given, and it will resolve on the next save.
+    return named.length ? named : [spineFile];
+  }
+}
+
+/**
  * Every chapter of the book you are standing in — the bare form of a command.
  *
  * THE OPERAND IS A FILTER: name files and a command acts on those, name none and
@@ -1648,6 +1806,8 @@ async function runFile(file, runner, options) {
     process.stderr.write(`${name}: not written\n`);
     return 1;
   }
+
+  if (options.check) return verdict(name, notebook, edits, options);
 
   const text = exportSource(notebook, edits);
   if (options.stdout) {

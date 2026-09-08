@@ -167,6 +167,38 @@ test('--dry-run says what would go and pushes nothing', async () => {
   assert.equal(branches, '', 'the branch does not exist yet');
 });
 
+test('a site behind its book is refused, and says which chapters are missing', async () => {
+  // THE FAILURE THE SPINE EXISTS FOR (869eu5tt0). The Captain: "if the generated
+  // site keeps disappearing, we will end up always publishing the last one
+  // chapter." The site is gitignored, so a fresh clone has none of it; building
+  // the chapter you are working on and publishing would put that one chapter at
+  // the URL and take the rest of the book off the internet.
+  const { work, remote } = await project();
+  // `new` puts a chapter in the book without building it — the exact gap.
+  await run(['new', 'notes/second.prolog.md'], work);
+
+  for (const argv of [['publish', '--yes'], ['publish', '--dry-run']]) {
+    const refused = await run(argv, work).catch((e) => e);
+    assert.equal(refused.code, 1, argv.join(' '));
+    assert.match(refused.stderr, /is behind prolog-notebook-index\.md: 1 of 2 chapters has no page/);
+    assert.match(refused.stderr, /Second — \/second\//);
+    assert.match(refused.stderr, /Run `prolog-notebook build`/);
+    // Somebody reading this may have published a thin site already. publish
+    // commits onto the branch tip rather than forcing over it, so the good tree
+    // is still there — cheaper to say than to have them find out.
+    assert.match(refused.stderr, /still holds whatever was published last/);
+  }
+  // NOT EVEN ASKED. The check runs before the confirmation, so nobody approves a
+  // publish that was never going to happen.
+  assert.equal(await git(['branch', '--list'], remote), '');
+
+  // Built, and it goes.
+  await run(['build'], work);
+  const { stderr } = await run(['publish', '--yes'], work);
+  assert.match(stderr, /Pushed \d+ files to origin gh-pages/);
+  assert.match(await git(['branch', '--list'], remote), /gh-pages/);
+});
+
 test('it refuses rather than guessing', async () => {
   // No repository: publishing is pushing, and no argument could supply one.
   const loose = await mkdtemp(join(tmpdir(), 'prolog-notebook-loose-'));

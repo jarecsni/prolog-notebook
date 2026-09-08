@@ -37,6 +37,15 @@ jobs:
       - name: Test
         run: npm test
 
+      # THE BOOK IS TESTED TOO (869ectt41). This repository publishes a chapter of
+      # its own, and a chapter's saved answers are a claim about what SWI prints
+      # — a claim nothing but this checks. Technical books rot because their code
+      # stops working and nobody notices; ours cannot, now, for longer than one
+      # pull request. It writes nothing, and fails on an answer that has moved or
+      # one whose program has changed underneath it.
+      - name: Check the book
+        run: npm run check
+
       # THE PACKAGE AS SOMEBODY ELSE RECEIVES IT. The suite above runs against the
       # checkout, where node_modules sits where a relative path expects it — which
       # is how `build` shipped broken for every install through 0.6.5 (869erzf1j).

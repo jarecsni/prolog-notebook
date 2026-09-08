@@ -1,6 +1,6 @@
 {
   "name": "prolog-notebook",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "Jupyter-style notebooks for Prolog. Runs in the browser, installs nothing.",
   "type": "module",
   "main": "./src/node.js",
@@ -34,7 +34,8 @@
     "dev": "python3 -m http.server 8777",
     "prepublishOnly": "npm test",
     "test:packaged": "node --test test/packaged.mjs",
-    "man": "node bin/prolog-notebook.mjs guide --roff > man/prolog-notebook.1"
+    "man": "node bin/prolog-notebook.mjs guide --roff > man/prolog-notebook.1",
+    "check": "node bin/prolog-notebook.mjs execute --check"
   },
   "keywords": [
     "prolog",
